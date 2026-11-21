@@ -11,7 +11,7 @@ ApplicationWindow {
     property var initialPaths: []
     property var initialSelect: []
     property var initialStates: []       // tab states (a torn-off tab, the session)
-    readonly property bool clientDecorations: app.settings.client_decorations === true
+    readonly property bool clientDecorations: app.settings.client_decorations !== false
     readonly property bool chooserMode: false
     property bool sidebarShown: true
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
@@ -311,22 +311,22 @@ ApplicationWindow {
                     onPressed: (m) => { if (m.button === Qt.RightButton) toolbarMenu.popup(); else bw.startSystemMove() }
                     onDoubleClicked: bw.visibility === Window.Maximized ? bw.showNormal() : bw.showMaximized()
                 }
-                GButton {
-                    id: closeBtn
-                    visible: !bw.sidebarShown && bw.clientDecorations
-                    x: 12
+                // Window buttons, Breeze style, when grove draws its own title bar.
+                WindowControls {
+                    id: winControls
+                    window: bw
+                    visible: bw.clientDecorations
+                    anchors.right: parent.right
+                    anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
-                    iconName: "window-close"; iconSize: 12
-                    tip: "Close window"
-                    onClicked: bw.close()
                 }
                 // The items from Customize Toolbar (settings "toolbar").
                 RowLayout {
                     id: toolRow
-                    anchors.left: closeBtn.visible ? closeBtn.right : parent.left
-                    anchors.leftMargin: closeBtn.visible ? 8 : (bw.sidebarShown ? 4 : (bw.clientDecorations ? 12 : 8))
-                    anchors.right: parent.right
-                    anchors.rightMargin: 10
+                    anchors.left: parent.left
+                    anchors.leftMargin: bw.sidebarShown ? 4 : 8
+                    anchors.right: winControls.visible ? winControls.left : parent.right
+                    anchors.rightMargin: winControls.visible ? 12 : 10
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 8
                     Repeater {

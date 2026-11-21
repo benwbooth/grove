@@ -40,44 +40,11 @@ Item {
 
     GlassPanel { anchors.fill: parent; tint: Theme.sidebar }
 
-    // Traffic lights (grove draws its own title bar).
-    Row {
-        id: lights
-        visible: sb.win.clientDecorations
-        x: 18
-        y: 18
-        spacing: 8
-        Repeater {
-            model: [
-                { c: "#ff5f57", tip: "Close this window (Ctrl+W closes a tab)", act: "close" },
-                { c: "#febc2e", tip: "Minimize", act: "min" },
-                { c: "#28c840", tip: "Zoom (fill the screen / restore)", act: "max" }
-            ]
-            Rectangle {
-                required property var modelData
-                width: 13; height: 13; radius: 7
-                color: lm.containsMouse || sb.win.active ? modelData.c : Theme.fgTertiary
-                border.width: 0.5
-                border.color: Qt.rgba(0, 0, 0, 0.25)
-                MouseArea {
-                    id: lm
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: {
-                        if (parent.modelData.act === "close") sb.win.close()
-                        else if (parent.modelData.act === "min") sb.win.showMinimized()
-                        else sb.win.visibility === Window.Maximized ? sb.win.showNormal() : sb.win.showMaximized()
-                    }
-                }
-                GTip { visible: lm.containsMouse; text: parent.modelData.tip }
-            }
-        }
-    }
     // Drag the window by the sidebar's top strip.
     MouseArea {
         anchors.left: parent.left; anchors.right: parent.right
         anchors.top: parent.top
-        height: lights.y + lights.height + 10
+        height: 10
         z: -1
         onPressed: sb.win.startSystemMove()
         onDoubleClicked: sb.win.visibility === Window.Maximized ? sb.win.showNormal() : sb.win.showMaximized()
@@ -243,7 +210,7 @@ Item {
     Flickable {
         id: flick
         anchors.fill: parent
-        anchors.topMargin: sb.win.clientDecorations ? lights.y + lights.height + 10 : 10
+        anchors.topMargin: 10
         anchors.bottomMargin: 8
         contentHeight: col.height
         clip: true
