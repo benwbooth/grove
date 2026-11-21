@@ -88,7 +88,11 @@ Item {
     Connections {
         target: app.grove
         function onOpenRequest(json) { app.handleOpen(JSON.parse(json)) }
-        function onSettingsJsonChanged() { app.settings = JSON.parse(app.grove.settingsJson); Theme.mode = app.settings.theme || "auto" }
+        function onSettingsJsonChanged() {
+            app.settings = JSON.parse(app.grove.settingsJson)
+            Theme.mode = app.settings.theme || "auto"
+            Help.custom = app.settings.shortcuts && typeof app.settings.shortcuts === "object" ? app.settings.shortcuts : {}
+        }
         function onJobChanged(id, json) {
             const j = JSON.parse(json)
             const row = {
@@ -172,6 +176,7 @@ Item {
 
     Component.onCompleted: {
         Theme.mode = settings.theme || "auto"
+        Help.custom = settings.shortcuts && typeof settings.shortcuts === "object" ? settings.shortcuts : {}
         try { Theme.hearth = JSON.parse(grove.env("GROVE_HEARTH") || "{}") } catch (e) {}
         applyIconTheme()
         grove.start()

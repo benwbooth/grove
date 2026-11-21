@@ -120,5 +120,5 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Remote: SFTP, SMB, WebDAV, cloud (rclone), MTP phones | ✅ | ✅ | ✅ (sshfs, rclone, simple-mtpfs; passwords in the Secret Service keyring) |
 | Share with nearby devices (AirDrop) | ✅ | – | ✅ LocalSend protocol (send; receiving is left to the LocalSend app) |
 | Customizable toolbar | ✅ | ✅ | ✅ Customize Toolbar… (right-click the toolbar): drag items, space, flexible space; Restore Defaults |
-| Customizable shortcuts | – | ✅ | ❌ (Finder and Dolphin shortcuts both built in) |
+| Customizable shortcuts | – | ✅ | ✅ Settings › Keyboard: every action, click to record, conflict warnings, reset one or all; Help and menus show your bindings |
 | Help with searchable shortcuts, tooltips everywhere, first-run welcome | 🟡 | 🟡 | ✅ |

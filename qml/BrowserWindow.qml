@@ -682,30 +682,30 @@ ApplicationWindow {
     // ---------- menus ----------
     GMenu {
         id: actionMenu
-        GMenuItem { text: "New Window"; iconName: "window-new"; shortcutText: "Ctrl+N"; onTriggered: bw.app.openWindow([bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home()]) }
-        GMenuItem { text: "New Tab"; iconName: "tab-new"; shortcutText: "Ctrl+T"; onTriggered: bw.newTab(bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home(), []) }
-        GMenuItem { text: "New Folder"; iconName: "folder-new"; shortcutText: "Ctrl+Shift+N"; onTriggered: bw.activePane.newFolder() }
+        GMenuItem { text: "New Window"; iconName: "window-new"; shortcutText: Help.shown("Ctrl+N"); onTriggered: bw.app.openWindow([bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home()]) }
+        GMenuItem { text: "New Tab"; iconName: "tab-new"; shortcutText: Help.shown("Ctrl+T"); onTriggered: bw.newTab(bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home(), []) }
+        GMenuItem { text: "New Folder"; iconName: "folder-new"; shortcutText: Help.shown("Ctrl+Shift+N"); onTriggered: bw.activePane.newFolder() }
         GMenuSeparator {}
-        GMenuItem { text: bw.app.grove.undoLabel ? "Undo " + bw.app.grove.undoLabel : "Undo"; iconName: "edit-undo"; shortcutText: "Ctrl+Z"; enabled: bw.app.grove.undoLabel !== ""; onTriggered: bw.app.grove.undo() }
-        GMenuItem { text: bw.app.grove.redoLabel ? "Redo " + bw.app.grove.redoLabel : "Redo"; iconName: "edit-redo"; shortcutText: "Ctrl+Shift+Z"; enabled: bw.app.grove.redoLabel !== ""; onTriggered: bw.app.grove.redo() }
+        GMenuItem { text: bw.app.grove.undoLabel ? "Undo " + bw.app.grove.undoLabel : "Undo"; iconName: "edit-undo"; shortcutText: Help.shown("Ctrl+Z"); enabled: bw.app.grove.undoLabel !== ""; onTriggered: bw.app.grove.undo() }
+        GMenuItem { text: bw.app.grove.redoLabel ? "Redo " + bw.app.grove.redoLabel : "Redo"; iconName: "edit-redo"; shortcutText: Help.shown("Ctrl+Shift+Z"); enabled: bw.app.grove.redoLabel !== ""; onTriggered: bw.app.grove.redo() }
         GMenuSeparator {}
-        GMenuItem { text: "Filter This Folder"; iconName: "view-filter"; shortcutText: "Ctrl+I"; onTriggered: bw.openFilter() }
-        GMenuItem { text: "Show View Options"; iconName: "configure"; shortcutText: "Ctrl+J"; onTriggered: bw.toggleViewOptions() }
-        GMenuItem { text: "Use Stacks"; checkable: true; checked: bw.activePane && bw.activePane.stacks !== ""; shortcutText: "Ctrl+Alt+0"; onTriggered: bw.toggleStacks() }
-        GMenuItem { text: "Selection Mode"; checkable: true; checked: bw.activePane && bw.activePane.selectionMode; shortcutText: "Ctrl+Shift+S"; tip: "Checkboxes on items: clicks and Space tick them"; onTriggered: bw.toggleSelectionMode() }
-        GMenuItem { text: "Show Hidden Files"; checkable: true; checked: !!bw.app.settings.show_hidden; shortcutText: "Ctrl+H"; onTriggered: bw.toggleHidden() }
-        GMenuItem { text: "Information Panel"; checkable: true; checked: !!bw.app.settings.info_panel; shortcutText: "F11"; onTriggered: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
-        GMenuItem { text: "Terminal Panel"; checkable: true; checked: !!bw.app.settings.terminal_panel; shortcutText: "F4"; onTriggered: bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel) }
-        GMenuItem { text: "Folders Panel"; checkable: true; checked: !!bw.app.settings.folders_panel; shortcutText: "F7"; onTriggered: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
-        GMenuItem { text: "Split View"; checkable: true; checked: bw.currentTab && bw.currentTab.split; shortcutText: "F3"; onTriggered: bw.currentTab.toggleSplit() }
-        GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: "Ctrl+Alt+T"; onTriggered: bw.app.grove.openTerminal(bw.activePane.path) }
-        GMenuItem { text: "Connect to Server…"; iconName: "network-connect"; shortcutText: "Ctrl+K"; onTriggered: bw.connectServer() }
+        GMenuItem { text: "Filter This Folder"; iconName: "view-filter"; shortcutText: Help.shown("Ctrl+I"); onTriggered: bw.openFilter() }
+        GMenuItem { text: "Show View Options"; iconName: "configure"; shortcutText: Help.shown("Ctrl+J"); onTriggered: bw.toggleViewOptions() }
+        GMenuItem { text: "Use Stacks"; checkable: true; checked: bw.activePane && bw.activePane.stacks !== ""; shortcutText: Help.shown("Ctrl+Alt+0"); onTriggered: bw.toggleStacks() }
+        GMenuItem { text: "Selection Mode"; checkable: true; checked: bw.activePane && bw.activePane.selectionMode; shortcutText: Help.shown("Ctrl+Shift+S"); tip: "Checkboxes on items: clicks and Space tick them"; onTriggered: bw.toggleSelectionMode() }
+        GMenuItem { text: "Show Hidden Files"; checkable: true; checked: !!bw.app.settings.show_hidden; shortcutText: Help.shown("Ctrl+H"); onTriggered: bw.toggleHidden() }
+        GMenuItem { text: "Information Panel"; checkable: true; checked: !!bw.app.settings.info_panel; shortcutText: Help.shown("F11"); onTriggered: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
+        GMenuItem { text: "Terminal Panel"; checkable: true; checked: !!bw.app.settings.terminal_panel; shortcutText: Help.shown("F4"); onTriggered: bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel) }
+        GMenuItem { text: "Folders Panel"; checkable: true; checked: !!bw.app.settings.folders_panel; shortcutText: Help.shown("F7"); onTriggered: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
+        GMenuItem { text: "Split View"; checkable: true; checked: bw.currentTab && bw.currentTab.split; shortcutText: Help.shown("F3"); onTriggered: bw.currentTab.toggleSplit() }
+        GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: Help.shown("Ctrl+Alt+T"); onTriggered: bw.app.grove.openTerminal(bw.activePane.path) }
+        GMenuItem { text: "Connect to Server…"; iconName: "network-connect"; shortcutText: Help.shown("Ctrl+K"); onTriggered: bw.connectServer() }
         GMenuSeparator {}
         GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; enabled: bw.app.trashCount > 0; onTriggered: bw.emptyTrash() }
         GMenuSeparator {}
         GMenuItem { text: "Customize Toolbar…"; iconName: "configure"; tip: "Add, remove and rearrange toolbar items"; onTriggered: toolbarSheet.open() }
-        GMenuItem { text: "Settings…"; iconName: "configure"; shortcutText: "Ctrl+,"; onTriggered: bw.showSettings() }
-        GMenuItem { text: "Help and Keyboard Shortcuts"; iconName: "help-contents"; shortcutText: "F1"; onTriggered: bw.showHelp("") }
+        GMenuItem { text: "Settings…"; iconName: "configure"; shortcutText: Help.shown("Ctrl+,"); onTriggered: bw.showSettings() }
+        GMenuItem { text: "Help and Keyboard Shortcuts"; iconName: "help-contents"; shortcutText: Help.shown("F1"); onTriggered: bw.showHelp("") }
     }
     function editPath() { if (pathBar) pathBar.edit(); else goSheet.open() }
     function focusSearch() { if (search) { search.forceActiveFocus(); search.selectAll() } else openFilter() }
@@ -796,79 +796,80 @@ ApplicationWindow {
     function toggleSelectionMode() { activePane.setSelectionMode(!activePane.selectionMode); activePane.forceActiveFocus() }
     function toggleStacks() { activePane.setStacks(activePane.stacks ? "" : "kind") }
     SettingsWindow { id: settingsWin; app: bw.app }
-    HelpWindow { id: helpWin; app: bw.app }
+    HelpWindow { id: helpWin; app: bw.app; onChangeShortcuts: { settingsWin.page = "keyboard"; bw.showSettings() } }
     Welcome { id: welcome; app: bw.app; win: bw }
 
     // ---------- shortcuts ----------
-    component Key: Shortcut { context: Qt.WindowShortcut; enabled: !bw.modalOpen }
-    Key { sequences: ["Alt+Left", "Ctrl+["]; onActivated: bw.activePane.goBack() }
-    Key { sequences: ["Alt+Right", "Ctrl+]"]; onActivated: bw.activePane.goForward() }
-    Key { sequences: ["Alt+Up", "Ctrl+Up"]; onActivated: bw.activePane.goUp() }
-    Key { sequences: ["Ctrl+Down"]; onActivated: bw.activePane.openSelected(false) }
-    Key { sequences: ["Ctrl+L", "Ctrl+Shift+G", "F6"]; onActivated: bw.editPath() }
-    Key { sequences: ["Ctrl+Shift+H", "Alt+Home"]; onActivated: bw.go(bw.app.grove.home()) }
-    Key { sequences: ["Ctrl+Shift+D"]; onActivated: bw.go(bw.app.grove.home() + "/Desktop") }
-    Key { sequences: ["Ctrl+Shift+O"]; onActivated: bw.go(bw.app.grove.home() + "/Documents") }
-    Key { sequences: ["Ctrl+Alt+L"]; onActivated: bw.go(bw.app.grove.home() + "/Downloads") }
-    Key { sequences: ["Ctrl+Shift+F"]; onActivated: bw.go("recent:///") }
-    Key { sequences: ["Ctrl+Shift+C"]; onActivated: bw.go("/") }
-    Key { sequences: ["Ctrl+Shift+T"]; onActivated: bw.go("trash:///") }
-    Key { sequences: ["Ctrl+K"]; onActivated: bw.connectServer() }
-    Key { sequences: ["F5", "Ctrl+R"]; onActivated: bw.activePane.reload() }
-    Key { sequences: ["Ctrl+1"]; onActivated: bw.activePane.setView("icons") }
-    Key { sequences: ["Ctrl+2"]; onActivated: bw.activePane.setView("list") }
-    Key { sequences: ["Ctrl+3"]; onActivated: bw.activePane.setView("columns") }
-    Key { sequences: ["Ctrl+4"]; onActivated: bw.activePane.setView("gallery") }
-    Key { sequences: ["Ctrl++", "Ctrl+="]; onActivated: bw.activePane.zoom(1) }
-    Key { sequences: ["Ctrl+-"]; onActivated: bw.activePane.zoom(-1) }
-    Key { sequences: ["Ctrl+H", "Ctrl+Shift+."]; onActivated: bw.toggleHidden() }
-    Key { sequences: ["Ctrl+I"]; onActivated: bw.openFilter() }
-    Key { sequences: ["Ctrl+Shift+S"]; onActivated: bw.toggleSelectionMode() }
-    Key { sequences: ["Ctrl+J"]; onActivated: bw.toggleViewOptions() }
-    Key { sequences: ["Ctrl+Alt+0"]; onActivated: bw.toggleStacks() }
-    Key { sequences: ["Ctrl+Y"]; onActivated: bw.activePane.quickLook() }
-    Key { sequences: ["F3"]; onActivated: bw.currentTab.toggleSplit() }
-    Key { sequences: ["Ctrl+Alt+S", "F9"]; onActivated: bw.sidebarShown = !bw.sidebarShown }
-    Key { sequences: ["Ctrl+N"]; onActivated: bw.app.openWindow([bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home()]) }
-    Key { sequences: ["Ctrl+T"]; onActivated: bw.newTab(bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home(), []) }
-    Key { sequences: ["Ctrl+W"]; onActivated: bw.closeTab(tabBar.currentIndex) }
-    Key { sequences: ["Ctrl+Tab"]; onActivated: tabBar.currentIndex = (tabBar.currentIndex + 1) % tabs.count }
-    Key { sequences: ["Ctrl+Shift+Tab", "Ctrl+Backtab"]; onActivated: tabBar.currentIndex = (tabBar.currentIndex + tabs.count - 1) % tabs.count }
-    Key { sequences: ["Ctrl+C"]; onActivated: bw.activePane.copy(false) }
-    Key { sequences: ["Ctrl+X"]; onActivated: bw.activePane.copy(true) }
-    Key { sequences: ["Ctrl+V"]; onActivated: bw.activePane.paste(false) }
-    Key { sequences: ["Ctrl+Alt+V"]; onActivated: bw.activePane.paste(true) }
-    Key { sequences: ["Ctrl+Alt+C"]; onActivated: bw.activePane.copyPath() }
-    Key { sequences: ["Ctrl+D"]; onActivated: bw.activePane.duplicate() }
-    Key { sequences: ["Ctrl+Alt+A"]; onActivated: bw.activePane.makeAlias() }
-    Key { sequences: ["F2"]; onActivated: bw.activePane.rename() }
-    Key { sequences: ["Shift+F2"]; onActivated: { const s = bw.activePane.selectedPaths(); if (s.length) bw.batchRename(s) } }
-    Key { sequences: ["Ctrl+Shift+N", "F10"]; onActivated: bw.activePane.newFolder() }
-    Key { sequences: ["Ctrl+Alt+N"]; onActivated: bw.activePane.newFile("") }
-    Key { sequences: ["Delete", "Ctrl+Backspace"]; onActivated: bw.activePane.trashSelected() }
-    Key { sequences: ["Shift+Delete"]; onActivated: bw.activePane.deleteSelected() }
-    Key { sequences: ["Ctrl+Z"]; onActivated: bw.app.grove.undo() }
-    Key { sequences: ["Ctrl+Shift+Z"]; onActivated: bw.app.grove.redo() }
-    Key { sequences: ["Ctrl+A"]; onActivated: bw.activePane.model.selectAll() }
-    Key { sequences: ["Ctrl+Shift+A"]; onActivated: bw.activePane.model.invertSelection() }
-    Key { sequences: ["Alt+Return", "Ctrl+Shift+I"]; onActivated: { const s = bw.activePane.selectedPaths(); bw.showInfo(s.length ? s : [bw.activePane.path]) } }
-    Key { sequences: ["Ctrl+F"]; onActivated: bw.focusSearch() }
-    Key { sequences: ["Ctrl+Alt+T"]; onActivated: bw.app.grove.openTerminal(bw.activePane.path) }
-    Key { sequences: ["Ctrl+E"]; onActivated: bw.ejectCurrent() }
-    Key { sequences: ["Ctrl+,"]; onActivated: bw.showSettings() }
-    Key { sequences: ["F4"]; onActivated: { bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel); if (bw.app.settings.terminal_panel) bw.activePane.forceActiveFocus() } }
-    Key { sequences: ["F7"]; onActivated: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
-    Key { sequences: ["F11", "Ctrl+Shift+P"]; onActivated: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
-    Key { sequences: ["Shift+F5"]; onActivated: bw.toOtherPane(false) }
-    Key { sequences: ["Shift+F6"]; onActivated: bw.toOtherPane(true) }
-    Key { sequences: ["F1", "Ctrl+?", "Ctrl+Shift+/"]; onActivated: bw.showHelp("") }
-    Key { sequences: ["Ctrl+Alt+1"]; onActivated: bw.activePane.toggleTag("Red") }
-    Key { sequences: ["Ctrl+Alt+2"]; onActivated: bw.activePane.toggleTag("Orange") }
-    Key { sequences: ["Ctrl+Alt+3"]; onActivated: bw.activePane.toggleTag("Yellow") }
-    Key { sequences: ["Ctrl+Alt+4"]; onActivated: bw.activePane.toggleTag("Green") }
-    Key { sequences: ["Ctrl+Alt+5"]; onActivated: bw.activePane.toggleTag("Blue") }
-    Key { sequences: ["Ctrl+Alt+6"]; onActivated: bw.activePane.toggleTag("Purple") }
-    Key { sequences: ["Ctrl+Alt+7"]; onActivated: bw.activePane.toggleTag("Gray") }
+    // Shortcuts come from Help (defaults) and settings.shortcuts (the user's).
+    component Key: Shortcut { property string act: ""; sequences: Help.seqs(act); context: Qt.WindowShortcut; enabled: !bw.modalOpen && sequences.length > 0 }
+    Key { act: "back"; onActivated: bw.activePane.goBack() }
+    Key { act: "forward"; onActivated: bw.activePane.goForward() }
+    Key { act: "up"; onActivated: bw.activePane.goUp() }
+    Key { act: "open"; onActivated: bw.activePane.openSelected(false) }
+    Key { act: "gotofolder"; onActivated: bw.editPath() }
+    Key { act: "home"; onActivated: bw.go(bw.app.grove.home()) }
+    Key { act: "desktop"; onActivated: bw.go(bw.app.grove.home() + "/Desktop") }
+    Key { act: "documents"; onActivated: bw.go(bw.app.grove.home() + "/Documents") }
+    Key { act: "downloads"; onActivated: bw.go(bw.app.grove.home() + "/Downloads") }
+    Key { act: "recents"; onActivated: bw.go("recent:///") }
+    Key { act: "computer"; onActivated: bw.go("/") }
+    Key { act: "trash"; onActivated: bw.go("trash:///") }
+    Key { act: "connect"; onActivated: bw.connectServer() }
+    Key { act: "reload"; onActivated: bw.activePane.reload() }
+    Key { act: "viewicons"; onActivated: bw.activePane.setView("icons") }
+    Key { act: "viewlist"; onActivated: bw.activePane.setView("list") }
+    Key { act: "viewcolumns"; onActivated: bw.activePane.setView("columns") }
+    Key { act: "viewgallery"; onActivated: bw.activePane.setView("gallery") }
+    Key { act: "zoomin"; onActivated: bw.activePane.zoom(1) }
+    Key { act: "zoomout"; onActivated: bw.activePane.zoom(-1) }
+    Key { act: "hidden"; onActivated: bw.toggleHidden() }
+    Key { act: "filter"; onActivated: bw.openFilter() }
+    Key { act: "selectionmode"; onActivated: bw.toggleSelectionMode() }
+    Key { act: "viewoptions"; onActivated: bw.toggleViewOptions() }
+    Key { act: "stacks"; onActivated: bw.toggleStacks() }
+    Key { act: "quicklook"; onActivated: bw.activePane.quickLook() }
+    Key { act: "split"; onActivated: bw.currentTab.toggleSplit() }
+    Key { act: "sidebar"; onActivated: bw.sidebarShown = !bw.sidebarShown }
+    Key { act: "newwindow"; onActivated: bw.app.openWindow([bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home()]) }
+    Key { act: "newtab"; onActivated: bw.newTab(bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home(), []) }
+    Key { act: "closetab"; onActivated: bw.closeTab(tabBar.currentIndex) }
+    Key { act: "nexttab"; onActivated: tabBar.currentIndex = (tabBar.currentIndex + 1) % tabs.count }
+    Key { act: "prevtab"; onActivated: tabBar.currentIndex = (tabBar.currentIndex + tabs.count - 1) % tabs.count }
+    Key { act: "copy"; onActivated: bw.activePane.copy(false) }
+    Key { act: "cut"; onActivated: bw.activePane.copy(true) }
+    Key { act: "paste"; onActivated: bw.activePane.paste(false) }
+    Key { act: "movehere"; onActivated: bw.activePane.paste(true) }
+    Key { act: "copypath"; onActivated: bw.activePane.copyPath() }
+    Key { act: "duplicate"; onActivated: bw.activePane.duplicate() }
+    Key { act: "alias"; onActivated: bw.activePane.makeAlias() }
+    Key { act: "rename"; onActivated: bw.activePane.rename() }
+    Key { act: "batchrename"; onActivated: { const s = bw.activePane.selectedPaths(); if (s.length) bw.batchRename(s) } }
+    Key { act: "newfolder"; onActivated: bw.activePane.newFolder() }
+    Key { act: "newfile"; onActivated: bw.activePane.newFile("") }
+    Key { act: "movetotrash"; onActivated: bw.activePane.trashSelected() }
+    Key { act: "delete"; onActivated: bw.activePane.deleteSelected() }
+    Key { act: "undo"; onActivated: bw.app.grove.undo() }
+    Key { act: "redo"; onActivated: bw.app.grove.redo() }
+    Key { act: "selectall"; onActivated: bw.activePane.model.selectAll() }
+    Key { act: "invert"; onActivated: bw.activePane.model.invertSelection() }
+    Key { act: "getinfo"; onActivated: { const s = bw.activePane.selectedPaths(); bw.showInfo(s.length ? s : [bw.activePane.path]) } }
+    Key { act: "search"; onActivated: bw.focusSearch() }
+    Key { act: "terminal"; onActivated: bw.app.grove.openTerminal(bw.activePane.path) }
+    Key { act: "eject"; onActivated: bw.ejectCurrent() }
+    Key { act: "settings"; onActivated: bw.showSettings() }
+    Key { act: "terminalpanel"; onActivated: { bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel); if (bw.app.settings.terminal_panel) bw.activePane.forceActiveFocus() } }
+    Key { act: "folderspanel"; onActivated: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
+    Key { act: "infopanel"; onActivated: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
+    Key { act: "copyother"; onActivated: bw.toOtherPane(false) }
+    Key { act: "moveother"; onActivated: bw.toOtherPane(true) }
+    Key { act: "help"; onActivated: bw.showHelp("") }
+    Key { act: "tagred"; onActivated: bw.activePane.toggleTag("Red") }
+    Key { act: "tagorange"; onActivated: bw.activePane.toggleTag("Orange") }
+    Key { act: "tagyellow"; onActivated: bw.activePane.toggleTag("Yellow") }
+    Key { act: "taggreen"; onActivated: bw.activePane.toggleTag("Green") }
+    Key { act: "tagblue"; onActivated: bw.activePane.toggleTag("Blue") }
+    Key { act: "tagpurple"; onActivated: bw.activePane.toggleTag("Purple") }
+    Key { act: "taggray"; onActivated: bw.activePane.toggleTag("Gray") }
 
     Component.onCompleted: {
         if (initialStates.length) for (const st of initialStates) tabs.append({ path: st.path, select: "[]", tstate: JSON.stringify(st) })
@@ -913,7 +914,11 @@ ApplicationWindow {
         else if (cmd === "actions") { if (actionButton) actionMenu.popup(actionButton, 0, actionButton.height + 4); else actionMenu.popup() }
         else if (cmd === "toolbar") setSetting("toolbar", arg ? arg.split(",") : [])
         else if (cmd === "customize") toolbarSheet.open()
-        else if (cmd === "settings") showSettings()
+        else if (cmd === "shortcut") { const i = arg.indexOf(":"); const c = Object.assign({}, app.settings.shortcuts || {}); c[arg.substring(0, i)] = arg.substring(i + 1).split("|"); setSetting("shortcuts", c) }
+        else if (cmd === "record") { settingsWin.page = "keyboard"; showSettings(); settingsWin.record(arg) }
+        else if (cmd === "recordkey") settingsWin.recordSeq(arg)
+        else if (cmd === "key") { const [k, m] = arg.split(":"); app.grove.testKey(Number(k), Number(m || 0), "") }
+        else if (cmd === "settings") { if (arg) settingsWin.page = arg; showSettings() }
         else if (cmd === "help") showHelp(arg || "")
         else if (cmd === "connect") connectServer()
         else if (cmd === "rename") batchRename(p.selectedPaths())

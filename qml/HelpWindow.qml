@@ -9,6 +9,7 @@ Window {
     id: hw
     property var app
     property string query: ""
+    signal changeShortcuts()
     width: Math.round(640 * Theme.pt)
     height: Math.round(640 * Theme.pt)
     color: Theme.window
@@ -30,7 +31,12 @@ Window {
                 color: Theme.fgSecondary
                 text: "Grove works like Finder: the sidebar on the left, four views (Ctrl+1–4), Space for Quick Look. It also has Dolphin's extras: split view (F3), the filter bar (Ctrl+I), tabs, and Dolphin's shortcuts where they don't clash. Hover over any button to see what it does. Right-click items for more."
             }
-            GField { id: field; width: parent.width; iconName: "edit-find"; clearable: true; placeholderText: "Search shortcuts and actions (e.g. “rename”, “hidden”, “tab”)" }
+            Row {
+                width: parent.width
+                spacing: 8
+                GField { id: field; width: parent.width - changeBtn.width - 8; iconName: "edit-find"; clearable: true; placeholderText: "Search shortcuts and actions (e.g. “rename”, “hidden”, “tab”)"; tip: "Type part of an action's name or its keys" }
+                PushButton { id: changeBtn; text: "Change Shortcuts…"; tip: "Settings › Keyboard: give any action your own shortcut"; onClicked: hw.changeShortcuts() }
+            }
         }
         ListView {
             id: list
@@ -43,7 +49,7 @@ Window {
             ScrollBar.vertical: ScrollBar {}
             model: Help.shortcuts.filter(s => {
                 const q = field.text.toLowerCase()
-                return !q || (s.action + " " + s.keys + " " + s.also + " " + s.note + " " + s.group).toLowerCase().indexOf(q) >= 0
+                return !q || (s.action + " " + Help.display(s).join(" ") + " " + s.note + " " + s.group).toLowerCase().indexOf(q) >= 0
             })
             section.property: "group"
             section.delegate: GLabel { required property string section; text: section; font.bold: true; topPadding: 12; bottomPadding: 4; color: Theme.fgSecondary }
@@ -60,7 +66,8 @@ Window {
                     y: 4
                     spacing: 6
                     Repeater {
-                        model: [modelData.keys].concat(modelData.also ? modelData.also.split(", ") : [])
+                        // The user's own bindings (Settings › Keyboard).
+                        model: Help.display(modelData)
                         Rectangle {
                             required property string modelData
                             visible: modelData !== ""

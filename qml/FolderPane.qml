@@ -751,12 +751,12 @@ FocusScope {
     GMenu {
         id: bgMenu
         property var templates: []
-        GMenuItem { text: "New Folder"; iconName: "folder-new"; shortcutText: "Ctrl+Shift+N"; enabled: !pane.special; onTriggered: pane.newFolder() }
+        GMenuItem { text: "New Folder"; iconName: "folder-new"; shortcutText: Help.shown("Ctrl+Shift+N"); enabled: !pane.special; onTriggered: pane.newFolder() }
         GMenu {
             id: newFileMenu
             title: "New File"
             enabled: !pane.special
-            GMenuItem { text: "Empty Text File"; iconName: "text-plain"; shortcutText: "Ctrl+Alt+N"; onTriggered: pane.newFile("") }
+            GMenuItem { text: "Empty Text File"; iconName: "text-plain"; shortcutText: Help.shown("Ctrl+Alt+N"); onTriggered: pane.newFile("") }
             Instantiator {
                 model: bgMenu.templates
                 delegate: GMenuItem { required property var modelData; text: modelData; iconName: "text-x-generic"; onTriggered: pane.newFile(modelData) }
@@ -764,11 +764,11 @@ FocusScope {
                 onObjectRemoved: (i, o) => newFileMenu.removeItem(o)
             }
         }
-        GMenuItem { text: "Paste"; iconName: "edit-paste"; shortcutText: "Ctrl+V"; enabled: !pane.special; onTriggered: pane.paste(false) }
+        GMenuItem { text: "Paste"; iconName: "edit-paste"; shortcutText: Help.shown("Ctrl+V"); enabled: !pane.special; onTriggered: pane.paste(false) }
         GMenuSeparator {}
-        GMenuItem { text: "Get Info"; iconName: "documentinfo"; shortcutText: "Alt+Return"; enabled: !pane.special; onTriggered: pane.win.showInfo([pane.path]) }
-        GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: "Ctrl+Alt+T"; enabled: !pane.special; onTriggered: pane.grove.openTerminal(pane.path) }
-        GMenuItem { text: "Copy Path"; iconName: "edit-copy-path"; shortcutText: "Ctrl+Alt+C"; onTriggered: pane.copyPath() }
+        GMenuItem { text: "Get Info"; iconName: "documentinfo"; shortcutText: Help.shown("Alt+Return"); enabled: !pane.special; onTriggered: pane.win.showInfo([pane.path]) }
+        GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: Help.shown("Ctrl+Alt+T"); enabled: !pane.special; onTriggered: pane.grove.openTerminal(pane.path) }
+        GMenuItem { text: "Copy Path"; iconName: "edit-copy-path"; shortcutText: Help.shown("Ctrl+Alt+C"); onTriggered: pane.copyPath() }
         GMenuItem { text: "Add to Favourites"; iconName: "bookmark-new"; enabled: !pane.special; onTriggered: pane.grove.addFavourite(pane.path, -1) }
         GMenuItem { text: "Browse Previous Versions…"; iconName: "document-open-recent"; enabled: !pane.special; tip: "Earlier copies of this folder from the hourly snapshots"; onTriggered: pane.win.showVersions(pane.path) }
         GMenu {
@@ -784,10 +784,10 @@ FocusScope {
         GMenuSeparator {}
         GMenu {
             title: "View as"
-            GMenuItem { text: "Icons"; checkable: true; checked: pane.viewMode === "icons"; shortcutText: "Ctrl+1"; onTriggered: pane.setView("icons") }
-            GMenuItem { text: "List"; checkable: true; checked: pane.viewMode === "list"; shortcutText: "Ctrl+2"; onTriggered: pane.setView("list") }
-            GMenuItem { text: "Columns"; checkable: true; checked: pane.viewMode === "columns"; shortcutText: "Ctrl+3"; onTriggered: pane.setView("columns") }
-            GMenuItem { text: "Gallery"; checkable: true; checked: pane.viewMode === "gallery"; shortcutText: "Ctrl+4"; onTriggered: pane.setView("gallery") }
+            GMenuItem { text: "Icons"; checkable: true; checked: pane.viewMode === "icons"; shortcutText: Help.shown("Ctrl+1"); onTriggered: pane.setView("icons") }
+            GMenuItem { text: "List"; checkable: true; checked: pane.viewMode === "list"; shortcutText: Help.shown("Ctrl+2"); onTriggered: pane.setView("list") }
+            GMenuItem { text: "Columns"; checkable: true; checked: pane.viewMode === "columns"; shortcutText: Help.shown("Ctrl+3"); onTriggered: pane.setView("columns") }
+            GMenuItem { text: "Gallery"; checkable: true; checked: pane.viewMode === "gallery"; shortcutText: Help.shown("Ctrl+4"); onTriggered: pane.setView("gallery") }
         }
         GMenu {
             title: "Sort by"
@@ -811,9 +811,9 @@ FocusScope {
             GMenuItem { text: "Name"; checkable: true; checked: pane.groupBy === "name"; onTriggered: pane.setGroupBy("name") }
             GMenuItem { text: "Tags"; checkable: true; checked: pane.groupBy === "tags"; onTriggered: pane.setGroupBy("tags") }
         }
-        GMenuItem { text: "Use Stacks"; checkable: true; checked: pane.stacks !== ""; shortcutText: "Ctrl+Alt+0"; tip: "Pile files of one kind into stacks (icon view)"; onTriggered: pane.setStacks(pane.stacks ? "" : "kind") }
-        GMenuItem { text: "Show View Options"; iconName: "configure"; shortcutText: "Ctrl+J"; tip: "Icon size, spacing, text size, labels, background for this folder"; onTriggered: pane.win.toggleViewOptions() }
-        GMenuItem { text: "Show Hidden Files"; checkable: true; checked: fm.showHidden; shortcutText: "Ctrl+H"; onTriggered: pane.win.toggleHidden() }
+        GMenuItem { text: "Use Stacks"; checkable: true; checked: pane.stacks !== ""; shortcutText: Help.shown("Ctrl+Alt+0"); tip: "Pile files of one kind into stacks (icon view)"; onTriggered: pane.setStacks(pane.stacks ? "" : "kind") }
+        GMenuItem { text: "Show View Options"; iconName: "configure"; shortcutText: Help.shown("Ctrl+J"); tip: "Icon size, spacing, text size, labels, background for this folder"; onTriggered: pane.win.toggleViewOptions() }
+        GMenuItem { text: "Show Hidden Files"; checkable: true; checked: fm.showHidden; shortcutText: Help.shown("Ctrl+H"); onTriggered: pane.win.toggleHidden() }
         GMenuSeparator { visible: pane.inTrash }
         GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; visible: pane.inTrash; height: visible ? implicitHeight : 0; onTriggered: pane.win.emptyTrash() }
     }

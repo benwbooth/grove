@@ -14,6 +14,10 @@ Window {
     color: Theme.window
     title: "Grove Settings"
     function set(name, value) { app.grove.setSetting(name, JSON.stringify(value)) }
+    // General settings, or Keyboard (every shortcut, changeable).
+    property string page: "general"
+    function recordSeq(seq) { shortcutsPage.handleSeq(seq) }
+    function record(id) { requestActivate(); shortcutsPage.startRecording(id, -1) }
 
     component Group: Column {
         property string title: ""
@@ -79,11 +83,29 @@ Window {
         }
     }
 
+    Row {
+        id: pages
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: 12
+        spacing: 4
+        transform: Translate { x: 0.001; y: 0.001 }
+        GButton { text: "General"; capsule: true; flat: false; checked: sw.page === "general"; tip: "Appearance, files, search, terminal"; onClicked: sw.page = "general" }
+        GButton { text: "Keyboard"; capsule: true; flat: false; checked: sw.page === "keyboard"; tip: "Every action and its shortcut: click one to change it"; onClicked: sw.page = "keyboard" }
+    }
     ScrollView {
         anchors.fill: parent
+        anchors.topMargin: pages.y + pages.height + 6
         contentWidth: availableWidth
         transform: Translate { x: 0.001; y: 0.001 }
+        ShortcutsPage {
+            id: shortcutsPage
+            visible: sw.page === "keyboard"
+            x: 20; y: 10
+            width: sw.width - 40
+            app: sw.app
+        }
         Column {
+            visible: sw.page === "general"
             x: 20
             width: sw.width - 40
             bottomPadding: 20
