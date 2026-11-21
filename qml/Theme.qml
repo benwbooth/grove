@@ -29,7 +29,7 @@ QtObject {
     readonly property color sidebar: dark ? Qt.rgba(0.20, 0.205, 0.22, 0.97) : Qt.rgba(0.955, 0.955, 0.965, 0.98)
     readonly property color toolbar: window
     readonly property color glass: dark ? Qt.rgba(0.24, 0.245, 0.26, 0.92) : Qt.rgba(0.985, 0.985, 0.99, 0.94)
-    readonly property color glassMenu: dark ? Qt.rgba(0.17, 0.175, 0.19, 0.97) : Qt.rgba(0.975, 0.975, 0.98, 0.98)
+    readonly property color glassMenu: dark ? Qt.rgba(0.17, 0.175, 0.19, 0.995) : Qt.rgba(0.975, 0.975, 0.98, 0.995)
     readonly property color glassRim: dark ? Qt.rgba(1, 1, 1, 0.14) : Qt.rgba(1, 1, 1, 0.85)
     readonly property color glassEdge: dark ? Qt.rgba(0, 0, 0, 0.6) : Qt.rgba(0, 0, 0, 0.13)
     readonly property color fg: dark ? "#f5f5f7" : "#1d1d1f"

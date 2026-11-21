@@ -11,10 +11,17 @@ Item {
 
     Connections {
         target: root.fm
-        function onCurrentRowChanged() { root.current = root.fm.currentRow >= 0 ? root.pane.itemAt(root.fm.currentRow) : null }
+        function onCurrentRowChanged() {
+            root.current = root.fm.currentRow >= 0 ? root.pane.itemAt(root.fm.currentRow) : null
+            if (root.fm.currentRow >= 0) strip.positionViewAtIndex(root.fm.currentRow, ListView.Center)
+        }
         function onLoaded() { if (root.fm.currentRow < 0 && root.fm.count) root.fm.select(0, "set") }
     }
-    Component.onCompleted: if (fm.count && fm.currentRow < 0) fm.select(0, "set")
+    Component.onCompleted: {
+        if (fm.count && fm.currentRow < 0) fm.select(0, "set")
+        current = fm.currentRow >= 0 ? pane.itemAt(fm.currentRow) : null
+        if (fm.currentRow >= 0) Qt.callLater(() => strip.positionViewAtIndex(fm.currentRow, ListView.Center))
+    }
 
     function positionAt(row) { if (row >= 0) strip.positionViewAtIndex(row, ListView.Center) }
     function handleKey(e) {

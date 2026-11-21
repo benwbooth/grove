@@ -203,7 +203,11 @@ pub struct RawItem {
 }
 
 pub fn raw_from_entry(e: Entry) -> RawItem {
-    let mime = mime::for_entry(&e);
+    let mut mime = mime::for_entry(&e);
+    // Unknown by name (LICENSE, flake.lock...): look inside small files.
+    if mime.name == "application/octet-stream" && !e.is_dir && e.size > 0 && e.size < 8 << 20 && e.path.starts_with('/') {
+        mime = std::sync::Arc::new(mime::deep(&e.path));
+    }
     let tags = if e.path.starts_with('/') { grove_core::tags::get(Path::new(&e.path)) } else { vec![] };
     RawItem { e, mime, tags }
 }

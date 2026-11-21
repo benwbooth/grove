@@ -28,6 +28,7 @@ pub mod ffi {
         fn grove_image_convert(path: &QString, format: &QString) -> QString;
         fn grove_test_key(key: i32, modifiers: i32, text: &QString);
         fn grove_set_icon_theme(dark: bool);
+        fn grove_grab_windows(path: &QString);
     }
 
     // Called by the C++ thumbnail provider (on its worker threads).
@@ -235,6 +236,8 @@ pub mod ffi {
         fn quit_app(self: &Grove);
         #[qinvokable]
         fn set_icon_theme(self: &Grove, dark: bool);
+        #[qinvokable]
+        fn grab_windows(self: &Grove, path: &QString);
     }
 }
 

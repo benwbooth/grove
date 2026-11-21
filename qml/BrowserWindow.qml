@@ -565,7 +565,7 @@ ApplicationWindow {
     Timer {
         id: shotTimer2
         interval: Number(bw.app.grove.env("GROVE_SHOT_DELAY2") || 1500)
-        onTriggered: root.grabToImage(r => { r.saveToFile(bw.app.screenshot); console.log("grove: screenshot " + bw.app.screenshot + " (" + bw.activePane.model.lastLoadMs() + " ms listing, " + bw.activePane.model.count + " items)"); Qt.quit() })
+        onTriggered: { bw.app.grove.grabWindows(bw.app.screenshot); console.log("grove: screenshot " + bw.app.screenshot + " (" + bw.activePane.model.lastLoadMs() + " ms listing, " + bw.activePane.model.count + " items)"); Qt.quit() }
     }
     function testStep(s) {
         const [cmd, arg] = s.split("=")

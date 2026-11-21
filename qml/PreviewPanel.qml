@@ -71,8 +71,8 @@ Item {
             GLabel { text: p.info.mtime ? new Date(p.info.mtime * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat) : "--" }
             GLabel { text: "Opens with"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90; visible: !!p.info.defaultApp }
             GLabel { text: p.info.defaultApp ? p.info.defaultApp.name : ""; visible: !!p.info.defaultApp }
-            GLabel { text: "Tags"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90; visible: p.info.tags && p.info.tags.length > 0 }
-            GLabel { text: p.info.tags ? p.info.tags.join(", ") : ""; visible: p.info.tags && p.info.tags.length > 0 }
+            GLabel { text: "Tags"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90; visible: !!(p.info.tags && p.info.tags.length > 0) }
+            GLabel { text: p.info.tags ? p.info.tags.join(", ") : ""; visible: !!(p.info.tags && p.info.tags.length > 0) }
         }
         PushButton {
             visible: !p.compact

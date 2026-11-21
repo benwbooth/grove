@@ -12,7 +12,7 @@ Item {
     readonly property int labelLines: 2
     readonly property real cellW: Math.max(icon + 36, Math.round(icon * 1.45) + 20)
     readonly property real cellH: icon + 14 + Math.ceil(Theme.body * 1.3) * labelLines + 12
-    readonly property int cols: Math.max(1, Math.floor((grid.width) / cellW))
+    readonly property int cols: Math.max(1, Math.floor((root.width - 16) / cellW))
     readonly property bool thumbs: !pane.app || pane.app.settings.show_thumbnails !== false
 
     function positionAt(row) { if (row >= 0) grid.positionViewAtIndex(row, GridView.Contain) }
@@ -85,7 +85,7 @@ Item {
     GridView {
         id: grid
         anchors.fill: parent
-        anchors.leftMargin: Math.max(8, (root.width - root.cols * root.cellW) / 2)
+        anchors.leftMargin: Math.max(8, Math.floor((root.width - root.cols * root.cellW) / 2))
         anchors.topMargin: 8
         model: root.fm
         cellWidth: root.cellW

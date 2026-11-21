@@ -956,6 +956,10 @@ impl ffi::Grove {
         });
     }
 
+    pub fn grab_windows(&self, path: &QString) {
+        ffi::grove_grab_windows(path);
+    }
+
     pub fn set_icon_theme(&self, dark: bool) {
         ffi::grove_set_icon_theme(dark);
     }

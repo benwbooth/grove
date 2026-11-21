@@ -348,3 +348,19 @@ void grove_set_icon_theme(bool dark)
     if (cur.startsWith(QLatin1String("breeze"), Qt::CaseInsensitive))
         QIcon::setThemeName(dark ? QStringLiteral("breeze-dark") : QStringLiteral("breeze"));
 }
+
+void grove_grab_windows(const QString& path)
+{
+    int n = 0;
+    QList<QQuickWindow*> wins;
+    for (QWindow* w : QGuiApplication::topLevelWindows())
+        if (auto* q = qobject_cast<QQuickWindow*>(w); q && q->isVisible()) wins << q;
+    // Browser windows first (largest), then the rest.
+    std::stable_sort(wins.begin(), wins.end(), [](QQuickWindow* a, QQuickWindow* b) { return a->width() * a->height() > b->width() * b->height(); });
+    for (QQuickWindow* q : wins) {
+        QString out = path;
+        if (n > 0) out.replace(QStringLiteral(".png"), QStringLiteral("-%1.png").arg(n));
+        q->grabWindow().save(out);
+        n++;
+    }
+}

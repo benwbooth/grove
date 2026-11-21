@@ -11,7 +11,7 @@ Menu {
     rightPadding: Theme.menuPad
     overlap: 3
     cascade: true
-    implicitWidth: Math.max(Math.round(200 * Theme.pt), contentItem.implicitWidth + leftPadding + rightPadding)
+    implicitWidth: Math.max(Math.round(250 * Theme.pt), contentItem.implicitWidth + leftPadding + rightPadding)
     delegate: GMenuItem {}
     background: GlassPanel {
         implicitWidth: Math.round(200 * Theme.pt)
