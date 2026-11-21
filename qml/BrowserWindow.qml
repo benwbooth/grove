@@ -648,7 +648,7 @@ ApplicationWindow {
             placeholderText: "Search"
             tip: Help.tip("Search names below this folder (choose Contents in the bar to search inside files)", "Search")
             onTextEdited: bw.activePane.startSearch(text)
-            onTextChanged: if (text === "" && bw.activePane && bw.activePane.searching) bw.activePane.endSearch(true)
+            onTextChanged: if (text === "" && bw.activePane && bw.activePane.searching && !bw.activePane.searchFiltered) bw.activePane.endSearch(true)
             Keys.onEscapePressed: { text = ""; bw.activePane.forceActiveFocus() }
             Keys.onDownPressed: bw.activePane.forceActiveFocus()
             Keys.onReturnPressed: bw.activePane.forceActiveFocus()
@@ -772,7 +772,25 @@ ApplicationWindow {
         property var pane
         title: "Save Search as a Smart Folder"
         message: "It appears in the sidebar and runs the search again whenever you open it."
-        onOpened: { smartName.text = pane ? pane.searchText : ""; smartName.forceActiveFocus(); smartName.selectAll() }
+        onOpened: { smartName.text = pane ? (pane.searchText || pane.searchTag || "Smart Folder") : ""; smartName.forceActiveFocus(); smartName.selectAll() }
+        // What it will look for (the search text and the chips).
+        GLabel {
+            width: parent.width
+            wrapMode: Text.Wrap; elide: Text.ElideNone
+            color: Theme.fgSecondary
+            font.pixelSize: Theme.small
+            text: {
+                const p = saveSheet.pane
+                if (!p) return ""
+                const kinds = { folder: "folders", image: "images", video: "movies", audio: "music", document: "documents", archive: "archives" }
+                const parts = []
+                if (p.searchText) parts.push((p.searchContents ? "containing “" : "named “") + p.searchText + "”")
+                if (p.searchKind) parts.push("only " + kinds[p.searchKind])
+                if (p.searchDays) parts.push("modified in the last " + (p.searchDays === 1 ? "day" : p.searchDays + " days"))
+                if (p.searchTag) parts.push("tagged " + p.searchTag)
+                return "Finds items " + (parts.join(", ") || "of any kind") + " in “" + p.titleFor(p.searchRoot) + "”."
+            }
+        }
         GField { id: smartName; width: parent.width; placeholderText: "Name"; Keys.onReturnPressed: saveBtn.clicked() }
         buttons: [
             PushButton { text: "Cancel"; onClicked: saveSheet.close() },
@@ -781,7 +799,8 @@ ApplicationWindow {
                 text: "Save"; primary: true; enabled: smartName.text !== ""
                 onClicked: {
                     const p = saveSheet.pane
-                    const q = { name: p.searchContents ? "" : p.searchText, content: p.searchContents ? p.searchText : "", include_hidden: !!bw.app.settings.show_hidden }
+                    const q = p.searchQuery()
+                    delete q.respect_ignore
                     bw.app.grove.saveSmartFolder(smartName.text, p.searchRoot, JSON.stringify(q))
                     saveSheet.close()
                     bw.toast("info", "Saved “" + smartName.text + "” in the sidebar")
@@ -919,6 +938,10 @@ ApplicationWindow {
         else if (cmd === "info") showInfo([arg])
         else if (cmd === "filter") { openFilter(); p.model.applyFilter(arg) }
         else if (cmd === "search") { if (search) search.text = arg; p.startSearch(arg) }
+        else if (cmd === "skind") p.setSearchFilter("searchKind", arg)
+        else if (cmd === "sdays") p.setSearchFilter("searchDays", Number(arg))
+        else if (cmd === "stag") p.setSearchFilter("searchTag", arg)
+        else if (cmd === "savesearch") saveSmartFolder(p)
         else if (cmd === "menu") p.showItemMenu(Number(arg), 100, 100)
         else if (cmd === "bgmenu") p.showBackgroundMenu()
         else if (cmd === "actions") { if (actionButton) actionMenu.popup(actionButton, 0, actionButton.height + 4); else actionMenu.popup() }

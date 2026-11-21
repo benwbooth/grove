@@ -44,7 +44,7 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Locations: home, computer, disks with capacity + eject, unmounted disks (click to mount) | ✅ | ✅ | ✅ (udisks2 over D-Bus) |
 | Network: saved servers, connected shares, mDNS discovery | ✅ | ✅ | ✅ |
 | Tags in the sidebar | ✅ | ✅ | ✅ |
-| Smart Folders (saved searches) | ✅ | ✅ | ✅ 🟡 criteria: name/content/kind/date/tag in the query format; the UI saves name/content searches |
+| Smart Folders (saved searches) | ✅ | ✅ | ✅ saves the text, Names/Contents and the kind/date/tag chips; reopening restores the chips |
 | Information panel / preview pane (F11, Ctrl+Shift+P) | ✅ | ✅ | ✅ with ratings |
 | Folders tree panel (F7) | – | ✅ | ✅ |
 | Terminal panel (F4) following the folder | – | ✅ | ✅ built-in emulator (alacritty_terminal) |
@@ -57,7 +57,7 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Search by name, streaming results | ✅ | ✅ | ✅ (parallel walk, `ignore` crate) |
 | Search in contents | ✅ | ✅ | ✅ (ripgrep's searcher) |
 | Scopes: home / this folder / computer | ✅ | ✅ | ✅ |
-| Metadata filters (kind, date, tag) | ✅ | ✅ | 🟡 in the engine and Smart Folders; no filter chips in the search bar yet |
+| Metadata filters (kind, date, tag) | ✅ | ✅ | ✅ Kind / Date / Tag chips in the search bar (they work without search text too) |
 | Show Enclosing Folder | ✅ | ✅ | ✅ |
 
 ## File operations

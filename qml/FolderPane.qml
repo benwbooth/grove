@@ -89,7 +89,7 @@ FocusScope {
         if (!p) return ""
         if (p.indexOf("trash:") === 0) return "Trash"
         if (p.indexOf("recent:") === 0) return "Recents"
-        if (p.indexOf("search:") === 0) return "Searching “" + searchText + "”"
+        if (p.indexOf("search:") === 0) return searchText ? "Searching “" + searchText + "”" : searchTag ? "Tag: " + searchTag : "Search"
         if (p.indexOf("archive://") === 0) {
             const h = p.indexOf("#")
             const a = p.substring(10, h < 0 ? p.length : h)
@@ -280,9 +280,14 @@ FocusScope {
     }
 
     // ---------- search & filter ----------
+    // Finder's search criteria: chips in the search bar (kind, date, tag).
+    property string searchKind: ""       // "", folder, image, video, audio, document, archive
+    property int searchDays: 0           // modified within (0: any time)
+    property string searchTag: ""
+    readonly property bool searchFiltered: searchKind !== "" || searchDays > 0 || searchTag !== ""
     function startSearch(text) {
         searchText = text
-        if (!text) { endSearch(true); return }
+        if (!text && !searchFiltered) { endSearch(true); return }
         if (!searching) {
             folderBeforeSearch = path
             searchRoot = special ? grove.home() : path
@@ -290,11 +295,20 @@ FocusScope {
         }
         searchTimer.restart()
     }
-    function runSearch() {
+    function setSearchFilter(name, value) {
+        pane[name] = value
+        if (searching) runSearch()
+        else if (searchFiltered) startSearch(searchText)
+    }
+    function searchQuery() {
         const q = { name: searchContents ? "" : searchText, content: searchContents ? searchText : "",
                     include_hidden: app ? !!app.settings.show_hidden : false,
-                    respect_ignore: app ? !!app.settings.search_respect_ignore : false }
-        if (!searchContents && searchText.indexOf(" ") < 0 && searchText.indexOf("*") < 0) q.name = searchText
+                    respect_ignore: app ? !!app.settings.search_respect_ignore : false,
+                    kind: searchKind, days: searchDays, tag: searchTag }
+        return q
+    }
+    function runSearch() {
+        const q = searchQuery()
         viewMode = viewMode === "columns" ? "list" : viewMode
         if (path.indexOf("search:") !== 0) backStack = backStack.concat([path])
         fm.startSearch(searchRoot, JSON.stringify(q))
@@ -304,6 +318,7 @@ FocusScope {
         if (!searching) return
         searching = false
         searchText = ""
+        searchKind = ""; searchDays = 0; searchTag = ""
         fm.stop()
         if (goBackToFolder && folderBeforeSearch) {
             backStack = backStack.filter(x => x !== folderBeforeSearch)
@@ -313,18 +328,22 @@ FocusScope {
     function runSmartFolder(sf) {
         folderBeforeSearch = path || grove.home()
         searching = true
-        searchText = sf.query.name || sf.query.content || ""
+        const q = sf.query || {}
+        searchContents = !q.name && !!q.content
+        searchText = q.name || q.content || ""
+        searchKind = q.kind || ""; searchDays = q.days || 0; searchTag = q.tag || ""
         searchRoot = sf.root
         viewMode = "list"
-        fm.startSearch(sf.root, JSON.stringify(sf.query))
+        fm.startSearch(sf.root, JSON.stringify(q))
         path = fm.path
     }
     function showTag(tag) {
         folderBeforeSearch = path || grove.home()
         searching = true
-        searchText = "tag: " + tag
+        searchText = ""
+        searchKind = ""; searchDays = 0; searchTag = tag
         searchRoot = grove.home()
-        fm.startSearch(grove.home(), JSON.stringify({ name: "", tag: tag }))
+        fm.startSearch(grove.home(), JSON.stringify(searchQuery()))
         path = fm.path
     }
     Timer { id: searchTimer; interval: 250; onTriggered: pane.runSearch() }
@@ -630,6 +649,30 @@ FocusScope {
                     text: "Contents"; checked: pane.searchContents; flat: false; capsule: true
                     tip: "Find files that contain the search text inside them"
                     onClicked: { pane.searchContents = true; pane.runSearch() }
+                }
+                Rectangle { width: 1; height: 16; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
+                SearchChip {
+                    label: "Kind"
+                    value: pane.searchKind
+                    choices: [{ v: "folder", t: "Folders" }, { v: "image", t: "Images" }, { v: "video", t: "Movies" }, { v: "audio", t: "Music" }, { v: "document", t: "Documents" }, { v: "archive", t: "Archives" }]
+                    tip: "Only items of one kind"
+                    onPicked: (v) => pane.setSearchFilter("searchKind", v)
+                }
+                SearchChip {
+                    label: "Date"
+                    value: pane.searchDays ? "" + pane.searchDays : ""
+                    choices: [{ v: "1", t: "Today" }, { v: "7", t: "Past 7 Days" }, { v: "30", t: "Past 30 Days" }, { v: "365", t: "Past Year" }]
+                    tip: "Only items modified recently"
+                    onPicked: (v) => pane.setSearchFilter("searchDays", Number(v || 0))
+                }
+                SearchChip {
+                    id: tagChip
+                    label: "Tag"
+                    value: pane.searchTag
+                    choices: []
+                    tip: "Only items with a tag"
+                    onAboutToOpen: Async.call(pane.grove, k => pane.grove.knownTags(k), r => tagChip.choices = (r || []).map(t => ({ v: t.name, t: t.name, color: t.color })))
+                    onPicked: (v) => pane.setSearchFilter("searchTag", v)
                 }
                 GLabel {
                     anchors.verticalCenter: parent.verticalCenter

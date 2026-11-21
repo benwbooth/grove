@@ -82,7 +82,7 @@ QtObject {
         { id: "taggray", group: "Edit", action: "Tag: Gray", defaults: ["Ctrl+Alt+7"], fixed: "", note: "Toggle the Gray tag on the selection" },
 
         { id: "search", group: "Search", action: "Search", defaults: ["Ctrl+F"], fixed: "", note: "Both" },
-        { id: "savesearch", group: "Search", action: "Save search as Smart Folder", defaults: [], fixed: "", note: "From the search bar" },
+        { id: "savesearch", group: "Search", action: "Save search as Smart Folder", defaults: [], fixed: "", note: "From the search bar: Kind, Date and Tag chips narrow a search and are saved with it" },
 
         { id: "terminal", group: "Other", action: "Open in Terminal", defaults: ["Ctrl+Alt+T"], fixed: "", note: "" },
         { id: "eject", group: "Other", action: "Eject", defaults: ["Ctrl+E"], fixed: "", note: "Finder: ⌘E" },
