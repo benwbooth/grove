@@ -170,10 +170,23 @@ public:
             key.truncate(q);
         }
         const QString decoded = QUrl::fromPercentEncoding(key.toUtf8());
+        QString matched;
         for (const QString& n : decoded.split(QLatin1Char('|'), Qt::SkipEmptyParts)) {
             if (n.startsWith(QLatin1Char('/'))) { icon = QIcon(n); if (!icon.isNull()) break; continue; }
-            if (QIcon::hasThemeIcon(n)) { icon = QIcon::fromTheme(n); break; }
+            if (QIcon::hasThemeIcon(n)) { icon = QIcon::fromTheme(n); matched = n; break; }
         }
+        // File and folder pictures (mime types, places) only: line-art
+        // action icons must render at their real size, since shrinking 1 px
+        // strokes leaves gaps.
+        static const QStringList filePrefixes {
+            QStringLiteral("folder"), QStringLiteral("inode-"), QStringLiteral("text-"), QStringLiteral("application-"),
+            QStringLiteral("image-"), QStringLiteral("video-"), QStringLiteral("audio-"), QStringLiteral("font-"),
+            QStringLiteral("model-"), QStringLiteral("package-"), QStringLiteral("x-office"), QStringLiteral("user-home"),
+            QStringLiteral("user-desktop"), QStringLiteral("unknown") };
+        bool fileIcon = false;
+        for (const QString& p : filePrefixes) if (matched.startsWith(p)) { fileIcon = true; break; }
+        if (matched.contains(QLatin1String("-x-"))) fileIcon = true;
+        if (matched.endsWith(QLatin1String("-new")) || matched.endsWith(QLatin1String("-symbolic"))) fileIcon = false;
         if (icon.isNull()) icon = QIcon::fromTheme(QStringLiteral("unknown"));
         // Small full-colour icons (list rows) come from the 32 px art scaled
         // down: Finder shows little blue folders there, while themes like
@@ -182,7 +195,7 @@ public:
         // size: QML already asks for size × the screen scale, and letting
         // QIcon apply the fractional scale (4/3) again smeared the art.
         QImage pm;
-        if (!tint.isValid() && s < 32) {
+        if (fileIcon && !tint.isValid() && s < 32) {
             pm = icon.pixmap(QSize(32, 32), 1.0).toImage();
             if (!pm.isNull() && pm.width() > s)
                 pm = pm.scaled(s, s, Qt::KeepAspectRatio, Qt::SmoothTransformation);

@@ -38,10 +38,27 @@ QtObject {
     }
     function stop() { velocity = 0; anim.running = false; samples = [] }
 
+    // GROVE_WHEEL_DEBUG=1 logs the first wheel events (device, deltas).
+    property int debugLeft: Theme.wheelDebug ? 40 : 0
     function wheel(e) {
         if (!target) return
         const now = Date.now()
-        const px = horizontal ? (e.pixelDelta.x || e.pixelDelta.y) : e.pixelDelta.y
+        const dev = e.device
+        const devType = dev ? dev.type : -1
+        if (debugLeft > 0) {
+            debugLeft--
+            console.warn("grove wheel: device", dev ? dev.name : "?", "type", devType,
+                         "angle", e.angleDelta.x, e.angleDelta.y, "pixel", e.pixelDelta.x, e.pixelDelta.y,
+                         "end", e.isEndEvent === true)
+        }
+        // A touchpad (or other smooth scroller) follows the fingers; a mouse
+        // wheel moves by notches. Qt on Wayland also gives wheel notches pixel
+        // deltas, so go by the device, then by whole-notch angles.
+        const ang0 = horizontal ? (e.angleDelta.x || e.angleDelta.y) : e.angleDelta.y
+        const isTouchpad = devType === PointerDevice.TouchPad
+            || (devType !== PointerDevice.Mouse && ang0 % 120 !== 0)
+        const px = !isTouchpad ? 0 : ((horizontal ? (e.pixelDelta.x || e.pixelDelta.y) : e.pixelDelta.y) || ang0 / 8)
+        if (isTouchpad && e.isEndEvent === true) { release.stop(); release.triggered(); return }
         if (px !== 0) {
             // Touchpad: follow the fingers, remember the speed.
             anim.running = false

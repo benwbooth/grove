@@ -178,6 +178,8 @@ Item {
         Theme.mode = settings.theme || "auto"
         Help.custom = settings.shortcuts && typeof settings.shortcuts === "object" ? settings.shortcuts : {}
         try { Theme.hearth = JSON.parse(grove.env("GROVE_HEARTH") || "{}") || {} } catch (e) {}
+        Theme.wheelDebug = grove.env("GROVE_WHEEL_DEBUG") === "1"
+        if (Theme.wheelDebug) console.warn("grove: Screen.devicePixelRatio", Screen.devicePixelRatio)
         applyIconTheme()
         grove.start()
         refreshTrash()

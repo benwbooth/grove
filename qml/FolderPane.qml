@@ -116,7 +116,11 @@ FocusScope {
         filterOpen = false
         fm.applyFilter("")
         renamingRow = -1
+        // Column view stays column view while you browse in it (as in
+        // Finder); a folder's saved view applies when you arrive any other way.
+        const keepColumns = viewMode === "columns"
         applyRememberedView(p)
+        if (keepColumns) viewMode = "columns"
         fm.applyShowHidden(app ? !!app.settings.show_hidden : false)
         fm.applyFoldersFirst(app ? app.settings.folders_first !== false : true)
         pendingSelect = opts.select || []

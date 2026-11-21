@@ -13,6 +13,8 @@ QtObject {
     property var hearth: ({})
     // Bumped when the icon theme changes so cached theme icons reload.
     property int iconRev: 0
+    // Set by Main.qml from GROVE_WHEEL_DEBUG.
+    property bool wheelDebug: false
     // hearth's Reduce motion: no gliding or extra animation.
     readonly property bool reduceMotion: (hearth || {}).reduceMotion === true
     // Toolbar glyph: the "-symbolic" form of each name first (one-colour
