@@ -728,6 +728,7 @@ impl qobject::FolderModel {
         if gen != self.rust().gen {
             return;
         }
+        let _perf = Perf::new(if done { "final batch (sort + show)" } else { "batch" }, items.len());
         if !items.is_empty() {
             let new: Vec<ItemRef> = items
                 .into_iter()
@@ -798,12 +799,14 @@ impl qobject::FolderModel {
     }
 
     fn apply_sort(mut self: Pin<&mut Self>, key: &QString, descending: bool) {
+        let _perf = Perf::new("sort", self.rust().all.len());
         self.as_mut().set_sort_key(key.clone());
         self.as_mut().set_descending(descending);
         self.resort();
     }
 
     fn apply_filter(mut self: Pin<&mut Self>, text: &QString) {
+        let _perf = Perf::new("filter", self.rust().all.len());
         self.as_mut().set_filter(text.clone());
         self.refilter();
     }
@@ -1071,6 +1074,21 @@ impl qobject::FolderModel {
 
     fn last_load_ms(&self) -> i32 {
         self.rust().load_ms
+    }
+}
+
+/// GROVE_PERF=1: how long the UI thread spends on each step.
+struct Perf(&'static str, usize, std::time::Instant);
+impl Perf {
+    fn new(what: &'static str, n: usize) -> Perf {
+        Perf(what, n, std::time::Instant::now())
+    }
+}
+impl Drop for Perf {
+    fn drop(&mut self) {
+        if std::env::var_os("GROVE_PERF").is_some() {
+            eprintln!("grove perf: {} ({} items): {:.1} ms on the UI thread", self.0, self.1, self.2.elapsed().as_secs_f64() * 1000.0);
+        }
     }
 }
 
