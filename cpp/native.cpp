@@ -38,6 +38,9 @@ class ThumbResponse : public QQuickImageResponse, public QRunnable {
 public:
     ThumbResponse(const QString& path, const QSize& req, QThreadPool* pool) : m_path(path), m_req(req), m_pool(pool) { setAutoDelete(false); }
     QQuickTextureFactory* textureFactory() const override { return QQuickTextureFactory::textureFactoryForImage(m_img); }
+    // No picture: an error, so the view keeps showing the icon (and
+    // doesn't cache an empty image for this file).
+    QString errorString() const override { return m_img.isNull() ? QStringLiteral("no thumbnail") : QString(); }
     // Scrolled away: drop it if it hasn't started (the engine still needs
     // finished() to clean up).
     void cancel() override

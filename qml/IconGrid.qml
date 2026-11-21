@@ -132,7 +132,7 @@ Item {
                 anchors.verticalCenter: iconBg.verticalCenter
                 size: root.icon
                 name: cell.iconName
-                visible: th.status !== Image.Ready
+                visible: th.status !== Image.Ready || th.implicitWidth <= 1
                 opacity: cell.cut || cell.hidden ? 0.5 : 1
             }
             Image {

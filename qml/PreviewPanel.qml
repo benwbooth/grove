@@ -30,7 +30,7 @@ Item {
                 anchors.centerIn: parent
                 size: Math.min(p.big, 256)
                 name: p.item ? p.item.icon : ""
-                visible: th.status !== Image.Ready
+                visible: th.status !== Image.Ready || th.implicitWidth <= 1
             }
             Image {
                 id: th

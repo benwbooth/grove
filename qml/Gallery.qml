@@ -108,7 +108,7 @@ Item {
                 color: t.selected ? Theme.accent : "transparent"
                 opacity: t.selected ? 0.9 : 1
             }
-            GIcon { anchors.centerIn: parent; size: parent.width - 16; name: t.iconName; visible: th.status !== Image.Ready }
+            GIcon { anchors.centerIn: parent; size: parent.width - 16; name: t.iconName; visible: th.status !== Image.Ready || th.implicitWidth <= 1 }
             Image {
                 id: th
                 anchors.fill: parent

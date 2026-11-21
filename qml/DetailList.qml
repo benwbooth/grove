@@ -293,7 +293,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         size: 18
                         name: rowItem.iconName
-                        visible: th.status !== Image.Ready
+                        visible: th.status !== Image.Ready || th.implicitWidth <= 1
                     }
                     Image {
                         id: th

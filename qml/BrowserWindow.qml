@@ -312,6 +312,7 @@ ApplicationWindow {
                         onPicked: (v) => bw.activePane.setView(v)
                     }
                     GButton {
+                        visible: main.width > 860
                         iconName: "view-split-left-right"
                         checked: bw.currentTab && bw.currentTab.split
                         tip: Help.tip("Split view: two folders side by side", "Split view")
@@ -326,7 +327,7 @@ ApplicationWindow {
                     JobsButton { app: bw.app; win: bw }
                     GField {
                         id: search
-                        width: Math.round(190 * Theme.pt)
+                        width: Math.max(110, Math.min(Math.round(190 * Theme.pt), main.width * 0.18))
                         iconName: "edit-find"
                         clearable: true
                         placeholderText: "Search"
