@@ -267,9 +267,10 @@ ApplicationWindow {
             id: sidebar
             win: bw
             visible: bw.sidebarShown
-            x: 8; y: 8
+            // Below the toolbar, which spans the whole window.
+            x: 8; y: Theme.toolbarHeight
             width: bw.sidebarWidth
-            height: parent.height - 16
+            height: parent.height - y - 8
             currentPath: bw.activePane ? bw.activePane.path : ""
         }
         FoldersPanel {
@@ -277,15 +278,16 @@ ApplicationWindow {
             win: bw
             visible: !!bw.app.settings.folders_panel
             x: bw.sidebarShown ? sidebar.x + sidebar.width + 8 : 8
-            y: 8
+            y: Theme.toolbarHeight
             width: Math.round(220 * Theme.pt)
-            height: parent.height - 16
+            height: parent.height - y - 8
         }
         MouseArea {
             visible: bw.sidebarShown
             x: sidebar.x + sidebar.width
+            y: sidebar.y
             width: 8
-            height: parent.height
+            height: sidebar.height
             cursorShape: Qt.SplitHCursor
             property real sx: 0
             property real sw: 0
@@ -301,9 +303,12 @@ ApplicationWindow {
             height: parent.height
 
             // ---------- toolbar ----------
+            // Spans the whole window (out over the sidebar column) so the
+            // toolbar has room; the sidebar sits below it.
             Item {
                 id: toolbar
-                width: parent.width
+                x: -main.x
+                width: root.width
                 height: Theme.toolbarHeight
                 MouseArea {
                     anchors.fill: parent
@@ -324,21 +329,28 @@ ApplicationWindow {
                 RowLayout {
                     id: toolRow
                     anchors.left: parent.left
-                    anchors.leftMargin: bw.sidebarShown ? 4 : 8
+                    anchors.leftMargin: 12
                     anchors.right: winControls.visible ? winControls.left : parent.right
                     anchors.rightMargin: winControls.visible ? 12 : 10
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 8
+                    // Never draw under the window buttons, however narrow the window.
+                    clip: true
                     Repeater {
                         model: bw.toolbarItems
                         Loader {
                             required property string modelData
                             readonly property bool flexible: modelData === "path" || modelData === "flexspace"
-                            Layout.fillWidth: flexible
-                            Layout.minimumWidth: modelData === "path" ? 120 : 0
+                            // The search field shrinks before anything else drops out.
+                            readonly property bool shrinks: modelData === "search"
+                            Layout.fillWidth: flexible || shrinks
+                            Layout.minimumWidth: modelData === "path" ? 80 : shrinks ? 90 : 0
+                            Layout.maximumWidth: shrinks && item ? item.implicitWidth : Number.POSITIVE_INFINITY
                             Layout.preferredWidth: modelData === "space" ? 16 : flexible ? 10 : (item ? item.implicitWidth : 0)
                             Layout.preferredHeight: Theme.controlHeight
-                            visible: modelData !== "split" || main.width > 860
+                            // As the toolbar narrows, the least-used items step aside
+                            // (they stay in the action menu and the keyboard).
+                            visible: bw.toolbarFits(modelData, toolRow.width)
                             sourceComponent: bw.toolComponent(modelData)
                         }
                     }
@@ -590,6 +602,13 @@ ApplicationWindow {
     property Item pathBar: null
     property Item search: null
     property Item actionButton: null
+    // Width below which a toolbar item hides (0: always shown).
+    function toolbarFits(k, w) {
+        const minW = { split: 760, selection: 700, viewopts: 680, hidden: 680, terminal: 680, connect: 680, burn: 680,
+                       eject: 680, share: 640, info: 640, quicklook: 640, newfolder: 620, trash: 620, jobs: 0,
+                       sidebar: 560, view: 520, space: 600, flexspace: 0 }[k] || 0
+        return w >= minW
+    }
     function toolComponent(k) {
         return ({ nav: tcNav, sidebar: tcSidebar, path: tcPath, view: tcView, split: tcSplit, selection: tcSelection, action: tcAction,
                   jobs: tcJobs, search: tcSearch, newfolder: tcNewFolder, trash: tcTrash, info: tcInfo, share: tcShare, quicklook: tcQuickLook,
@@ -954,6 +973,7 @@ ApplicationWindow {
         const p = activePane
         if (cmd === "view") p.setView(arg)
         else if (cmd === "go") p.navigate(arg)
+        else if (cmd === "size") { const [w, h] = arg.split("x").map(Number); bw.width = w; if (h) bw.height = h }
         else if (cmd === "wheel") { const v = p.viewLoaderItem(); if (v && v.testWheel) v.testWheel(Number(arg)) }
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")
