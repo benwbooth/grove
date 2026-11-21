@@ -48,6 +48,7 @@ ApplicationWindow {
     function emptyTrash() {}
     function selectAfterJob() {}
     function toggleViewOptions() {}
+    function burn(p) {}
 
     function accept(paths) {
         let uris = []

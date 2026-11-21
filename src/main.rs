@@ -11,6 +11,7 @@
 
 mod actions;
 mod archive;
+mod burn;
 mod bridge;
 mod controller;
 mod dbus;

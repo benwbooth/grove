@@ -262,6 +262,14 @@ pub mod ffi {
         #[qinvokable]
         fn media_trim(self: &Grove, key: &QString, path: &QString, start_ms: f64, end_ms: f64, mode: &QString);
 
+        // --- burning ---
+        /// Optical drives: JSON [{dev, name, canWrite}].
+        #[qinvokable]
+        fn optical_drives(self: &Grove, key: &QString);
+        /// Burn (JSON burn::Request) to a drive or an ISO file; the job id.
+        #[qinvokable]
+        fn burn(self: Pin<&mut Grove>, json: &QString) -> i32;
+
         // --- portal file chooser ---
         #[qinvokable]
         fn chooser_done(self: &Grove, id: &QString, ok: bool, uris: &QString, choices: &QString);

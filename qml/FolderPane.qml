@@ -814,6 +814,7 @@ FocusScope {
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: Help.shown("Ctrl+Alt+T"); enabled: !pane.special; onTriggered: pane.grove.openTerminal(pane.path) }
         GMenuItem { text: "Copy Path"; iconName: "edit-copy-path"; shortcutText: Help.shown("Ctrl+Alt+C"); onTriggered: pane.copyPath() }
         GMenuItem { text: "Add to Favourites"; iconName: "bookmark-new"; enabled: !pane.special; onTriggered: pane.grove.addFavourite(pane.path, -1) }
+        GMenuItem { text: "Burn “" + pane.title + "” to Disc…"; iconName: "media-optical-burn|media-optical"; enabled: !pane.special; tip: "Put this folder's contents on a CD, DVD or Blu-ray (or a disc image file)"; onTriggered: pane.win.burn([pane.path]) }
         GMenuItem { text: "Browse Previous Versions…"; iconName: "document-open-recent"; enabled: !pane.special; tip: "Earlier copies of this folder from the hourly snapshots"; onTriggered: pane.win.showVersions(pane.path) }
         GMenu {
             id: gitBgMenu

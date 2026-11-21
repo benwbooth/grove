@@ -17,7 +17,7 @@ ApplicationWindow {
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
     property var currentTab: tabRepeater.count > 0 ? tabRepeater.itemAt(tabBar.currentIndex) : null
     property var activePane: currentTab ? currentTab.activePane : null
-    property bool modalOpen: toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || saveSheet.opened || openWithSheet.opened
+    property bool modalOpen: burnSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || saveSheet.opened || openWithSheet.opened
 
     width: 1180
     height: 720
@@ -678,6 +678,7 @@ ApplicationWindow {
         GMenuItem { text: "Restore Default Toolbar"; tip: "Put back grove's standard toolbar"; onTriggered: bw.setSetting("toolbar", []) }
     }
     ToolbarSheet { id: toolbarSheet; win: bw }
+    BurnSheet { id: burnSheet; app: bw.app; win: bw }
 
     // ---------- menus ----------
     GMenu {
@@ -701,6 +702,7 @@ ApplicationWindow {
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: Help.shown("Ctrl+Alt+T"); onTriggered: bw.app.grove.openTerminal(bw.activePane.path) }
         GMenuItem { text: "Connect to Server…"; iconName: "network-connect"; shortcutText: Help.shown("Ctrl+K"); onTriggered: bw.connectServer() }
         GMenuSeparator {}
+        GMenuItem { text: "Burn to Disc…"; iconName: "media-optical-burn|media-optical"; tip: "Burn the selection (or this folder) to a CD, DVD or Blu-ray, or save a disc image"; onTriggered: bw.burnSelection() }
         GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; enabled: bw.app.trashCount > 0; onTriggered: bw.emptyTrash() }
         GMenuSeparator {}
         GMenuItem { text: "Customize Toolbar…"; iconName: "configure"; tip: "Add, remove and rearrange toolbar items"; onTriggered: toolbarSheet.open() }
@@ -811,7 +813,13 @@ ApplicationWindow {
     QuickLook { id: ql; app: bw.app; win: bw }
     ViewOptions { id: viewOptions; win: bw; x: bw.width - width - 16; y: Theme.toolbarHeight + 8 }
     function toggleViewOptions() { if (viewOptions.opened) viewOptions.close(); else viewOptions.open() }
-    function burnSelection() { toast("info", "Disc burning isn't ready yet.") }
+    function burn(paths) { if (paths.length) burnSheet.start(paths) }
+    function burnSelection() {
+        const s = activePane.selectedPaths()
+        if (s.length) burn(s)
+        else if (!activePane.special) burn([activePane.path])
+        else toast("info", "Select something to burn first.")
+    }
     function toggleSelectionMode() { activePane.setSelectionMode(!activePane.selectionMode); activePane.forceActiveFocus() }
     function toggleStacks() { activePane.setStacks(activePane.stacks ? "" : "kind") }
     SettingsWindow { id: settingsWin; app: bw.app }
@@ -955,6 +963,8 @@ ApplicationWindow {
             else { ql.trimFrom(2000, 5000) }
         }
         else if (cmd === "qlsave") ql.saveEdit(arg)
+        else if (cmd === "burn") burn(arg ? arg.split(",") : [p.path])
+        else if (cmd === "burngo") burnSheet.goImage()
         else if (cmd === "tip") { setSetting("preview_tooltips", true); p.testTip = Number(arg) }
         else if (cmd === "recordkey") settingsWin.recordSeq(arg)
         else if (cmd === "key") { const [k, m] = arg.split(":"); app.grove.testKey(Number(k), Number(m || 0), "") }

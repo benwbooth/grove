@@ -1134,6 +1134,65 @@ impl ffi::Grove {
         });
     }
 
+    pub fn optical_drives(&self, key: &QString) {
+        self.answer(key, || json!(crate::burn::drives().into_iter().map(|d| json!({"dev": d.dev, "name": d.name, "canWrite": d.can_write})).collect::<Vec<_>>()));
+    }
+
+    pub fn burn(mut self: Pin<&mut Self>, json_s: &QString) -> i32 {
+        let Ok(req) = serde_json::from_str::<crate::burn::Request>(&json_s.to_string()) else { return -1 };
+        let id = self.rust().next_job;
+        self.as_mut().rust_mut().next_job += 1;
+        let state = Arc::new(JobState { ctl: Arc::new(Control::default()), answer: Mutex::new(None) });
+        jobs().lock().insert(id, state.clone());
+        let qt = self.qt_thread();
+        let what = if req.paths.len() == 1 { Path::new(&req.paths[0]).file_name().map(|n| format!("“{}”", n.to_string_lossy())).unwrap_or_default() } else { format!("{} items", req.paths.len()) };
+        let title = if req.device.is_empty() { format!("Making a disc image of {what}") } else if req.simulate { format!("Test-burning {what}") } else { format!("Burning {what}") };
+        std::thread::spawn(move || {
+            let send = |v: Value| {
+                let s = v.to_string();
+                let _ = qt.queue(move |g| g.job_changed(id, qs(&s)));
+            };
+            if req.dry_run {
+                jobs().lock().remove(&id);
+                let cmd = crate::burn::command(&req).map(|a| a.join(" ")).unwrap_or_else(|e| e);
+                send(json!({"id": id, "title": title, "state": "done", "totalBytes": 1, "doneBytes": 1, "current": cmd}));
+                notify_any("info", &format!("Dry run: {cmd}"));
+                return;
+            }
+            send(json!({"id": id, "title": title, "state": "running", "indeterminate": true, "totalItems": 0, "doneItems": 0, "current": "Starting…"}));
+            let cancel = AtomicBool::new(false);
+            let ctl = state.ctl.clone();
+            let mut last = std::time::Instant::now();
+            let mut frac = 0.0;
+            let r = crate::burn::run(&req, &cancel, |f, msg| {
+                if ctl.is_cancelled() {
+                    cancel.store(true, Ordering::Relaxed);
+                }
+                if f >= 0.0 {
+                    frac = f;
+                }
+                if last.elapsed().as_millis() > 200 || !msg.is_empty() {
+                    last = std::time::Instant::now();
+                    send(json!({"id": id, "title": title, "state": "running", "totalBytes": 1000, "doneBytes": (frac * 1000.0) as u64, "current": msg}));
+                }
+            });
+            jobs().lock().remove(&id);
+            match r {
+                Ok(()) => {
+                    if !req.iso.is_empty() {
+                        if let Some(d) = Path::new(&req.iso).parent() {
+                            ffi::Grove::touched(&qt, vec![d.to_string_lossy().into_owned()]);
+                        }
+                        ffi::Grove::push_history(&qt, "Make Disc Image", Action::Exists { paths: vec![PathBuf::from(&req.iso)] });
+                    }
+                    send(json!({"id": id, "title": title, "state": "done", "totalBytes": 1, "doneBytes": 1, "results": if req.iso.is_empty() { json!([]) } else { json!([req.iso]) }, "dest": Path::new(&req.iso).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()}));
+                }
+                Err(e) => send(json!({"id": id, "title": title, "state": if e == "Cancelled" {"cancelled"} else {"failed"}, "errors": [e]})),
+            }
+        });
+        id
+    }
+
     pub fn session(&self) -> QString {
         qs(&startup().session)
     }
