@@ -1,3 +1,6 @@
+#include <QUrlQuery>
+#include <QPainter>
+#include <QColor>
 #include "native_helpers.h"
 #include "grove/src/bridge.cxxqt.h"
 
@@ -153,13 +156,38 @@ public:
     {
         const int s = qMax(16, qMax(req.width(), req.height()));
         QIcon icon;
-        const QString decoded = QUrl::fromPercentEncoding(id.toUtf8());
+        QString key = id;
+        QColor tint;
+        const int q = key.lastIndexOf(QLatin1Char('?'));  // ?r=<rev> busts caches; &tint=rrggbb recolours
+        if (q >= 0) {
+            const QUrlQuery query(key.mid(q + 1));
+            if (query.hasQueryItem(QStringLiteral("tint")))
+                tint = QColor(QLatin1Char('#') + query.queryItemValue(QStringLiteral("tint")));
+            key.truncate(q);
+        }
+        const QString decoded = QUrl::fromPercentEncoding(key.toUtf8());
         for (const QString& n : decoded.split(QLatin1Char('|'), Qt::SkipEmptyParts)) {
             if (n.startsWith(QLatin1Char('/'))) { icon = QIcon(n); if (!icon.isNull()) break; continue; }
             if (QIcon::hasThemeIcon(n)) { icon = QIcon::fromTheme(n); break; }
         }
         if (icon.isNull()) icon = QIcon::fromTheme(QStringLiteral("unknown"));
-        QPixmap pm = icon.pixmap(QSize(s, s));
+        // Small full-colour icons (list rows) come from the 32 px art scaled
+        // down: Finder shows little blue folders there, while themes like
+        // WhiteSur draw their 16 px sizes as outlines.
+        QPixmap pm;
+        if (!tint.isValid() && s < 32) {
+            pm = icon.pixmap(QSize(32, 32));
+            if (!pm.isNull() && pm.width() > s)
+                pm = pm.scaled(s, s, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        } else {
+            pm = icon.pixmap(QSize(s, s));
+        }
+        if (tint.isValid() && !pm.isNull()) {
+            // Monochrome glyph in one colour, keeping its alpha (Finder's sidebar).
+            QPainter p(&pm);
+            p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+            p.fillRect(pm.rect(), tint);
+        }
         if (size) *size = pm.size();
         return pm;
     }
@@ -345,11 +373,26 @@ void grove_test_key(int32_t key, int32_t modifiers, const QString& text)
     QGuiApplication::sendEvent(w, &release);
 }
 
-void grove_set_icon_theme(bool dark)
+static QString g_systemIconTheme;
+
+static bool iconThemeInstalled(const QString& name)
 {
-    const QString cur = QIcon::themeName();
-    if (cur.startsWith(QLatin1String("breeze"), Qt::CaseInsensitive))
-        QIcon::setThemeName(dark ? QStringLiteral("breeze-dark") : QStringLiteral("breeze"));
+    for (const QString& d : QIcon::themeSearchPaths())
+        if (QFile::exists(d + QLatin1Char('/') + name + QStringLiteral("/index.theme"))) return true;
+    return false;
+}
+
+// mac: WhiteSur (Finder-like folders and file icons, shipped with grove);
+// otherwise the desktop's theme, switching breeze <-> breeze-dark.
+void grove_set_icon_theme(bool dark, bool mac)
+{
+    if (g_systemIconTheme.isEmpty()) g_systemIconTheme = QIcon::themeName();
+    QString want = g_systemIconTheme;
+    if (mac && iconThemeInstalled(QStringLiteral("WhiteSur")))
+        want = dark ? QStringLiteral("WhiteSur-dark") : QStringLiteral("WhiteSur");
+    else if (want.startsWith(QLatin1String("breeze"), Qt::CaseInsensitive))
+        want = dark ? QStringLiteral("breeze-dark") : QStringLiteral("breeze");
+    if (QIcon::themeName() != want) QIcon::setThemeName(want);
 }
 
 void grove_grab_windows(const QString& path)

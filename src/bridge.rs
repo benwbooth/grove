@@ -27,7 +27,7 @@ pub mod ffi {
         fn grove_image_rotate(path: &QString, degrees: i32) -> QString;
         fn grove_image_convert(path: &QString, format: &QString) -> QString;
         fn grove_test_key(key: i32, modifiers: i32, text: &QString);
-        fn grove_set_icon_theme(dark: bool);
+        fn grove_set_icon_theme(dark: bool, mac: bool);
         fn grove_grab_windows(path: &QString);
     }
 
@@ -263,7 +263,7 @@ pub mod ffi {
         #[qinvokable]
         fn quit_app(self: &Grove);
         #[qinvokable]
-        fn set_icon_theme(self: &Grove, dark: bool);
+        fn set_icon_theme(self: &Grove, dark: bool, mac: bool);
         #[qinvokable]
         fn grab_windows(self: &Grove, path: &QString);
     }

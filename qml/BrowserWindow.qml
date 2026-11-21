@@ -303,10 +303,10 @@ ApplicationWindow {
                     spacing: 8
                     Segmented {
                         items: [
-                            { icon: "view-list-icons", tip: Help.tip("View as icons", "Icons"), value: "icons" },
-                            { icon: "view-list-details", tip: Help.tip("View as a list (folders expand in place)", "List"), value: "list" },
-                            { icon: "view-file-columns|view-split-left-right", tip: Help.tip("View in columns", "Columns"), value: "columns" },
-                            { icon: "view-preview|view-list-images", tip: Help.tip("View as a gallery", "Gallery"), value: "gallery" }
+                            { icon: "view-grid-symbolic|view-list-icons", tip: Help.tip("View as icons", "Icons"), value: "icons" },
+                            { icon: "view-list-symbolic|view-list-details", tip: Help.tip("View as a list (folders expand in place)", "List"), value: "list" },
+                            { icon: "view-column-symbolic|view-file-columns|view-split-left-right", tip: Help.tip("View in columns", "Columns"), value: "columns" },
+                            { icon: "view-paged-symbolic|view-preview|view-list-images", tip: Help.tip("View as a gallery", "Gallery"), value: "gallery" }
                         ]
                         current: bw.activePane ? bw.activePane.viewMode : ""
                         onPicked: (v) => bw.activePane.setView(v)
@@ -320,7 +320,7 @@ ApplicationWindow {
                     }
                     GButton {
                         id: actionButton
-                        iconName: "application-menu|open-menu-symbolic|overflow-menu"
+                        iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
                         tip: "More actions: new folder, sort, show hidden files, settings, help"
                         onClicked: actionMenu.popup(actionButton, 0, actionButton.height + 4)
                     }

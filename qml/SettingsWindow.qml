@@ -90,6 +90,7 @@ Window {
             Group {
                 title: "Appearance"
                 ChoiceRow { label: "Light or dark"; help: "Automatic follows hearth's setting (or the time of day)."; key: "theme"; choices: [{ label: "Automatic", value: "auto" }, { label: "Dark", value: "dark" }, { label: "Light", value: "light" }] }
+                ChoiceRow { label: "Icons"; help: "macOS style looks like Finder. System uses your desktop's icon theme."; key: "icon_style"; choices: [{ label: "macOS style", value: "macos" }, { label: "System", value: "system" }] }
                 ChoiceRow { label: "New folders open as"; help: "The view for folders you haven't opened before."; key: "default_view"; choices: [{ label: "Icons", value: "icons" }, { label: "List", value: "list" }, { label: "Columns", value: "columns" }, { label: "Gallery", value: "gallery" }] }
                 ToggleRow { label: "Remember each folder's view"; help: "Folders reopen in the view, sort order and icon size you left them in."; key: "per_folder_views" }
                 ToggleRow { label: "Show previews (thumbnails)"; help: "Pictures, videos and PDFs show their contents instead of an icon."; key: "show_thumbnails" }

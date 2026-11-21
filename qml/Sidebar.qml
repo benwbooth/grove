@@ -140,7 +140,9 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: pl.total > 0 ? -3 : 0
             size: 18
-            name: pl.icon
+            // Finder: monochrome glyphs in the accent colour.
+            name: pl.icon ? pl.icon.split("|").map(n => n + "-symbolic").join("|") + "|" + pl.icon : ""
+            tint: Theme.accent
             opacity: pl.dim ? 0.5 : 1
         }
         GLabel {
@@ -282,6 +284,8 @@ Item {
                 Place {
                     label: sb.app.grove.env("USER") || "Home"; icon: "user-home"; path: sb.places.home || ""
                     tip: "Your home folder (Ctrl+Shift+H)"; dropTarget: true
+                    // Finder lists home once, under Favourites.
+                    visible: !(sb.places.favourites || []).some(f => f.path === sb.places.home)
                     onActivated: sb.win.go(sb.places.home)
                 }
                 Repeater {

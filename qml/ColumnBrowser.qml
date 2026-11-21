@@ -183,7 +183,7 @@ Item {
                         enabled: column.isLast && !r.renaming
                         pane: root.pane
                         row: r.index
-                        iconUrl: r.iconName ? "image://icon/" + r.iconName : ""
+                        iconUrl: Theme.iconUrl(r.iconName)
                         onLeftPressed: (mods) => { if (r.isDir && !(mods & (Qt.ShiftModifier | Qt.ControlModifier))) openTimer.restart() }
                         Timer { id: openTimer; interval: 1; onTriggered: if (root.fm.selectionCount === 1) root.pane.navigate(r.path) }
                     }

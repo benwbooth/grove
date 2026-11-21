@@ -28,7 +28,8 @@ AbstractButton {
             spacing: 6
             GIcon {
                 visible: b.iconName !== ""
-                name: b.iconName
+                name: Theme.glyph(b.iconName)
+                tint: b.tint
                 size: b.iconSize
                 anchors.verticalCenter: parent.verticalCenter
             }

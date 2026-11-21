@@ -151,10 +151,26 @@ Item {
 
     function refreshTrash() { Async.call(grove, k => grove.trashCount(k), r => app.trashCount = r.count) }
 
+    // Only when the theme really changes: a new iconRev reloads every icon.
+    property string appliedIconTheme: ""
+    function applyIconTheme() {
+        const mac = (settings.icon_style || "macos") === "macos"
+        const key = Theme.dark + "/" + mac
+        if (key === appliedIconTheme) return
+        appliedIconTheme = key
+        grove.setIconTheme(Theme.dark, mac)
+        Theme.iconRev++
+    }
+    Connections {
+        target: Theme
+        function onDarkChanged() { app.applyIconTheme() }
+    }
+    onSettingsChanged: if (appliedIconTheme !== "") applyIconTheme()
+
     Component.onCompleted: {
         Theme.mode = settings.theme || "auto"
         try { Theme.hearth = JSON.parse(grove.env("GROVE_HEARTH") || "{}") } catch (e) {}
-        grove.setIconTheme(Theme.dark)
+        applyIconTheme()
         grove.start()
         refreshTrash()
         let req = null

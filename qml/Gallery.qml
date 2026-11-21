@@ -119,7 +119,7 @@ Item {
                 sourceSize.height: Math.ceil(height * Screen.devicePixelRatio)
                 source: t.thumb ? "image://thumb/" + encodeURIComponent(t.path) + "?m=" + t.mtime : ""
             }
-            ItemMouse { anchors.fill: parent; pane: root.pane; row: t.index; iconUrl: t.iconName ? "image://icon/" + t.iconName : "" }
+            ItemMouse { anchors.fill: parent; pane: root.pane; row: t.index; iconUrl: Theme.iconUrl(t.iconName) }
             FolderDrop { anchors.fill: parent; pane: root.pane; path: t.path; enabledFor: t.isDir }
             GTip { visible: false; text: t.name }
         }

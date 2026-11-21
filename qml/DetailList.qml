@@ -352,7 +352,7 @@ Item {
                 anchors.leftMargin: 10 + (rowItem.depth + 1) * 16
                 pane: root.pane
                 row: rowItem.index
-                iconUrl: rowItem.iconName ? "image://icon/" + rowItem.iconName : ""
+                iconUrl: Theme.iconUrl(rowItem.iconName)
                 enabled: !rowItem.renaming
             }
             FolderDrop {

@@ -1123,8 +1123,8 @@ impl ffi::Grove {
         ffi::grove_grab_windows(path);
     }
 
-    pub fn set_icon_theme(&self, dark: bool) {
-        ffi::grove_set_icon_theme(dark);
+    pub fn set_icon_theme(&self, dark: bool, mac: bool) {
+        ffi::grove_set_icon_theme(dark, mac);
     }
 
     pub fn quit_app(&self) {

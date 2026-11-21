@@ -18,6 +18,9 @@ fn view_default() -> String {
 fn theme_default() -> String {
     "auto".into()
 }
+fn icon_style_default() -> String {
+    "macos".into()
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Settings {
@@ -56,6 +59,9 @@ pub struct Settings {
     /// auto (follow hearth / the system), dark, light.
     #[serde(default = "theme_default")]
     pub theme: String,
+    /// macos (WhiteSur icons, Finder-like) or system (the desktop's icon theme).
+    #[serde(default = "icon_style_default")]
+    pub icon_style: String,
     #[serde(default = "t")]
     pub show_path_bar: bool,
     #[serde(default = "t")]

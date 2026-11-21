@@ -202,7 +202,7 @@ Item {
                 anchors.bottomMargin: -(labelBg.height + 3)
                 pane: root.pane
                 row: cell.index
-                iconUrl: th.status === Image.Ready ? th.source : (cell.iconName ? "image://icon/" + cell.iconName : "")
+                iconUrl: th.status === Image.Ready ? th.source : Theme.iconUrl(cell.iconName)
                 enabled: !cell.renaming
             }
             FolderDrop {

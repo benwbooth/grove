@@ -11,6 +11,20 @@ QtObject {
     // Set by Main.qml from grove's settings and hearth's appearance.
     property string mode: "auto"          // auto, dark, light
     property var hearth: ({})
+    // Bumped when the icon theme changes so cached theme icons reload.
+    property int iconRev: 0
+    // Toolbar glyph: the "-symbolic" form of each name first (one-colour
+    // glyphs as in Finder's toolbar), then the names as given.
+    function glyph(name) {
+        if (!name) return ""
+        const ns = name.split("|")
+        return ns.map(n => n.endsWith("-symbolic") ? n : n + "-symbolic").concat(ns).join("|")
+    }
+    function iconUrl(name, tint) {
+        if (!name) return ""
+        const t = tint !== undefined && tint.a > 0 ? "&tint=" + tint.toString().replace("#", "") : ""
+        return "image://icon/" + name + "?r=" + iconRev + t
+    }
     readonly property bool hearthDark: {
         const m = hearth.mode || "dark"
         if (m === "light") return false

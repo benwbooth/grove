@@ -26,7 +26,8 @@ TextField {
         border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.7)
         GIcon {
             visible: f.iconName !== ""
-            name: f.iconName
+            name: Theme.glyph(f.iconName)
+            tint: Theme.fgSecondary
             size: 14
             x: 9
             anchors.verticalCenter: parent.verticalCenter
