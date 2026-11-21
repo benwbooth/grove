@@ -230,6 +230,13 @@ pub mod ffi {
         #[qinvokable]
         fn save_session(self: &Grove, json: &QString);
 
+        /// LocalSend devices nearby (JSON list), after ~3 s.
+        #[qinvokable]
+        fn nearby_devices(self: &Grove, key: &QString);
+        /// Send files to a LocalSend device; returns the job id.
+        #[qinvokable]
+        fn share_localsend(self: Pin<&mut Grove>, device: &QString, paths: &QString) -> i32;
+
         // --- remote places (phase 2) ---
         #[qinvokable]
         fn connect_server(self: &Grove, key: &QString, json: &QString);

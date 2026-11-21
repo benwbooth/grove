@@ -1056,6 +1056,58 @@ impl ffi::Grove {
         });
     }
 
+    pub fn nearby_devices(&self, key: &QString) {
+        self.answer(key, || match crate::localsend::discover(std::time::Duration::from_millis(3000)) {
+            Ok(d) => json!({"devices": d}),
+            Err(e) => json!({"error": e}),
+        });
+    }
+
+    pub fn share_localsend(mut self: Pin<&mut Self>, device: &QString, paths: &QString) -> i32 {
+        let Ok(dev) = serde_json::from_str::<Value>(&device.to_string()) else { return -1 };
+        let dev = crate::localsend::Device {
+            alias: dev["alias"].as_str().unwrap_or("").into(),
+            ip: dev["ip"].as_str().unwrap_or("").into(),
+            port: dev["port"].as_u64().unwrap_or(53317) as u16,
+            protocol: dev["protocol"].as_str().unwrap_or("https").into(),
+            device_type: String::new(),
+            device_model: String::new(),
+            fingerprint: dev["fingerprint"].as_str().unwrap_or("").into(),
+        };
+        let files = paths_of(paths);
+        let id = self.rust().next_job;
+        self.as_mut().rust_mut().next_job += 1;
+        let state = Arc::new(JobState { ctl: Arc::new(Control::default()), answer: Mutex::new(None) });
+        jobs().lock().insert(id, state.clone());
+        let qt = self.qt_thread();
+        let title = format!("Sending {} to “{}”", if files.len() == 1 { files[0].file_name().map(|n| format!("“{}”", n.to_string_lossy())).unwrap_or_default() } else { format!("{} files", files.len()) }, dev.alias);
+        std::thread::spawn(move || {
+            let send = |v: Value| {
+                let s = v.to_string();
+                let _ = qt.queue(move |g| g.job_changed(id, qs(&s)));
+            };
+            send(json!({"id": id, "title": title, "state": "running", "totalBytes": 1, "doneBytes": 0, "current": "Waiting for the other device to accept…"}));
+            let mut last = std::time::Instant::now();
+            let cancel = AtomicBool::new(false);
+            let ctl = state.ctl.clone();
+            let r = crate::localsend::send(&dev, &files, &cancel, |d, t| {
+                if ctl.is_cancelled() {
+                    cancel.store(true, Ordering::Relaxed);
+                }
+                if last.elapsed().as_millis() > 150 {
+                    last = std::time::Instant::now();
+                    send(json!({"id": id, "title": title, "state": "running", "totalBytes": t, "doneBytes": d, "current": ""}));
+                }
+            });
+            jobs().lock().remove(&id);
+            match r {
+                Ok(()) => send(json!({"id": id, "title": title, "state": "done", "totalBytes": 1, "doneBytes": 1})),
+                Err(e) => send(json!({"id": id, "title": title, "state": if e == "Cancelled" {"cancelled"} else {"failed"}, "errors": [e]})),
+            }
+        });
+        id
+    }
+
     pub fn session(&self) -> QString {
         qs(&startup().session)
     }

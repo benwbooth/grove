@@ -16,6 +16,7 @@ mod controller;
 mod dbus;
 mod gitstatus;
 mod info;
+mod localsend;
 mod mime;
 mod model;
 mod places;

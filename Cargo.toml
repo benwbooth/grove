@@ -29,6 +29,9 @@ zbus = { version = "5", default-features = false, features = ["blocking-api", "a
 futures-channel = "0.3"
 percent-encoding = "2"
 alacritty_terminal = "0.25"
+ureq = { version = "3", features = ["json"] }
+socket2 = { version = "0.6", features = ["all"] }
+rand = "0.9"
 
 [build-dependencies]
 cxx-qt-build = "0.10"

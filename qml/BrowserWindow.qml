@@ -16,7 +16,7 @@ ApplicationWindow {
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
     property var currentTab: tabRepeater.count > 0 ? tabRepeater.itemAt(tabBar.currentIndex) : null
     property var activePane: currentTab ? currentTab.activePane : null
-    property bool modalOpen: commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || saveSheet.opened || openWithSheet.opened
+    property bool modalOpen: shareSheet.opened || commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || saveSheet.opened || openWithSheet.opened
 
     width: 1180
     height: 720
@@ -162,6 +162,7 @@ ApplicationWindow {
         })
     }
     function showVersions(path) { versionsSheet.start(path) }
+    function share(paths) { shareSheet.start(paths) }
     function showText(heading, text, html, tool, action) {
         const w = textComp.createObject(null, { heading: heading, text: text || "", html: html || "", tool: tool || "", toolAction: action || null })
         w.show()
@@ -589,6 +590,7 @@ ApplicationWindow {
     }
     BatchRename { id: renameSheet; app: bw.app; win: bw }
     VersionsSheet { id: versionsSheet; app: bw.app; win: bw }
+    ShareSheet { id: shareSheet; app: bw.app; win: bw }
     Sheet {
         id: commitSheet
         property string dir: ""
@@ -748,5 +750,8 @@ ApplicationWindow {
         else if (cmd === "toast") toast("info", arg)
         else if (cmd === "light") Theme.mode = "light"
         else if (cmd === "hidden") toggleHidden()
+        else if (cmd === "share") share([arg])
+        else if (cmd === "versions") showVersions(arg)
+        else if (cmd === "panel") setPanel(arg, true)
     }
 }

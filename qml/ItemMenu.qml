@@ -51,6 +51,7 @@ GMenu {
     GMenuItem { text: "Copy to Other Side"; iconName: "edit-copy"; visible: m.split; height: visible ? implicitHeight : 0; shortcutText: "Shift+F5"; onTriggered: m.pane.win.toOtherPane(false) }
     GMenuItem { text: "Move to Other Side"; iconName: "go-next"; visible: m.split; height: visible ? implicitHeight : 0; shortcutText: "Shift+F6"; onTriggered: m.pane.win.toOtherPane(true) }
     GMenuItem { text: "Browse Previous Versions…"; iconName: "document-open-recent"; enabled: m.one && !m.pane.special; tip: "Earlier copies from the hourly snapshots; show or restore them"; onTriggered: m.pane.win.showVersions(m.target.path) }
+    GMenuItem { text: "Share with Nearby Device…"; iconName: "document-share|send-to|network-wireless"; enabled: !m.pane.special && !m.target.isDir; tip: "Send to a phone or computer running LocalSend (like AirDrop)"; onTriggered: m.pane.win.share(m.sel) }
     GMenuSeparator {}
     GMenuItem { text: "Copy"; iconName: "edit-copy"; shortcutText: "Ctrl+C"; onTriggered: m.pane.copy(false) }
     GMenuItem { text: "Cut"; iconName: "edit-cut"; shortcutText: "Ctrl+X"; enabled: !m.pane.special || m.trash; onTriggered: m.pane.copy(true) }
