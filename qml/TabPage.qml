@@ -8,6 +8,7 @@ Item {
     property var win
     property string initialPath: ""
     property var initialSelect: []
+    property var initialState: null      // from another window (tab drag) or the session
     property bool split: false
     property var activePane: first
     readonly property string title: activePane ? activePane.title : ""
@@ -72,5 +73,20 @@ Item {
         height: 2
         color: Theme.accent
     }
-    Component.onCompleted: first.navigate(initialPath || win.app.grove.home(), { select: initialSelect })
+    function tabState() {
+        const t = first.tabState()
+        if (split) t.split = second.tabState()
+        t.activeSecond = split && activePane === second
+        return t
+    }
+    Component.onCompleted: {
+        if (initialState && initialState.path) {
+            first.restoreTabState(initialState)
+            if (initialState.split) {
+                split = true
+                second.restoreTabState(initialState.split)
+                if (initialState.activeSecond) activePane = second
+            }
+        } else first.navigate(initialPath || win.app.grove.home(), { select: initialSelect })
+    }
 }

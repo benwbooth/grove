@@ -145,7 +145,7 @@ Item {
     function groupedKey(e, shift) {
         if (!flat.length) return false
         const cur = fm.currentRow
-        const go = (r) => { fm.select(r, shift ? "range" : "set"); positionAt(r); pane.win.quickLookFollow(pane); return true }
+        const go = (r) => { if (pane.selectionMode && !shift) fm.currentRow = r; else fm.select(r, shift ? "range" : "set"); positionAt(r); pane.win.quickLookFollow(pane); return true }
         let fi = flat.indexOf(cur)
         if (e.key === Qt.Key_Right) return go(flat[fi < 0 ? 0 : Math.min(flat.length - 1, fi + 1)])
         if (e.key === Qt.Key_Left) return go(flat[fi < 0 ? flat.length - 1 : Math.max(0, fi - 1)])

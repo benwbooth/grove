@@ -58,6 +58,10 @@ FocusScope {
     // Stacks only exist in icon view; other views show the groups.
     function modelGrouping() { return stacks && viewMode === "icons" ? "stack" + stacks : groupBy }
     onViewModeChanged: if (fm.grouping() !== modelGrouping()) fm.applyGroupBy(modelGrouping())
+    function setSelectionMode(on) {
+        selectionMode = on
+        if (win && win.toast && on) win.toast("info", "Selection mode: click items or press Space to tick them. Esc leaves.")
+    }
     function setViewOption(name, value) { pane[name] = value; rememberView() }
     readonly property bool inTrash: path.indexOf("trash:") === 0
     readonly property bool special: path.indexOf(":///") > 0 || inTrash || path.indexOf("recent:") === 0
@@ -173,6 +177,9 @@ FocusScope {
     function applyRememberedView(p) {
         let v = {}
         try { v = JSON.parse(grove.folderView(p)) } catch (e) {}
+        applyViewState(v)
+    }
+    function applyViewState(v) {
         const s = app ? app.settings : {}
         const d = (s.view_defaults && typeof s.view_defaults === "object") ? s.view_defaults : {}
         const has = (k) => v.view !== undefined && v[k] !== undefined
@@ -189,6 +196,16 @@ FocusScope {
         stacks = pick("stacks", "")
         fm.applyGroupBy(modelGrouping())
         fm.applySort(v.sort || d.sort || "name", v.sort ? !!v.descending : !!d.descending)
+    }
+    // Everything a tab carries to another window: folder, history, view.
+    function tabState() {
+        return { path: searching ? folderBeforeSearch : path, back: backStack, fwd: fwdStack, view: viewState(), selected: selectedPaths() }
+    }
+    function restoreTabState(t) {
+        navigate(t.path, { noHistory: true, select: t.selected || [] })
+        backStack = t.back || []
+        fwdStack = t.fwd || []
+        if (t.view) applyViewState(t.view)
     }
     function setView(mode) {
         viewMode = mode
@@ -218,6 +235,7 @@ FocusScope {
         pane.activated()
         pane.forceActiveFocus()
         if (renamingRow >= 0 && renamingRow !== row) renamingRow = -1
+        if (selectionMode) { fm.select(row, (modifiers & Qt.ShiftModifier) ? "extend" : "toggle"); return }
         if (modifiers & Qt.ShiftModifier) fm.select(row, (modifiers & Qt.ControlModifier) ? "extend" : "range")
         else if (modifiers & Qt.ControlModifier) fm.select(row, "toggle")
         else if (!fm.isSelected(row)) fm.select(row, "set")
@@ -225,7 +243,7 @@ FocusScope {
     }
     function releaseItem(row, modifiers) {
         // Click on one of several selected items (no drag): only it.
-        if (!(modifiers & (Qt.ShiftModifier | Qt.ControlModifier)) && fm.selectionCount > 1) fm.select(row, "set")
+        if (!selectionMode && !(modifiers & (Qt.ShiftModifier | Qt.ControlModifier)) && fm.selectionCount > 1) fm.select(row, "set")
     }
     function openRow(row, inNewTab) {
         const it = itemAt(row)
@@ -460,10 +478,14 @@ FocusScope {
             if (alt) win.showInfo(selectedPaths().length ? selectedPaths() : [path])
             else openSelected(ctrl)
             e.accepted = true
+        } else if (e.key === Qt.Key_Space && !ctrl && selectionMode) {
+            if (fm.currentRow >= 0) fm.select(fm.currentRow, "toggle")
+            e.accepted = true
         } else if (e.key === Qt.Key_Space && !ctrl) { quickLook(); e.accepted = true }
         else if (e.key === Qt.Key_Backspace && !ctrl) { goBack(); e.accepted = true }
         else if (e.key === Qt.Key_Escape) {
-            if (filterOpen) { filterOpen = false; fm.applyFilter("") }
+            if (selectionMode) setSelectionMode(false)
+            else if (filterOpen) { filterOpen = false; fm.applyFilter("") }
             else if (searching) endSearch(true)
             else fm.clearSelection()
             e.accepted = true
@@ -482,7 +504,8 @@ FocusScope {
         const n = fm.count
         if (!n) return
         let r = fm.currentRow < 0 ? (d > 0 ? 0 : n - 1) : Math.max(0, Math.min(n - 1, fm.currentRow + d))
-        fm.select(r, shift ? "range" : "set")
+        if (selectionMode && !shift) fm.currentRow = r
+        else fm.select(r, shift ? "range" : "set")
         if (view && view.positionAt) view.positionAt(r)
         win.quickLookFollow(pane)
     }
@@ -628,9 +651,46 @@ FocusScope {
         anchors.top: topBars.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: parent.bottom
+        anchors.bottom: selectBar.top
         focus: true
         sourceComponent: pane.viewMode === "list" ? listComp : pane.viewMode === "columns" ? columnComp : pane.viewMode === "gallery" ? galleryComp : iconComp
+    }
+    // Dolphin's selection mode bar: what's ticked and what to do with it.
+    Rectangle {
+        id: selectBar
+        anchors.bottom: parent.bottom
+        width: parent.width
+        height: pane.selectionMode ? Theme.controlHeight + 14 : 0
+        visible: height > 0
+        clip: true
+        color: Theme.content
+        Behavior on height { NumberAnimation { duration: 120 } }
+        Rectangle { width: parent.width; height: 1; color: Theme.separator }
+        Row {
+            x: 10
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 6
+            GLabel {
+                anchors.verticalCenter: parent.verticalCenter
+                text: fm.selectionCount === 0 ? "Tick items to select them" : fm.selectionCount + " selected"
+                color: Theme.fgSecondary
+                width: Math.max(implicitWidth, 120)
+            }
+            GButton { text: "Select All"; flat: false; capsule: true; tip: Help.tip("Tick every item", "Select all"); onClicked: fm.selectAll() }
+            GButton { text: "Clear"; flat: false; capsule: true; enabled: fm.selectionCount > 0; tip: "Untick everything"; onClicked: fm.clearSelection() }
+            GButton { iconName: "edit-copy"; enabled: fm.selectionCount > 0; tip: Help.tip("Copy the ticked items", "Copy"); onClicked: pane.copy(false) }
+            GButton { iconName: "edit-cut"; enabled: fm.selectionCount > 0 && !pane.special; tip: Help.tip("Cut the ticked items (paste moves them)", "Cut (move on paste)"); onClicked: pane.copy(true) }
+            GButton { iconName: "edit-rename"; enabled: fm.selectionCount > 0 && !pane.special; tip: Help.tip("Rename the ticked items", "Rename"); onClicked: pane.rename() }
+            GButton { iconName: "user-trash"; enabled: fm.selectionCount > 0 && (!pane.special || pane.inTrash); tip: Help.tip(pane.inTrash ? "Delete the ticked items permanently" : "Move the ticked items to the Trash", "Move to Trash"); onClicked: pane.trashSelected() }
+            GButton { iconName: "document-share|emblem-shared"; enabled: fm.selectionCount > 0 && !pane.special; tip: "Share the ticked items with a nearby device"; onClicked: pane.win.share(pane.selectedPaths()) }
+        }
+        GButton {
+            anchors.right: parent.right; anchors.rightMargin: 10
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Done"; flat: false; capsule: true
+            tip: Help.tip("Leave selection mode (Esc)", "Selection mode")
+            onClicked: { pane.setSelectionMode(false); pane.forceActiveFocus() }
+        }
     }
     Component { id: iconComp; IconGrid { pane: viewLoader.parent } }
     Component { id: listComp; DetailList { pane: viewLoader.parent } }

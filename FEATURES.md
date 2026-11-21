@@ -25,12 +25,12 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Previews per folder toggle | – | ✅ | ✅ View Options › Show icon preview (Settings has the default) |
 | 100 000-item folders | ✅ | ✅ | ✅ streamed listing, virtualized views (see README) |
 | Tabs, drag files onto tabs | ✅ | ✅ | ✅ |
-| Drag tabs between windows | ✅ | ✅ | ❌ |
+| Drag tabs between windows | ✅ | ✅ | ✅ drag to reorder, onto another window's tabs, or away to tear off a new window; folder, history, view and split go along |
 | Split view (F3), drag between panes, copy/move to other side | – | ✅ | ✅ (Shift+F5 / Shift+F6) |
 | Multiple windows | ✅ | ✅ | ✅ |
 | Session restore of windows and tabs | ✅ | ✅ | ✅ |
 | Keyboard-only navigation, type-to-select | ✅ | ✅ | ✅ |
-| Selection mode (checkboxes) | – | ✅ | ❌ (Ctrl/Shift-click and rubber band instead) |
+| Selection mode (checkboxes) | – | ✅ | ✅ toolbar, menu or Ctrl+Shift+S; clicks and Space tick items; a bar with actions; Esc leaves |
 | Spring-loaded folders when dragging | ✅ | – | ✅ |
 | Status bar with selection summary, free space | – | ✅ | 🟡 summary yes; free space shows in the sidebar capacity bars and Get Info |
 
@@ -119,6 +119,6 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Version control overlays + actions (git: add, commit, pull, push, diff, log) | – | ✅ | ✅ |
 | Remote: SFTP, SMB, WebDAV, cloud (rclone), MTP phones | ✅ | ✅ | ✅ (sshfs, rclone, simple-mtpfs; passwords in the Secret Service keyring) |
 | Share with nearby devices (AirDrop) | ✅ | – | ✅ LocalSend protocol (send; receiving is left to the LocalSend app) |
-| Customizable toolbar | ✅ | ✅ | ❌ |
+| Customizable toolbar | ✅ | ✅ | ✅ Customize Toolbar… (right-click the toolbar): drag items, space, flexible space; Restore Defaults |
 | Customizable shortcuts | – | ✅ | ❌ (Finder and Dolphin shortcuts both built in) |
 | Help with searchable shortcuts, tooltips everywhere, first-run welcome | 🟡 | 🟡 | ✅ |

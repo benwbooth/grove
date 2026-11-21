@@ -17,6 +17,8 @@ Item {
     property string screenshot: grove.env("GROVE_SCREENSHOT")
     property int trashCount: 0
     property var closedTabs: []
+    // The tab being dragged ({win, index}) while a tab drag is under way.
+    property var dragTab: null
 
     Component { id: winComp; BrowserWindow {} }
     Component { id: chooserComp; FileChooser {} }
@@ -25,13 +27,14 @@ Item {
     function saveSession() {
         if (screenshot !== "" || portalMode) return
         const ws = []
-        for (const w of windows) ws.push({ tabs: w.tabPaths() })
+        for (const w of windows) ws.push({ tabs: w.tabPaths(), states: w.tabStates() })
         if (ws.length) grove.saveSession(JSON.stringify({ windows: ws }))
     }
     Timer { id: sessionTimer; interval: 2000; onTriggered: app.saveSession() }
 
-    function openWindow(paths, selectPaths) {
-        const w = winComp.createObject(null, { app: app, initialPaths: paths || [], initialSelect: selectPaths || [] })
+    function openWindowWithStates(states) { return openWindow([], [], states) }
+    function openWindow(paths, selectPaths, states) {
+        const w = winComp.createObject(null, { app: app, initialPaths: paths || [], initialSelect: selectPaths || [], initialStates: states || [] })
         windows.push(w)
         w.closing.connect(function () {
             windows = windows.filter(x => x !== w)
@@ -181,7 +184,11 @@ Item {
             let sess = null
             try { sess = JSON.parse(grove.session() || "null") } catch (e) {}
             if (settings.restore_session !== false && sess && sess.windows && sess.windows.length && screenshot === "")
-                for (const w of sess.windows) openWindow(w.tabs.filter(t => t.indexOf("/") === 0), [])
+                for (const w of sess.windows) {
+                    const st = (w.states || []).filter(t => t && t.path && t.path.indexOf("/") === 0)
+                    if (st.length) openWindowWithStates(st)
+                    else openWindow(w.tabs.filter(t => t.indexOf("/") === 0), [])
+                }
             else openWindow([grove.home()])
         }
     }

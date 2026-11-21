@@ -30,11 +30,11 @@ MouseArea {
         proxy.x = 0; proxy.y = 0
     }
     onClicked: (m) => {
-        if (m.button === Qt.LeftButton && pane.app.settings.single_click && !(m.modifiers & (Qt.ShiftModifier | Qt.ControlModifier)))
+        if (m.button === Qt.LeftButton && pane.app.settings.single_click && !pane.selectionMode && !(m.modifiers & (Qt.ShiftModifier | Qt.ControlModifier)))
             pane.openRow(row, false)
     }
     onDoubleClicked: (m) => {
-        if (m.button === Qt.LeftButton && !pane.app.settings.single_click) pane.openRow(row, (m.modifiers & Qt.ControlModifier) !== 0)
+        if (m.button === Qt.LeftButton && !pane.app.settings.single_click && !pane.selectionMode) pane.openRow(row, (m.modifiers & Qt.ControlModifier) !== 0)
     }
 
     Item {

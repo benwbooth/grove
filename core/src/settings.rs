@@ -113,6 +113,12 @@ pub struct Settings {
     /// View Options saved with "Use as Defaults" (a FolderView without a view).
     #[serde(default)]
     pub view_defaults: serde_json::Value,
+    /// Toolbar items in order (Customize Toolbar); empty = the default set.
+    #[serde(default)]
+    pub toolbar: Vec<String>,
+    /// Keyboard shortcuts changed from the defaults: {action id: [keys]}.
+    #[serde(default)]
+    pub shortcuts: serde_json::Value,
 }
 
 fn default_columns() -> Vec<String> {

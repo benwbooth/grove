@@ -2,7 +2,10 @@ import QtQuick
 import QtQuick.Controls.Basic
 
 // Tabs (shown when there's more than one): Finder-style equal-width tabs;
-// middle-click or × closes, drop files on a tab to move them there.
+// middle-click or × closes, drop files on a tab to move them there. Drag
+// a tab to reorder it, onto another grove window's tabs to move it there
+// (folder, history and view go with it), or anywhere else to tear it off
+// into a window of its own.
 Item {
     id: ts
     property var win
@@ -45,8 +48,32 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                    drag.target: dragProxy
+                    drag.threshold: 8
+                    onPressed: (m) => {
+                        if (m.button !== Qt.LeftButton) return
+                        dragProxy.x = m.x; dragProxy.y = m.y
+                        ts.currentIndex = tab.index
+                    }
                     onClicked: (m) => { if (m.button === Qt.MiddleButton) ts.win.closeTab(tab.index); else ts.currentIndex = tab.index }
+                    drag.onActiveChanged: if (drag.active) ts.win.app.dragTab = { win: ts.win, index: tab.index }
+                    Item {
+                        id: dragProxy
+                        width: 1; height: 1
+                        Drag.active: tm.drag.active
+                        Drag.dragType: Drag.Automatic
+                        Drag.supportedActions: Qt.MoveAction
+                        Drag.proposedAction: Qt.MoveAction
+                        Drag.mimeData: { "application/x-grove-tab": "tab" }
+                        Drag.onDragFinished: (action) => {
+                            const d = ts.win.app.dragTab
+                            ts.win.app.dragTab = null
+                            dragProxy.x = 0; dragProxy.y = 0
+                            if (action === Qt.IgnoreAction && d && d.win === ts.win) ts.win.tearOffTab(d.index)
+                        }
+                    }
                 }
+                GTip { visible: tm.containsMouse && !tm.pressed; text: "Drag to reorder, onto another window's tabs to move it there, or away to open it in a new window" }
                 GButton {
                     visible: tm.containsMouse || tab.current
                     anchors.left: parent.left; anchors.leftMargin: 8
@@ -67,6 +94,26 @@ Item {
                 }
             }
         }
+    }
+    // Tab drops (reorder, from other windows). The insertion point is a bar.
+    readonly property real tabW: Math.min(260, (ts.width - 46) / Math.max(1, ts.model.count))
+    function dropIndex(x) { return Math.max(0, Math.min(ts.model.count, Math.round((x - 6) / tabW))) }
+    DropArea {
+        id: tabDropZone
+        anchors.fill: parent
+        keys: ["application/x-grove-tab"]
+        onDropped: (d) => {
+            const t = ts.win.app.dragTab
+            if (!t) return
+            d.acceptProposedAction()
+            ts.win.acceptTab(t.win, t.index, ts.dropIndex(d.x))
+        }
+    }
+    Rectangle {
+        visible: tabDropZone.containsDrag
+        x: 6 + ts.dropIndex(tabDropZone.drag.x) * ts.tabW - 1
+        y: 4; width: 3; height: parent.height - 8; radius: 1.5
+        color: Theme.accent
     }
     function tabsRepeaterItem(i) { return ts.win.tabAt(i) }
     GButton {

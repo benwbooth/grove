@@ -267,9 +267,17 @@ Item {
                 Item {
                     width: root.wName
                     height: parent.height
+                    SelectCheck {
+                        id: rowCheck
+                        visible: root.pane.selectionMode
+                        anchors.verticalCenter: parent.verticalCenter
+                        pane: root.pane
+                        row: rowItem.index
+                        checked: rowItem.selected
+                    }
                     Item {
                         id: disclosure
-                        x: rowItem.depth * 16
+                        x: rowItem.depth * 16 + (root.pane.selectionMode ? rowCheck.width + 6 : 0)
                         width: 16; height: parent.height
                         GLabel {
                             anchors.centerIn: parent

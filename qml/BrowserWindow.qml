@@ -10,13 +10,14 @@ ApplicationWindow {
     property var app
     property var initialPaths: []
     property var initialSelect: []
+    property var initialStates: []       // tab states (a torn-off tab, the session)
     readonly property bool clientDecorations: app.settings.client_decorations !== false
     readonly property bool chooserMode: false
     property bool sidebarShown: true
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
     property var currentTab: tabRepeater.count > 0 ? tabRepeater.itemAt(tabBar.currentIndex) : null
     property var activePane: currentTab ? currentTab.activePane : null
-    property bool modalOpen: shareSheet.opened || commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || saveSheet.opened || openWithSheet.opened
+    property bool modalOpen: toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || saveSheet.opened || openWithSheet.opened
 
     width: 1180
     height: 720
@@ -42,8 +43,52 @@ ApplicationWindow {
     }
 
     function newTab(path, select) {
-        tabs.append({ path: path || app.grove.home(), select: JSON.stringify(select || []) })
+        tabs.append({ path: path || app.grove.home(), select: JSON.stringify(select || []), tstate: "" })
         tabBar.currentIndex = tabs.count - 1
+    }
+    // A tab from somewhere else (another window), at `index` (-1: the end).
+    function insertTabState(st, index) {
+        const i = index < 0 || index > tabs.count ? tabs.count : index
+        tabs.insert(i, { path: st.path, select: "[]", tstate: JSON.stringify(st) })
+        tabBar.currentIndex = i
+    }
+    function tabStates() {
+        const out = []
+        for (let i = 0; i < tabRepeater.count; i++) { const t = tabRepeater.itemAt(i); if (t) out.push(t.tabState()) }
+        return out
+    }
+    // Tab dragging: another grove window (or this one) dropped tab `index`
+    // of `from` here at `at`.
+    function acceptTab(from, index, at) {
+        const t = from.tabAt(index)
+        if (!t) return
+        if (from === bw) {
+            if (at === index || at === index + 1) return
+            const to = at > index ? at - 1 : at
+            tabs.move(index, to, 1)
+            tabBar.currentIndex = to
+            return
+        }
+        insertTabState(t.tabState(), at)
+        from.removeTab(index)
+        bw.raise(); bw.requestActivate()
+    }
+    // Dropped outside any tab bar: the tab becomes a window of its own.
+    function tearOffTab(index) {
+        const t = tabAt(index)
+        if (!t) return
+        if (tabs.count <= 1) return
+        const st = t.tabState()
+        const w = app.openWindowWithStates([st])
+        w.x = bw.x + 60; w.y = bw.y + 60
+        w.width = bw.width; w.height = bw.height
+        removeTab(index)
+    }
+    // Remove a tab that moved to another window (not "closed": no reopen).
+    function removeTab(i) {
+        if (tabs.count <= 1) { bw.close(); return }
+        tabs.remove(i)
+        tabBar.currentIndex = Math.min(tabBar.currentIndex, tabs.count - 1)
     }
     function closeTab(i) {
         if (tabs.count <= 1) { bw.close(); return }
@@ -262,94 +307,43 @@ ApplicationWindow {
                 height: Theme.toolbarHeight
                 MouseArea {
                     anchors.fill: parent
-                    onPressed: bw.startSystemMove()
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onPressed: (m) => { if (m.button === Qt.RightButton) toolbarMenu.popup(); else bw.startSystemMove() }
                     onDoubleClicked: bw.visibility === Window.Maximized ? bw.showNormal() : bw.showMaximized()
                 }
-                Row {
-                    id: leftTools
-                    x: bw.sidebarShown ? 4 : (bw.clientDecorations ? 12 : 8)
+                GButton {
+                    id: closeBtn
+                    visible: !bw.sidebarShown && bw.clientDecorations
+                    x: 12
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 8
-                    GButton {
-                        visible: !bw.sidebarShown && bw.clientDecorations
-                        iconName: "window-close"; iconSize: 12
-                        tip: "Close window"
-                        onClicked: bw.close()
-                    }
-                    Item {
-                        width: navGroup.implicitWidth + 4
-                        height: Theme.controlHeight
-                        GlassPanel { anchors.fill: parent; radius: height / 2; shadow: false; tint: Theme.field }
-                        Row {
-                            id: navGroup
-                            anchors.centerIn: parent
-                            GButton { iconName: "go-previous"; capsule: true; enabled: bw.activePane && bw.activePane.backStack.length > 0; tip: Help.tip("Back"); onClicked: bw.activePane.goBack() }
-                            GButton { iconName: "go-next"; capsule: true; enabled: bw.activePane && bw.activePane.fwdStack.length > 0; tip: Help.tip("Forward"); onClicked: bw.activePane.goForward() }
-                            GButton { iconName: "go-up"; capsule: true; enabled: bw.activePane && bw.activePane.parentOf(bw.activePane.path) !== ""; tip: Help.tip("Enclosing folder"); onClicked: bw.activePane.goUp() }
-                        }
-                    }
-                    GButton {
-                        iconName: "sidebar-show-symbolic|view-split-left-right|sidebar-expand-left"
-                        tip: Help.tip("Show or hide the sidebar", "Sidebar")
-                        onClicked: bw.sidebarShown = !bw.sidebarShown
-                    }
+                    iconName: "window-close"; iconSize: 12
+                    tip: "Close window"
+                    onClicked: bw.close()
                 }
-                PathBar {
-                    id: pathBar
-                    pane: bw.activePane
-                    anchors.left: leftTools.right
-                    anchors.leftMargin: 10
-                    anchors.right: rightTools.left
-                    anchors.rightMargin: 10
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-                Row {
-                    id: rightTools
+                // The items from Customize Toolbar (settings "toolbar").
+                RowLayout {
+                    id: toolRow
+                    anchors.left: closeBtn.visible ? closeBtn.right : parent.left
+                    anchors.leftMargin: closeBtn.visible ? 8 : (bw.sidebarShown ? 4 : (bw.clientDecorations ? 12 : 8))
                     anchors.right: parent.right
                     anchors.rightMargin: 10
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 8
-                    Segmented {
-                        items: [
-                            { icon: "view-grid-symbolic|view-list-icons", tip: Help.tip("View as icons", "Icons"), value: "icons" },
-                            { icon: "view-list-symbolic|view-list-details", tip: Help.tip("View as a list (folders expand in place)", "List"), value: "list" },
-                            { icon: "view-column-symbolic|view-file-columns|view-split-left-right", tip: Help.tip("View in columns", "Columns"), value: "columns" },
-                            { icon: "view-paged-symbolic|view-preview|view-list-images", tip: Help.tip("View as a gallery", "Gallery"), value: "gallery" }
-                        ]
-                        current: bw.activePane ? bw.activePane.viewMode : ""
-                        onPicked: (v) => bw.activePane.setView(v)
-                    }
-                    GButton {
-                        visible: main.width > 860
-                        iconName: "view-split-left-right"
-                        checked: bw.currentTab && bw.currentTab.split
-                        tip: Help.tip("Split view: two folders side by side", "Split view")
-                        onClicked: bw.currentTab.toggleSplit()
-                    }
-                    GButton {
-                        id: actionButton
-                        iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
-                        tip: "More actions: new folder, sort, show hidden files, settings, help"
-                        onClicked: actionMenu.popup(actionButton, 0, actionButton.height + 4)
-                    }
-                    JobsButton { app: bw.app; win: bw }
-                    GField {
-                        id: search
-                        width: Math.max(110, Math.min(Math.round(190 * Theme.pt), main.width * 0.18))
-                        iconName: "edit-find"
-                        clearable: true
-                        placeholderText: "Search"
-                        tip: Help.tip("Search names below this folder (choose Contents in the bar to search inside files)", "Search")
-                        onTextEdited: bw.activePane.startSearch(text)
-                        onTextChanged: if (text === "" && bw.activePane && bw.activePane.searching) bw.activePane.endSearch(true)
-                        Keys.onEscapePressed: { text = ""; bw.activePane.forceActiveFocus() }
-                        Keys.onDownPressed: bw.activePane.forceActiveFocus()
-                        Keys.onReturnPressed: bw.activePane.forceActiveFocus()
-                        Connections {
-                            target: bw.activePane
-                            function onSearchingChanged() { if (!bw.activePane.searching && search.text !== "") search.text = "" }
+                    Repeater {
+                        model: bw.toolbarItems
+                        Loader {
+                            required property string modelData
+                            readonly property bool flexible: modelData === "path" || modelData === "flexspace"
+                            Layout.fillWidth: flexible
+                            Layout.minimumWidth: modelData === "path" ? 120 : 0
+                            Layout.preferredWidth: modelData === "space" ? 16 : flexible ? 10 : (item ? item.implicitWidth : 0)
+                            Layout.preferredHeight: Theme.controlHeight
+                            visible: modelData !== "split" || main.width > 860
+                            sourceComponent: bw.toolComponent(modelData)
                         }
                     }
+                    // Without a flexible item the rest sits on the left.
+                    Item { visible: bw.toolbarItems.indexOf("path") < 0 && bw.toolbarItems.indexOf("flexspace") < 0; Layout.fillWidth: true }
                 }
             }
 
@@ -360,8 +354,9 @@ ApplicationWindow {
                 model: tabs
                 anchors.top: toolbar.bottom
                 width: parent.width
-                height: tabs.count > 1 ? Math.round(30 * Theme.pt) : 0
-                visible: tabs.count > 1
+                // Also shown while a tab is dragged, so a one-tab window takes it.
+                height: tabs.count > 1 || bw.app.dragTab ? Math.round(30 * Theme.pt) : 0
+                visible: height > 0
             }
 
             StackLayout {
@@ -376,10 +371,12 @@ ApplicationWindow {
                     TabPage {
                         required property string path
                         required property string select
+                        required property string tstate
                         required property int index
                         win: bw
                         initialPath: path
                         initialSelect: JSON.parse(select)
+                        initialState: tstate ? JSON.parse(tstate) : null
                     }
                 }
             }
@@ -541,8 +538,146 @@ ApplicationWindow {
             }
         }
 
-        Toast { id: toastBox; anchors.horizontalCenter: main.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 40 }
+        Toast { id: toastBox; anchors.horizontalCenter: main.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 40 + (bw.activePane && bw.activePane.selectionMode ? Theme.controlHeight + 14 : 0) }
     }
+
+
+    // ---------- toolbar items ----------
+    readonly property var toolbarDefaults: ["nav", "sidebar", "path", "view", "split", "selection", "action", "jobs", "search"]
+    readonly property var toolbarItems: app.settings.toolbar && app.settings.toolbar.length ? app.settings.toolbar : toolbarDefaults
+    readonly property var toolbarAll: ["nav", "sidebar", "path", "view", "split", "selection", "action", "jobs", "search", "newfolder", "trash", "info", "share", "quicklook", "terminal", "hidden", "viewopts", "connect", "eject", "burn", "space", "flexspace"]
+    readonly property var toolbarCatalog: ({
+        nav: { label: "Back/Forward", icon: "go-previous", tip: "Back, forward and the enclosing folder" },
+        sidebar: { label: "Sidebar", icon: "sidebar-show-symbolic|view-split-left-right", tip: "Show or hide the sidebar" },
+        path: { label: "Path", icon: "folder", tip: "Where you are; click to type a path (flexible width)" },
+        view: { label: "View", icon: "view-grid-symbolic|view-list-icons", tip: "Icons, list, columns or gallery" },
+        split: { label: "Split View", icon: "view-split-left-right", tip: "Two folders side by side" },
+        selection: { label: "Selection Mode", icon: "checkbox-checked|edit-select-all", tip: "Checkboxes on items" },
+        action: { label: "Action", icon: "view-more-horizontal-symbolic|application-menu", tip: "The action menu" },
+        jobs: { label: "Progress", icon: "view-refresh", tip: "Copies and moves under way (shows while busy)" },
+        search: { label: "Search", icon: "edit-find", tip: "The search field" },
+        newfolder: { label: "New Folder", icon: "folder-new", tip: "Make a new folder here" },
+        trash: { label: "Delete", icon: "user-trash", tip: "Move the selection to the Trash" },
+        info: { label: "Get Info", icon: "document-properties|documentinfo", tip: "Facts about the selection" },
+        share: { label: "Share", icon: "document-share|emblem-shared", tip: "Send to a nearby device" },
+        quicklook: { label: "Quick Look", icon: "document-preview|view-preview", tip: "Preview the selection" },
+        terminal: { label: "Terminal", icon: "utilities-terminal", tip: "Open a terminal here" },
+        hidden: { label: "Hidden Files", icon: "view-hidden|visibility", tip: "Show or hide hidden files" },
+        viewopts: { label: "View Options", icon: "configure|preferences-system", tip: "Spacing, text size, background" },
+        connect: { label: "Connect", icon: "network-connect|network-server", tip: "Connect to a server" },
+        eject: { label: "Eject", icon: "media-eject", tip: "Eject the disk you're in" },
+        burn: { label: "Burn", icon: "media-optical-burn|media-optical", tip: "Burn the selection or this folder to a disc" },
+        space: { label: "Space", icon: "", tip: "A fixed gap" },
+        flexspace: { label: "Flexible Space", icon: "", tip: "A gap that grows to fill the room" }
+    })
+    // Parts of the toolbar other code reaches (null when not in the toolbar).
+    property Item pathBar: null
+    property Item search: null
+    property Item actionButton: null
+    function toolComponent(k) {
+        return ({ nav: tcNav, sidebar: tcSidebar, path: tcPath, view: tcView, split: tcSplit, selection: tcSelection, action: tcAction,
+                  jobs: tcJobs, search: tcSearch, newfolder: tcNewFolder, trash: tcTrash, info: tcInfo, share: tcShare, quicklook: tcQuickLook,
+                  terminal: tcTerminal, hidden: tcHidden, viewopts: tcViewOpts, connect: tcConnect, eject: tcEject, burn: tcBurn,
+                  space: tcSpace, flexspace: tcSpace })[k] || tcSpace
+    }
+    function ejectCurrent() {
+        const p = activePane.path
+        for (const l of (sidebar.places.locations || []).concat(sidebar.places.network || []))
+            if (l.ejectable && (p === l.path || p.indexOf(l.path + "/") === 0)) { eject(l.path, l.name); return }
+        toast("info", "The folder you're in isn't on a disk that can be ejected.")
+    }
+    Component { id: tcSpace; Item { implicitWidth: 16 } }
+    Component {
+        id: tcNav
+        Item {
+            implicitWidth: navGroup.implicitWidth + 4
+            implicitHeight: Theme.controlHeight
+            GlassPanel { anchors.fill: parent; radius: height / 2; shadow: false; tint: Theme.field }
+            Row {
+                id: navGroup
+                anchors.centerIn: parent
+                GButton { iconName: "go-previous"; capsule: true; enabled: bw.activePane && bw.activePane.backStack.length > 0; tip: Help.tip("Back"); onClicked: bw.activePane.goBack() }
+                GButton { iconName: "go-next"; capsule: true; enabled: bw.activePane && bw.activePane.fwdStack.length > 0; tip: Help.tip("Forward"); onClicked: bw.activePane.goForward() }
+                GButton { iconName: "go-up"; capsule: true; enabled: bw.activePane && bw.activePane.parentOf(bw.activePane.path) !== ""; tip: Help.tip("Enclosing folder"); onClicked: bw.activePane.goUp() }
+            }
+        }
+    }
+    Component { id: tcSidebar; GButton { iconName: "sidebar-show-symbolic|view-split-left-right|sidebar-expand-left"; tip: Help.tip("Show or hide the sidebar", "Sidebar"); onClicked: bw.sidebarShown = !bw.sidebarShown } }
+    Component {
+        id: tcPath
+        PathBar {
+            pane: bw.activePane
+            Component.onCompleted: bw.pathBar = this
+            Component.onDestruction: if (bw.pathBar === this) bw.pathBar = null
+        }
+    }
+    Component {
+        id: tcView
+        Segmented {
+            items: [
+                { icon: "view-grid-symbolic|view-list-icons", tip: Help.tip("View as icons", "Icons"), value: "icons" },
+                { icon: "view-list-symbolic|view-list-details", tip: Help.tip("View as a list (folders expand in place)", "List"), value: "list" },
+                { icon: "view-column-symbolic|view-file-columns|view-split-left-right", tip: Help.tip("View in columns", "Columns"), value: "columns" },
+                { icon: "view-paged-symbolic|view-preview|view-list-images", tip: Help.tip("View as a gallery", "Gallery"), value: "gallery" }
+            ]
+            current: bw.activePane ? bw.activePane.viewMode : ""
+            onPicked: (v) => bw.activePane.setView(v)
+        }
+    }
+    Component { id: tcSplit; GButton { iconName: "view-split-left-right"; checked: bw.currentTab && bw.currentTab.split; tip: Help.tip("Split view: two folders side by side", "Split view"); onClicked: bw.currentTab.toggleSplit() } }
+    Component { id: tcSelection; GButton { iconName: "checkbox-checked|edit-select-all"; checked: bw.activePane && bw.activePane.selectionMode; tip: Help.tip("Selection mode: tick items with checkboxes", "Selection mode"); onClicked: bw.toggleSelectionMode() } }
+    Component {
+        id: tcAction
+        GButton {
+            id: ab
+            iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
+            tip: "More actions: new folder, sort, show hidden files, settings, help"
+            onClicked: actionMenu.popup(ab, 0, ab.height + 4)
+            Component.onCompleted: bw.actionButton = this
+            Component.onDestruction: if (bw.actionButton === this) bw.actionButton = null
+        }
+    }
+    Component { id: tcJobs; JobsButton { app: bw.app; win: bw } }
+    Component {
+        id: tcSearch
+        GField {
+            id: sf
+            implicitWidth: Math.max(110, Math.min(Math.round(190 * Theme.pt), main.width * 0.18))
+            iconName: "edit-find"
+            clearable: true
+            placeholderText: "Search"
+            tip: Help.tip("Search names below this folder (choose Contents in the bar to search inside files)", "Search")
+            onTextEdited: bw.activePane.startSearch(text)
+            onTextChanged: if (text === "" && bw.activePane && bw.activePane.searching) bw.activePane.endSearch(true)
+            Keys.onEscapePressed: { text = ""; bw.activePane.forceActiveFocus() }
+            Keys.onDownPressed: bw.activePane.forceActiveFocus()
+            Keys.onReturnPressed: bw.activePane.forceActiveFocus()
+            Connections {
+                target: bw.activePane
+                function onSearchingChanged() { if (!bw.activePane.searching && sf.text !== "") sf.text = "" }
+            }
+            Component.onCompleted: bw.search = this
+            Component.onDestruction: if (bw.search === this) bw.search = null
+        }
+    }
+    Component { id: tcNewFolder; GButton { iconName: "folder-new"; enabled: bw.activePane && !bw.activePane.special; tip: Help.tip("New folder", "New folder"); onClicked: bw.activePane.newFolder() } }
+    Component { id: tcTrash; GButton { iconName: "user-trash"; enabled: bw.activePane && bw.activePane.model.selectionCount > 0; tip: Help.tip("Move the selection to the Trash", "Move to Trash"); onClicked: bw.activePane.trashSelected() } }
+    Component { id: tcInfo; GButton { iconName: "document-properties|documentinfo"; tip: Help.tip("Get Info about the selection (or this folder)", "Get Info"); onClicked: { const s = bw.activePane.selectedPaths(); bw.showInfo(s.length ? s : [bw.activePane.path]) } } }
+    Component { id: tcShare; GButton { iconName: "document-share|emblem-shared"; enabled: bw.activePane && bw.activePane.model.selectionCount > 0; tip: "Share the selection with a nearby device (LocalSend)"; onClicked: bw.share(bw.activePane.selectedPaths()) } }
+    Component { id: tcQuickLook; GButton { iconName: "document-preview|view-preview"; tip: Help.tip("Quick Look the selection", "Quick Look"); onClicked: bw.activePane.quickLook() } }
+    Component { id: tcTerminal; GButton { iconName: "utilities-terminal"; tip: Help.tip("Open a terminal in this folder", "Open in Terminal"); onClicked: bw.app.grove.openTerminal(bw.activePane.path) } }
+    Component { id: tcHidden; GButton { iconName: "view-hidden|visibility"; checked: !!bw.app.settings.show_hidden; tip: Help.tip("Show or hide hidden files", "Show/hide hidden files"); onClicked: bw.toggleHidden() } }
+    Component { id: tcViewOpts; GButton { iconName: "configure|preferences-system"; checked: viewOptions.opened; tip: Help.tip("View Options for this folder", "View Options (spacing, text size, labels, background)"); onClicked: bw.toggleViewOptions() } }
+    Component { id: tcConnect; GButton { iconName: "network-connect|network-server"; tip: Help.tip("Connect to a server", "Connect to Server…"); onClicked: bw.connectServer() } }
+    Component { id: tcEject; GButton { iconName: "media-eject"; tip: Help.tip("Eject the disk you're in", "Eject"); onClicked: bw.ejectCurrent() } }
+    Component { id: tcBurn; GButton { iconName: "media-optical-burn|media-optical"; tip: Help.tip("Burn the selection (or this folder) to a disc", "Burn to Disc…"); onClicked: bw.burnSelection() } }
+
+    GMenu {
+        id: toolbarMenu
+        GMenuItem { text: "Customize Toolbar…"; iconName: "configure"; tip: "Add, remove and rearrange toolbar items"; onTriggered: toolbarSheet.open() }
+        GMenuItem { text: "Restore Default Toolbar"; tip: "Put back grove's standard toolbar"; onTriggered: bw.setSetting("toolbar", []) }
+    }
+    ToolbarSheet { id: toolbarSheet; win: bw }
 
     // ---------- menus ----------
     GMenu {
@@ -557,6 +692,7 @@ ApplicationWindow {
         GMenuItem { text: "Filter This Folder"; iconName: "view-filter"; shortcutText: "Ctrl+I"; onTriggered: bw.openFilter() }
         GMenuItem { text: "Show View Options"; iconName: "configure"; shortcutText: "Ctrl+J"; onTriggered: bw.toggleViewOptions() }
         GMenuItem { text: "Use Stacks"; checkable: true; checked: bw.activePane && bw.activePane.stacks !== ""; shortcutText: "Ctrl+Alt+0"; onTriggered: bw.toggleStacks() }
+        GMenuItem { text: "Selection Mode"; checkable: true; checked: bw.activePane && bw.activePane.selectionMode; shortcutText: "Ctrl+Shift+S"; tip: "Checkboxes on items: clicks and Space tick them"; onTriggered: bw.toggleSelectionMode() }
         GMenuItem { text: "Show Hidden Files"; checkable: true; checked: !!bw.app.settings.show_hidden; shortcutText: "Ctrl+H"; onTriggered: bw.toggleHidden() }
         GMenuItem { text: "Information Panel"; checkable: true; checked: !!bw.app.settings.info_panel; shortcutText: "F11"; onTriggered: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
         GMenuItem { text: "Terminal Panel"; checkable: true; checked: !!bw.app.settings.terminal_panel; shortcutText: "F4"; onTriggered: bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel) }
@@ -567,9 +703,12 @@ ApplicationWindow {
         GMenuSeparator {}
         GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; enabled: bw.app.trashCount > 0; onTriggered: bw.emptyTrash() }
         GMenuSeparator {}
+        GMenuItem { text: "Customize Toolbar…"; iconName: "configure"; tip: "Add, remove and rearrange toolbar items"; onTriggered: toolbarSheet.open() }
         GMenuItem { text: "Settings…"; iconName: "configure"; shortcutText: "Ctrl+,"; onTriggered: bw.showSettings() }
         GMenuItem { text: "Help and Keyboard Shortcuts"; iconName: "help-contents"; shortcutText: "F1"; onTriggered: bw.showHelp("") }
     }
+    function editPath() { if (pathBar) pathBar.edit(); else goSheet.open() }
+    function focusSearch() { if (search) { search.forceActiveFocus(); search.selectAll() } else openFilter() }
     function openFilter() {
         const p = activePane
         p.filterOpen = true
@@ -616,6 +755,17 @@ ApplicationWindow {
         ]
     }
     ConnectServer { id: connectSheet; app: bw.app; win: bw }
+    // Finder's Go to Folder (when the path bar isn't in the toolbar).
+    Sheet {
+        id: goSheet
+        title: "Go to Folder"
+        onOpened: { goField.text = bw.activePane && bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : ""; goField.forceActiveFocus(); goField.selectAll() }
+        GField { id: goField; width: parent.width; placeholderText: "~/Documents"; tip: "Type a folder path (~ is your home folder)"; Keys.onReturnPressed: goBtn.clicked() }
+        buttons: [
+            PushButton { text: "Cancel"; onClicked: goSheet.close() },
+            PushButton { id: goBtn; text: "Go"; primary: true; enabled: goField.text !== ""; onClicked: { const t = goField.text.replace(/^~/, bw.app.grove.home()); goSheet.close(); bw.go(t) } }
+        ]
+    }
     OpenWithSheet { id: openWithSheet; app: bw.app; win: bw }
     Sheet {
         id: saveSheet
@@ -642,6 +792,8 @@ ApplicationWindow {
     QuickLook { id: ql; app: bw.app; win: bw }
     ViewOptions { id: viewOptions; win: bw; x: bw.width - width - 16; y: Theme.toolbarHeight + 8 }
     function toggleViewOptions() { if (viewOptions.opened) viewOptions.close(); else viewOptions.open() }
+    function burnSelection() { toast("info", "Disc burning isn't ready yet.") }
+    function toggleSelectionMode() { activePane.setSelectionMode(!activePane.selectionMode); activePane.forceActiveFocus() }
     function toggleStacks() { activePane.setStacks(activePane.stacks ? "" : "kind") }
     SettingsWindow { id: settingsWin; app: bw.app }
     HelpWindow { id: helpWin; app: bw.app }
@@ -653,7 +805,7 @@ ApplicationWindow {
     Key { sequences: ["Alt+Right", "Ctrl+]"]; onActivated: bw.activePane.goForward() }
     Key { sequences: ["Alt+Up", "Ctrl+Up"]; onActivated: bw.activePane.goUp() }
     Key { sequences: ["Ctrl+Down"]; onActivated: bw.activePane.openSelected(false) }
-    Key { sequences: ["Ctrl+L", "Ctrl+Shift+G", "F6"]; onActivated: pathBar.edit() }
+    Key { sequences: ["Ctrl+L", "Ctrl+Shift+G", "F6"]; onActivated: bw.editPath() }
     Key { sequences: ["Ctrl+Shift+H", "Alt+Home"]; onActivated: bw.go(bw.app.grove.home()) }
     Key { sequences: ["Ctrl+Shift+D"]; onActivated: bw.go(bw.app.grove.home() + "/Desktop") }
     Key { sequences: ["Ctrl+Shift+O"]; onActivated: bw.go(bw.app.grove.home() + "/Documents") }
@@ -671,6 +823,7 @@ ApplicationWindow {
     Key { sequences: ["Ctrl+-"]; onActivated: bw.activePane.zoom(-1) }
     Key { sequences: ["Ctrl+H", "Ctrl+Shift+."]; onActivated: bw.toggleHidden() }
     Key { sequences: ["Ctrl+I"]; onActivated: bw.openFilter() }
+    Key { sequences: ["Ctrl+Shift+S"]; onActivated: bw.toggleSelectionMode() }
     Key { sequences: ["Ctrl+J"]; onActivated: bw.toggleViewOptions() }
     Key { sequences: ["Ctrl+Alt+0"]; onActivated: bw.toggleStacks() }
     Key { sequences: ["Ctrl+Y"]; onActivated: bw.activePane.quickLook() }
@@ -699,9 +852,9 @@ ApplicationWindow {
     Key { sequences: ["Ctrl+A"]; onActivated: bw.activePane.model.selectAll() }
     Key { sequences: ["Ctrl+Shift+A"]; onActivated: bw.activePane.model.invertSelection() }
     Key { sequences: ["Alt+Return", "Ctrl+Shift+I"]; onActivated: { const s = bw.activePane.selectedPaths(); bw.showInfo(s.length ? s : [bw.activePane.path]) } }
-    Key { sequences: ["Ctrl+F"]; onActivated: { search.forceActiveFocus(); search.selectAll() } }
+    Key { sequences: ["Ctrl+F"]; onActivated: bw.focusSearch() }
     Key { sequences: ["Ctrl+Alt+T"]; onActivated: bw.app.grove.openTerminal(bw.activePane.path) }
-    Key { sequences: ["Ctrl+E"]; onActivated: { const p = bw.activePane.path; for (const l of (sidebar.places.locations || []).concat(sidebar.places.network || [])) if (l.ejectable && (p === l.path || p.indexOf(l.path + "/") === 0)) bw.eject(l.path, l.name) } }
+    Key { sequences: ["Ctrl+E"]; onActivated: bw.ejectCurrent() }
     Key { sequences: ["Ctrl+,"]; onActivated: bw.showSettings() }
     Key { sequences: ["F4"]; onActivated: { bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel); if (bw.app.settings.terminal_panel) bw.activePane.forceActiveFocus() } }
     Key { sequences: ["F7"]; onActivated: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
@@ -718,8 +871,11 @@ ApplicationWindow {
     Key { sequences: ["Ctrl+Alt+7"]; onActivated: bw.activePane.toggleTag("Gray") }
 
     Component.onCompleted: {
-        const paths = initialPaths.length ? initialPaths : [app.grove.home()]
-        for (const p of paths) tabs.append({ path: p, select: JSON.stringify(initialSelect) })
+        if (initialStates.length) for (const st of initialStates) tabs.append({ path: st.path, select: "[]", tstate: JSON.stringify(st) })
+        else {
+            const paths = initialPaths.length ? initialPaths : [app.grove.home()]
+            for (const p of paths) tabs.append({ path: p, select: JSON.stringify(initialSelect), tstate: "" })
+        }
         if (!app.settings.welcomed && app.screenshot === "") welcome.open()
         if (app.screenshot !== "") shotTimer.start()
     }
@@ -751,10 +907,12 @@ ApplicationWindow {
         else if (cmd === "ql") quickLook(p)
         else if (cmd === "info") showInfo([arg])
         else if (cmd === "filter") { openFilter(); p.model.applyFilter(arg) }
-        else if (cmd === "search") { search.text = arg; p.startSearch(arg) }
+        else if (cmd === "search") { if (search) search.text = arg; p.startSearch(arg) }
         else if (cmd === "menu") p.showItemMenu(Number(arg), 100, 100)
         else if (cmd === "bgmenu") p.showBackgroundMenu()
-        else if (cmd === "actions") actionMenu.popup(actionButton, 0, actionButton.height + 4)
+        else if (cmd === "actions") { if (actionButton) actionMenu.popup(actionButton, 0, actionButton.height + 4); else actionMenu.popup() }
+        else if (cmd === "toolbar") setSetting("toolbar", arg ? arg.split(",") : [])
+        else if (cmd === "customize") toolbarSheet.open()
         else if (cmd === "settings") showSettings()
         else if (cmd === "help") showHelp(arg || "")
         else if (cmd === "connect") connectServer()
@@ -771,6 +929,10 @@ ApplicationWindow {
         else if (cmd === "panel") setPanel(arg, true)
         else if (cmd === "group") p.setGroupBy(arg)
         else if (cmd === "viewopts") viewOptions.open()
+        else if (cmd === "selmode") p.setSelectionMode(true)
+        else if (cmd === "tearoff") tearOffTab(Number(arg))
+        else if (cmd === "movetab") { const o = app.windows.filter(w => w !== bw); if (o.length) o[0].acceptTab(bw, Number(arg), -1) }
+        else if (cmd === "back") p.goBack()
         else if (cmd === "stacks") p.setStacks(arg)
         else if (cmd === "openstack") Qt.callLater(() => p.view.toggleStack(arg))
         else if (cmd === "opt") { const [k, v] = arg.split(":"); p.setViewOption(k, isNaN(Number(v)) ? (v === "true" ? true : v === "false" ? false : v) : Number(v)) }

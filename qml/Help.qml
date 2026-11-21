@@ -45,6 +45,7 @@ QtObject {
         { group: "Tabs & windows", action: "Close tab", keys: "Ctrl+W", also: "", note: "Both" },
         { group: "Tabs & windows", action: "Next / previous tab", keys: "Ctrl+Tab", also: "Ctrl+Shift+Tab", note: "Both" },
         { group: "Tabs & windows", action: "Switch split pane", keys: "Tab", also: "", note: "When the view has focus" },
+        { group: "Tabs & windows", action: "Move a tab to another window", keys: "drag the tab", also: "", note: "Finder and Dolphin. Drop it away from any tab bar to open it in a new window; its folder, history and view go with it" },
 
         { group: "Edit", action: "Copy", keys: "Ctrl+C", also: "", note: "Both" },
         { group: "Edit", action: "Cut (move on paste)", keys: "Ctrl+X", also: "", note: "Dolphin (Finder: ⌥⌘V moves)" },
@@ -65,6 +66,7 @@ QtObject {
         { group: "Edit", action: "Redo", keys: "Ctrl+Shift+Z", also: "", note: "Both" },
         { group: "Edit", action: "Select all", keys: "Ctrl+A", also: "", note: "Both" },
         { group: "Edit", action: "Invert selection", keys: "Ctrl+Shift+A", also: "", note: "Dolphin" },
+        { group: "Edit", action: "Selection mode", keys: "Ctrl+Shift+S", also: "", note: "Dolphin: checkboxes on items. Space ticks the current item, Esc leaves" },
         { group: "Edit", action: "Clear selection", keys: "Escape", also: "", note: "Both" },
         { group: "Edit", action: "Get Info", keys: "Alt+Return", also: "Ctrl+Shift+I", note: "Dolphin: Alt+Return (Finder: ⌘I, here the filter bar)" },
         { group: "Edit", action: "Tags: Red … Gray", keys: "Ctrl+Alt+1…7", also: "", note: "Toggle a colour tag on the selection" },

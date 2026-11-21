@@ -36,6 +36,8 @@ Item {
         width: cell.icon + 14
         height: cell.icon + 10
         radius: Math.round(8 * Theme.pt)
+        border.width: cell.pane.selectionMode && cell.pane.model.currentRow === cell.index ? 2 : 0
+        border.color: Theme.accent
         color: cell.selected ? Theme.selectedInactive : (drop.hovering ? Theme.dropTarget : (mouse.containsMouse ? Theme.hover : "transparent"))
     }
     GIcon {
@@ -71,25 +73,13 @@ Item {
     }
     GitBadge { status: cell.git; x: iconBg.x + iconBg.width - width - 2; y: iconBg.y + 2 }
     // Selection mode (Dolphin): a checkbox on every item.
-    Rectangle {
-        id: check
+    SelectCheck {
         visible: cell.pane.selectionMode
         x: iconBg.x + 2; y: iconBg.y + 2
-        width: 18; height: 18; radius: 9
-        color: cell.selected ? Theme.accent : Qt.rgba(Theme.content.r, Theme.content.g, Theme.content.b, 0.85)
-        border.width: cell.selected ? 0 : 1.5
-        border.color: Theme.fgTertiary
-        GLabel { anchors.centerIn: parent; visible: cell.selected; text: "✓"; color: Theme.accentText; font.pixelSize: 12; font.bold: true }
-        MouseArea {
-            id: checkMouse
-            anchors.fill: parent
-            anchors.margins: -3
-            hoverEnabled: true
-            z: 3
-            onClicked: { cell.pane.activated(); cell.pane.forceActiveFocus(); cell.pane.model.select(cell.index, "toggle") }
-        }
-        GTip { visible: checkMouse.containsMouse; text: cell.selected ? "Deselect this item (Space)" : "Select this item (Space)" }
         z: 3
+        pane: cell.pane
+        row: cell.index
+        checked: cell.selected
     }
 
     Rectangle {
