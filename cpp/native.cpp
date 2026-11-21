@@ -153,8 +153,10 @@ private:
 // ---- theme icons: image://icon/name|fallback|fallback ----
 class IconProvider : public QQuickImageProvider {
 public:
-    IconProvider() : QQuickImageProvider(QQuickImageProvider::Pixmap, QQuickImageProvider::ForceAsynchronousImageLoading) {}
-    QPixmap requestPixmap(const QString& id, QSize* size, const QSize& req) override
+    // QImage, not QPixmap: this runs on a loader thread, where pixmaps
+    // aren't safe on real GPU-backed windows (icons came out garbled).
+    IconProvider() : QQuickImageProvider(QQuickImageProvider::Image, QQuickImageProvider::ForceAsynchronousImageLoading) {}
+    QImage requestImage(const QString& id, QSize* size, const QSize& req) override
     {
         const int s = qMax(16, qMax(req.width(), req.height()));
         QIcon icon;
@@ -176,15 +178,21 @@ public:
         // Small full-colour icons (list rows) come from the 32 px art scaled
         // down: Finder shows little blue folders there, while themes like
         // WhiteSur draw their 16 px sizes as outlines.
-        QPixmap pm;
+        // Always at device-pixel ratio 1 and exactly the requested pixel
+        // size: QML already asks for size × the screen scale, and letting
+        // QIcon apply the fractional scale (4/3) again smeared the art.
+        QImage pm;
         if (!tint.isValid() && s < 32) {
-            pm = icon.pixmap(QSize(32, 32));
+            pm = icon.pixmap(QSize(32, 32), 1.0).toImage();
             if (!pm.isNull() && pm.width() > s)
                 pm = pm.scaled(s, s, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         } else {
-            pm = icon.pixmap(QSize(s, s));
+            pm = icon.pixmap(QSize(s, s), 1.0).toImage();
         }
-        if (tint.isValid() && !pm.isNull()) {
+        if (pm.isNull()) { if (size) *size = QSize(); return pm; }
+        pm = pm.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        pm.setDevicePixelRatio(1.0);
+        if (tint.isValid()) {
             // Monochrome glyph in one colour, keeping its alpha (Finder's sidebar).
             QPainter p(&pm);
             p.setCompositionMode(QPainter::CompositionMode_SourceIn);

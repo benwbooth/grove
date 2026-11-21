@@ -667,7 +667,9 @@ ApplicationWindow {
             id: ab
             iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
             tip: "More actions: new folder, sort, show hidden files, settings, help"
-            onClicked: actionMenu.popup(ab, 0, ab.height + 4)
+            // A second click closes it: the press outside already closed the
+            // menu, so don't open it again right away.
+            onClicked: { if (actionMenu.visible || Date.now() - actionMenu.closedAt < 250) actionMenu.close(); else actionMenu.popup(ab, 0, ab.height + 4) }
             Component.onCompleted: bw.actionButton = this
             Component.onDestruction: if (bw.actionButton === this) bw.actionButton = null
         }
@@ -718,6 +720,8 @@ ApplicationWindow {
     // ---------- menus ----------
     GMenu {
         id: actionMenu
+        property real closedAt: 0
+        onClosed: closedAt = Date.now()
         GMenuItem { text: "New Window"; iconName: "window-new"; shortcutText: Help.shown("Ctrl+N"); onTriggered: bw.app.openWindow([bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home()]) }
         GMenuItem { text: "New Tab"; iconName: "tab-new"; shortcutText: Help.shown("Ctrl+T"); onTriggered: bw.newTab(bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home(), []) }
         GMenuItem { text: "New Folder"; iconName: "folder-new"; shortcutText: Help.shown("Ctrl+Shift+N"); onTriggered: bw.activePane.newFolder() }
