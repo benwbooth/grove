@@ -15,14 +15,14 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Column view (Miller columns) + preview column | ✅ | – | ✅ |
 | Gallery view (big preview + filmstrip) | ✅ | – | ✅ |
 | Per-folder view memory (view, sort, icon size, groups) | ✅ | ✅ | ✅ |
-| Group by kind/date/size/name/tags | ✅ | ✅ | 🟡 list view only (icon view has no group headers yet) |
-| Stacks | ✅ | – | ❌ |
-| View options: grid spacing, label position, background | ✅ | – | ❌ (icon size only) |
+| Group by kind/date/size/name/tags | ✅ | ✅ | ✅ list and icon view, with headings and counts |
+| Stacks | ✅ | – | ✅ icon view, by kind (Finder's families) or date; open in place; View › Use Stacks (Ctrl+Alt+0), off by default |
+| View options: grid spacing, label position, background | ✅ | – | ✅ View Options (Ctrl+J): icon size, grid spacing, text size, label bottom/right, item info, previews, background colour/picture, Use as Defaults; per folder |
 | Sort by name/kind/date modified/created/added/last opened/size | ✅ | ✅ | ✅ ("Date Added" uses the inode change time) |
 | Folders first | – | ✅ | ✅ |
 | Hidden files toggle (Ctrl+H, Ctrl+Shift+.) | ✅ | ✅ | ✅ |
 | Previews (thumbnails), freedesktop cache shared with other apps | ✅ | ✅ | ✅ built-in images/PDF + system thumbnailers; prioritized, cancelled when scrolled away |
-| Previews per folder toggle | – | ✅ | 🟡 global setting |
+| Previews per folder toggle | – | ✅ | ✅ View Options › Show icon preview (Settings has the default) |
 | 100 000-item folders | ✅ | ✅ | ✅ streamed listing, virtualized views (see README) |
 | Tabs, drag files onto tabs | ✅ | ✅ | ✅ |
 | Drag tabs between windows | ✅ | ✅ | ❌ |

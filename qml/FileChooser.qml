@@ -17,6 +17,9 @@ ApplicationWindow {
     property var currentTab: null
     property bool modalOpen: false
     property bool answered: false
+    // Used inside grove (a picture for View Options, a disc image...):
+    // called with the chosen paths instead of answering the portal.
+    property var onChosen: null
     width: 960
     height: 620
     visible: false
@@ -44,6 +47,7 @@ ApplicationWindow {
     function confirmDelete(p) {}
     function emptyTrash() {}
     function selectAfterJob() {}
+    function toggleViewOptions() {}
 
     function accept(paths) {
         let uris = []
@@ -59,14 +63,15 @@ ApplicationWindow {
             uris = sel.map(p => "file://" + encodeURI(p))
         }
         answered = true
-        app.grove.chooserDone(request.id, true, JSON.stringify(uris), "{}")
+        if (onChosen) onChosen(uris.map(u => decodeURIComponent(u.substring(7))))
+        else app.grove.chooserDone(request.id, true, JSON.stringify(uris), "{}")
         close()
     }
     function chooserOpen(path, isDir) {
         if (isDir) go(path)
         else accept([path])
     }
-    onClosing: if (!answered) app.grove.chooserDone(request.id, false, "[]", "{}")
+    onClosing: if (!answered && !onChosen) app.grove.chooserDone(request.id, false, "[]", "{}")
 
     Item {
         anchors.fill: parent
@@ -165,7 +170,7 @@ ApplicationWindow {
         Toast { id: toastBox; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 70 }
     }
     Timer {
-        running: fc.app.screenshot !== ""
+        running: fc.app.screenshot !== "" && !fc.onChosen
         interval: 2500
         onTriggered: { fc.app.grove.grabWindows(fc.app.screenshot); fc.app.grove.chooserDone(fc.request.id, false, "[]", "{}"); fc.answered = true; Qt.quit() }
     }

@@ -11,7 +11,7 @@ Item {
     property var fm: pane.model
     readonly property bool showWhere: pane.searching || pane.path.indexOf("recent:") === 0 || pane.inTrash || pane.inArchive
     readonly property int rowH: Theme.rowHeight
-    readonly property bool thumbs: !pane.app || pane.app.settings.show_thumbnails !== false
+    readonly property bool thumbs: pane.previewsOn
     readonly property var allColumns: ({
         where: { label: pane.inTrash ? "Original Location" : "Where", w: 200 },
         modified: { label: "Date Modified", w: 170, sort: "modified" },

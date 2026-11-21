@@ -200,6 +200,14 @@ ApplicationWindow {
     function showHelp(search) { helpWin.query = search || ""; helpWin.show(); helpWin.raise(); helpWin.requestActivate() }
 
     Component { id: infoComp; InfoWindow {} }
+    Component { id: chooserComp; FileChooser {} }
+    // grove's own open/save dialog for grove itself: fn(paths).
+    function chooseFiles(title, opts, fn) {
+        const req = Object.assign({ title: title, mode: "open" }, opts || {})
+        const c = chooserComp.createObject(null, { app: app, request: req, onChosen: fn })
+        c.show(); c.raise(); c.requestActivate()
+        return c
+    }
     Component { id: textComp; TextViewer {} }
 
     // ---------- layout ----------
@@ -547,6 +555,8 @@ ApplicationWindow {
         GMenuItem { text: bw.app.grove.redoLabel ? "Redo " + bw.app.grove.redoLabel : "Redo"; iconName: "edit-redo"; shortcutText: "Ctrl+Shift+Z"; enabled: bw.app.grove.redoLabel !== ""; onTriggered: bw.app.grove.redo() }
         GMenuSeparator {}
         GMenuItem { text: "Filter This Folder"; iconName: "view-filter"; shortcutText: "Ctrl+I"; onTriggered: bw.openFilter() }
+        GMenuItem { text: "Show View Options"; iconName: "configure"; shortcutText: "Ctrl+J"; onTriggered: bw.toggleViewOptions() }
+        GMenuItem { text: "Use Stacks"; checkable: true; checked: bw.activePane && bw.activePane.stacks !== ""; shortcutText: "Ctrl+Alt+0"; onTriggered: bw.toggleStacks() }
         GMenuItem { text: "Show Hidden Files"; checkable: true; checked: !!bw.app.settings.show_hidden; shortcutText: "Ctrl+H"; onTriggered: bw.toggleHidden() }
         GMenuItem { text: "Information Panel"; checkable: true; checked: !!bw.app.settings.info_panel; shortcutText: "F11"; onTriggered: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
         GMenuItem { text: "Terminal Panel"; checkable: true; checked: !!bw.app.settings.terminal_panel; shortcutText: "F4"; onTriggered: bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel) }
@@ -630,6 +640,9 @@ ApplicationWindow {
         ]
     }
     QuickLook { id: ql; app: bw.app; win: bw }
+    ViewOptions { id: viewOptions; win: bw; x: bw.width - width - 16; y: Theme.toolbarHeight + 8 }
+    function toggleViewOptions() { if (viewOptions.opened) viewOptions.close(); else viewOptions.open() }
+    function toggleStacks() { activePane.setStacks(activePane.stacks ? "" : "kind") }
     SettingsWindow { id: settingsWin; app: bw.app }
     HelpWindow { id: helpWin; app: bw.app }
     Welcome { id: welcome; app: bw.app; win: bw }
@@ -658,6 +671,8 @@ ApplicationWindow {
     Key { sequences: ["Ctrl+-"]; onActivated: bw.activePane.zoom(-1) }
     Key { sequences: ["Ctrl+H", "Ctrl+Shift+."]; onActivated: bw.toggleHidden() }
     Key { sequences: ["Ctrl+I"]; onActivated: bw.openFilter() }
+    Key { sequences: ["Ctrl+J"]; onActivated: bw.toggleViewOptions() }
+    Key { sequences: ["Ctrl+Alt+0"]; onActivated: bw.toggleStacks() }
     Key { sequences: ["Ctrl+Y"]; onActivated: bw.activePane.quickLook() }
     Key { sequences: ["F3"]; onActivated: bw.currentTab.toggleSplit() }
     Key { sequences: ["Ctrl+Alt+S", "F9"]; onActivated: bw.sidebarShown = !bw.sidebarShown }
@@ -755,5 +770,10 @@ ApplicationWindow {
         else if (cmd === "versions") showVersions(arg)
         else if (cmd === "panel") setPanel(arg, true)
         else if (cmd === "group") p.setGroupBy(arg)
+        else if (cmd === "viewopts") viewOptions.open()
+        else if (cmd === "stacks") p.setStacks(arg)
+        else if (cmd === "openstack") Qt.callLater(() => p.view.toggleStack(arg))
+        else if (cmd === "opt") { const [k, v] = arg.split(":"); p.setViewOption(k, isNaN(Number(v)) ? (v === "true" ? true : v === "false" ? false : v) : Number(v)) }
+        else if (cmd === "bg") p.setViewOption("background", arg.replace("~", "#"))
     }
 }

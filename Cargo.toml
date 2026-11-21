@@ -32,6 +32,7 @@ alacritty_terminal = "0.25"
 ureq = { version = "3", features = ["json"] }
 socket2 = { version = "0.6", features = ["all"] }
 rand = "0.9"
+imagesize = "0.13"
 
 [build-dependencies]
 cxx-qt-build = "0.10"

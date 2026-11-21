@@ -32,7 +32,33 @@ FocusScope {
     property var gitMap: ({})
     property bool inGit: false
     property string groupBy: ""
-    function setGroupBy(g) { groupBy = g; fm.applyGroupBy(g); if (g && viewMode !== "list") setView("list"); rememberView() }
+    // Finder's View Options (Ctrl+J), remembered per folder.
+    property int gridSpacing: 0          // 1–10, 0 = default (4)
+    property int textSize: 0             // points, 0 = default (13)
+    property string labelPos: "bottom"   // bottom, right
+    property string background: ""       // "", "color:#rrggbb", "picture:/path"
+    property bool itemInfo: false
+    property var previews: null          // per folder: null follows Settings
+    readonly property bool previewsOn: previews === null || previews === undefined ? (!app || app.settings.show_thumbnails !== false) : !!previews
+    property string stacks: ""           // "", kind, date (icon view)
+    // Dolphin's selection mode: checkboxes, clicks toggle.
+    property bool selectionMode: false
+    function setGroupBy(g) {
+        groupBy = g
+        if (g) stacks = ""
+        fm.applyGroupBy(modelGrouping())
+        rememberView()
+    }
+    function setStacks(by) {
+        stacks = by
+        if (by) { groupBy = ""; if (viewMode !== "icons") setView("icons") }
+        fm.applyGroupBy(modelGrouping())
+        rememberView()
+    }
+    // Stacks only exist in icon view; other views show the groups.
+    function modelGrouping() { return stacks && viewMode === "icons" ? "stack" + stacks : groupBy }
+    onViewModeChanged: if (fm.grouping() !== modelGrouping()) fm.applyGroupBy(modelGrouping())
+    function setViewOption(name, value) { pane[name] = value; rememberView() }
     readonly property bool inTrash: path.indexOf("trash:") === 0
     readonly property bool special: path.indexOf(":///") > 0 || inTrash || path.indexOf("recent:") === 0
     readonly property bool inArchive: path.indexOf("archive://") === 0
@@ -128,17 +154,41 @@ FocusScope {
     // ---------- views ----------
     function rememberView() {
         if (!path || special || !app || !app.settings.per_folder_views) return
-        grove.setFolderView(path, JSON.stringify({ view: viewMode, sort: fm.sortKey, descending: fm.descending, icon_size: iconSize, group: groupBy }))
+        grove.setFolderView(path, JSON.stringify(viewState()))
+    }
+    function viewState() {
+        const v = { view: viewMode, sort: fm.sortKey, descending: fm.descending, icon_size: iconSize, group: groupBy,
+                    grid_spacing: gridSpacing, text_size: textSize, label_pos: labelPos === "bottom" ? "" : labelPos,
+                    background: background, item_info: itemInfo, stacks: stacks }
+        if (previews !== null && previews !== undefined) v.previews = previews
+        return v
+    }
+    // Finder's "Use as Defaults": these options for every folder without its own.
+    function useAsDefaults() {
+        const v = viewState()
+        delete v.view
+        win.setSetting("view_defaults", v)
+        win.toast("info", "Folders without their own view options now use these")
     }
     function applyRememberedView(p) {
         let v = {}
         try { v = JSON.parse(grove.folderView(p)) } catch (e) {}
         const s = app ? app.settings : {}
+        const d = (s.view_defaults && typeof s.view_defaults === "object") ? s.view_defaults : {}
+        const has = (k) => v.view !== undefined && v[k] !== undefined
+        const pick = (k, dflt) => has(k) ? v[k] : (d[k] !== undefined ? d[k] : dflt)
         viewMode = v.view || (pane.searching ? "list" : (s.default_view || "icons"))
-        iconSize = v.icon_size || s.icon_size || 64
-        groupBy = v.group || ""
-        fm.applyGroupBy(groupBy)
-        fm.applySort(v.sort || "name", !!v.descending)
+        iconSize = v.icon_size || d.icon_size || s.icon_size || 64
+        groupBy = pick("group", "")
+        gridSpacing = pick("grid_spacing", 0)
+        textSize = pick("text_size", 0)
+        labelPos = pick("label_pos", "") || "bottom"
+        background = pick("background", "")
+        itemInfo = !!pick("item_info", false)
+        previews = v.previews !== undefined ? v.previews : (d.previews !== undefined ? d.previews : null)
+        stacks = pick("stacks", "")
+        fm.applyGroupBy(modelGrouping())
+        fm.applySort(v.sort || d.sort || "name", v.sort ? !!v.descending : !!d.descending)
     }
     function setView(mode) {
         viewMode = mode
@@ -701,6 +751,8 @@ FocusScope {
             GMenuItem { text: "Name"; checkable: true; checked: pane.groupBy === "name"; onTriggered: pane.setGroupBy("name") }
             GMenuItem { text: "Tags"; checkable: true; checked: pane.groupBy === "tags"; onTriggered: pane.setGroupBy("tags") }
         }
+        GMenuItem { text: "Use Stacks"; checkable: true; checked: pane.stacks !== ""; shortcutText: "Ctrl+Alt+0"; tip: "Pile files of one kind into stacks (icon view)"; onTriggered: pane.setStacks(pane.stacks ? "" : "kind") }
+        GMenuItem { text: "Show View Options"; iconName: "configure"; shortcutText: "Ctrl+J"; tip: "Icon size, spacing, text size, labels, background for this folder"; onTriggered: pane.win.toggleViewOptions() }
         GMenuItem { text: "Show Hidden Files"; checkable: true; checked: fm.showHidden; shortcutText: "Ctrl+H"; onTriggered: pane.win.toggleHidden() }
         GMenuSeparator { visible: pane.inTrash }
         GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; visible: pane.inTrash; height: visible ? implicitHeight : 0; onTriggered: pane.win.emptyTrash() }

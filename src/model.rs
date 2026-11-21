@@ -176,6 +176,9 @@ pub mod qobject {
         fn apply_group_by(self: Pin<&mut FolderModel>, key: &QString);
         #[qinvokable]
         fn grouping(self: &FolderModel) -> QString;
+        /// Runs of rows under one group heading: [{label, start, count}].
+        #[qinvokable]
+        fn group_ranges(self: &FolderModel) -> QString;
         /// Folders panel: show folders only.
         #[qinvokable]
         fn apply_dirs_only(self: Pin<&mut FolderModel>, on: bool);
@@ -263,12 +266,14 @@ pub struct FolderModelRust {
     patterns: Vec<(bool, String)>,
     dirs_only: bool,
     group_by: String,
+    /// Identifies this model to the media worker (dimensions, durations).
+    media_id: std::cell::Cell<u64>,
 }
 
 const ROLES: &[&str] = &[
     "name", "path", "isDir", "isLink", "size", "sizeText", "mtime", "dateText", "kind", "mime", "iconName", "hidden", "selected", "depth",
     "expanded", "tags", "tagColors", "note", "git", "cut", "thumb", "row", "broken", "ext", "created", "createdText",
-    "rating", "addedText", "openedText", "permissions", "owner", "group", "fullPath", "section",
+    "rating", "addedText", "openedText", "permissions", "owner", "group", "fullPath", "section", "dims", "duration",
 ];
 
 fn qs(s: &str) -> QString {
@@ -427,6 +432,8 @@ impl qobject::FolderModel {
             "thumb" => QVariant::from(&mime::thumbable(&it.e, &it.mime)),
             "row" => QVariant::from(&row),
             "ext" => QVariant::from(&qs(it.e.ext())),
+            "dims" => QVariant::from(&qs(&self.media_of(&it, false).dims)),
+            "duration" => QVariant::from(&qs(&self.media_of(&it, true).duration)),
             _ => QVariant::default(),
         }
     }
@@ -1057,6 +1064,10 @@ impl qobject::FolderModel {
             "mtime": b.e.mtime, "mime": b.mime.name, "kind": b.mime.comment, "icon": b.icon,
             "note": b.e.note, "key": b.e.key, "tags": b.tags, "depth": b.e.depth, "expanded": b.expanded,
             "thumb": mime::thumbable(&b.e, &b.mime), "target": b.e.target, "selected": b.selected, "rating": b.rating,
+            "hidden": b.e.hidden, "git": b.git, "cut": self.rust().cut.contains(&b.e.path),
+            "tagColors": b.tags.iter().map(|t| grove_core::tags::color_of(t).unwrap_or("")).collect::<Vec<_>>().join(","),
+            "tagText": b.tags.join(", "), "sizeText": if b.e.is_dir { "--".to_string() } else { grove_core::util::human_size(b.e.size) },
+            "row": row, "dims": self.media_of(&b, false).dims,
         });
         qs(&v.to_string())
     }
@@ -1116,6 +1127,28 @@ impl qobject::FolderModel {
         qs(&self.rust().group_by)
     }
 
+    fn group_ranges(&self) -> QString {
+        let r = self.rust();
+        let mut out: Vec<serde_json::Value> = Vec::new();
+        let mut cur: Option<(String, usize)> = None;
+        for (i, it) in r.vis.iter().enumerate() {
+            let l = group_label(&r.group_by, &it.borrow());
+            match &cur {
+                Some((c, _)) if *c == l => {}
+                _ => {
+                    if let Some((c, st)) = cur.take() {
+                        out.push(serde_json::json!({"label": c, "start": st, "count": i - st}));
+                    }
+                    cur = Some((l, i));
+                }
+            }
+        }
+        if let Some((c, st)) = cur {
+            out.push(serde_json::json!({"label": c, "start": st, "count": r.vis.len() - st}));
+        }
+        qs(&serde_json::Value::Array(out).to_string())
+    }
+
     fn apply_dirs_only(mut self: Pin<&mut Self>, on: bool) {
         self.as_mut().rust_mut().dirs_only = on;
         self.refilter();
@@ -1149,6 +1182,39 @@ impl qobject::FolderModel {
     fn last_load_ms(&self) -> i32 {
         self.rust().load_ms
     }
+
+    /// Cached picture size / duration, asking the worker when unknown.
+    /// Durations (ffprobe) only when a view shows them.
+    fn media_of(&self, it: &Item, duration: bool) -> crate::media::Media {
+        let m = &it.mime.name;
+        if !crate::media::wants(m, &it.e.path) || it.e.is_dir {
+            return Default::default();
+        }
+        if let Some(x) = crate::media::cached(&it.e.path, it.e.mtime) {
+            return x;
+        }
+        if !duration && !m.starts_with("image/") {
+            return Default::default();
+        }
+        let r = self.rust();
+        if r.media_id.get() == 0 {
+            static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+            r.media_id.set(N.fetch_add(1, Ordering::Relaxed));
+        }
+        let qt = self.qt_thread();
+        crate::media::request(&it.e.path, it.e.mtime, m, r.media_id.get(), move |paths| {
+            let _ = qt.queue(move |model| model.media_ready(paths));
+        });
+        Default::default()
+    }
+
+    fn media_ready(mut self: Pin<&mut Self>, paths: Vec<String>) {
+        let set: HashSet<String> = paths.into_iter().collect();
+        let rows: Vec<i32> = self.rust().vis.iter().enumerate().filter(|(_, i)| set.contains(&i.borrow().e.path)).map(|(i, _)| i as i32).collect();
+        for r in rows {
+            qobject::grove_rows_changed(self.as_mut().upcast_pin(), r, r);
+        }
+    }
 }
 
 fn date_bucket(t: i64) -> (u8, &'static str) {
@@ -1179,15 +1245,44 @@ fn size_bucket(it: &Item) -> (u8, &'static str) {
 /// Sort key of an item's group.
 fn group_rank(g: &str, it: &Item) -> String {
     match g {
+        // Stacks (icon view): folders stay loose, first; files stack.
+        "stackkind" | "stackdate" if it.e.is_dir => "0".into(),
+        "stackkind" => match stack_kind(&it.mime.name) {
+            "Other" => "2".into(),
+            k => format!("1{k}"),
+        },
+        "stackdate" => format!("1{}", date_bucket(it.e.mtime).0),
         "date" => date_bucket(it.e.mtime).0.to_string(),
         "size" => size_bucket(it).0.to_string(),
         _ => group_label(g, it).to_lowercase(),
     }
 }
 
+/// Finder's stack kinds: broad families rather than exact types.
+pub fn stack_kind(mime: &str) -> &'static str {
+    let (top, sub) = mime.split_once('/').unwrap_or((mime, ""));
+    match top {
+        "image" => "Images",
+        "video" => "Movies",
+        "audio" => "Music",
+        _ if sub == "pdf" => "PDF Documents",
+        _ if sub.contains("spreadsheet") || sub.contains("excel") || sub == "csv" => "Spreadsheets",
+        _ if sub.contains("presentation") || sub.contains("powerpoint") => "Presentations",
+        _ if ["zip", "x-tar", "gzip", "x-7z-compressed", "vnd.rar", "x-xz", "zstd", "x-bzip2", "x-compressed-tar", "x-xz-compressed-tar", "x-zstd-compressed-tar", "x-bzip2-compressed-tar", "x-iso9660-image", "x-cd-image"].contains(&sub) => "Archives",
+        _ if sub.contains("x-rust") || sub.contains("x-python") || sub.contains("javascript") || sub.contains("x-csrc") || sub.contains("x-c++") || sub.contains("shellscript") || sub.contains("x-java") || sub == "json" || sub.contains("x-go") || sub == "xml" || sub.contains("toml") || sub.contains("yaml") || sub.contains("x-nix") => "Developer",
+        "text" => "Documents",
+        _ if sub.contains("document") || sub.contains("msword") || sub.contains("rtf") || sub.contains("epub") || sub.contains("opendocument.text") => "Documents",
+        _ if sub.contains("executable") || sub.contains("x-sharedlib") || sub.contains("appimage") => "Applications",
+        _ => "Other",
+    }
+}
+
 /// The group heading an item goes under.
 pub fn group_label(g: &str, it: &Item) -> String {
     match g {
+        "stackkind" | "stackdate" if it.e.is_dir => String::new(),
+        "stackkind" => stack_kind(&it.mime.name).into(),
+        "stackdate" => date_bucket(it.e.mtime).1.into(),
         "kind" => if it.e.is_dir { "Folders".into() } else { it.mime.comment.clone() },
         "date" => date_bucket(it.e.mtime).1.into(),
         "size" => size_bucket(it).1.into(),

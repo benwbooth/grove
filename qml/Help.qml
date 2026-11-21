@@ -29,6 +29,8 @@ QtObject {
         { group: "View", action: "Bigger icons", keys: "Ctrl++", also: "Ctrl+=", note: "Both" },
         { group: "View", action: "Smaller icons", keys: "Ctrl+-", also: "", note: "Both" },
         { group: "View", action: "Show/hide hidden files", keys: "Ctrl+H", also: "Ctrl+Shift+.", note: "Dolphin: Ctrl+H  ·  Finder: ⇧⌘." },
+        { group: "View", action: "View Options (spacing, text size, labels, background)", keys: "Ctrl+J", also: "", note: "Finder: ⌘J" },
+        { group: "View", action: "Use Stacks (icon view)", keys: "Ctrl+Alt+0", also: "", note: "Finder: ⌃⌘0. Click a stack to open it in place" },
         { group: "View", action: "Filter this folder", keys: "Ctrl+I", also: "", note: "Dolphin's filter bar (Finder uses ⌘I for Get Info: here Alt+Return)" },
         { group: "View", action: "Quick Look", keys: "Space", also: "Ctrl+Y", note: "Finder: Space, ⌘Y. Arrow keys move between files while it's open" },
         { group: "View", action: "Split view", keys: "F3", also: "", note: "Dolphin: F3" },

@@ -110,6 +110,9 @@ pub struct Settings {
     pub browse_archives: bool,
     #[serde(default)]
     pub list_thumbnails: bool,
+    /// View Options saved with "Use as Defaults" (a FolderView without a view).
+    #[serde(default)]
+    pub view_defaults: serde_json::Value,
 }
 
 fn default_columns() -> Vec<String> {
@@ -152,6 +155,7 @@ pub fn save(s: &Settings) -> Result<(), String> {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct FolderView {
+    #[serde(default)]
     pub view: String,
     #[serde(default)]
     pub sort: String,
@@ -161,6 +165,26 @@ pub struct FolderView {
     pub icon_size: u32,
     #[serde(default)]
     pub group: String,
+    /// Icon view options (Finder's View Options, Ctrl+J). 0 / "" = default.
+    #[serde(default)]
+    pub grid_spacing: u32,
+    #[serde(default)]
+    pub text_size: u32,
+    /// "bottom" (default) or "right".
+    #[serde(default)]
+    pub label_pos: String,
+    /// "" (default), "color:#rrggbb" or "picture:/path/to/image".
+    #[serde(default)]
+    pub background: String,
+    /// A second line under names: size, item count, picture dimensions.
+    #[serde(default)]
+    pub item_info: bool,
+    /// Per-folder previews (Dolphin): None follows the global setting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previews: Option<bool>,
+    /// Finder's stacks in icon view: "" (off), "kind" or "date".
+    #[serde(default)]
+    pub stacks: String,
 }
 
 fn views_path() -> PathBuf {
