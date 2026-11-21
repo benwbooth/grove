@@ -43,6 +43,7 @@ FocusScope {
     property string stacks: ""           // "", kind, date (icon view)
     // Dolphin's selection mode: checkboxes, clicks toggle.
     property bool selectionMode: false
+    property int testTip: -1             // test hook: show this row's tooltip
     function setGroupBy(g) {
         groupBy = g
         if (g) stacks = ""

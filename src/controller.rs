@@ -1108,6 +1108,32 @@ impl ffi::Grove {
         id
     }
 
+    pub fn markup_save(&self, key: &QString, path: &QString, ops: &QString, mode: &QString) {
+        let (p, ops, mode) = (PathBuf::from(path.to_string()), ops.to_string(), mode.to_string());
+        let qt = self.qt_thread();
+        self.answer(key, move || {
+            let ext = p.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+            // Formats Qt can write back; others become a PNG copy.
+            let ext = if ["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"].contains(&ext.as_str()) { ext } else { "png".into() };
+            save_edit(&p, &mode, "edited", &ext, "Markup", &qt, |dest| {
+                let e = ffi::grove_markup_render(&qs(&p.to_string_lossy()), &qs(&ops), &qs(&dest.to_string_lossy())).to_string();
+                if e.is_empty() { Ok(()) } else { Err(e) }
+            })
+        });
+    }
+
+    pub fn media_trim(&self, key: &QString, path: &QString, start_ms: f64, end_ms: f64, mode: &QString) {
+        let (p, mode) = (PathBuf::from(path.to_string()), mode.to_string());
+        let qt = self.qt_thread();
+        self.answer(key, move || {
+            if end_ms <= start_ms {
+                return json!({"error": "The end must come after the start."});
+            }
+            let ext = p.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_else(|| "mkv".into());
+            save_edit(&p, &mode, "trimmed", &ext, "Trim", &qt, |dest| trim_with_ffmpeg(&p, start_ms, end_ms, dest))
+        });
+    }
+
     pub fn session(&self) -> QString {
         qs(&startup().session)
     }
@@ -1130,6 +1156,111 @@ impl ffi::Grove {
     pub fn quit_app(&self) {
         std::process::exit(0);
     }
+}
+
+/// Stream copy first (fast, lossless, cuts at keyframes); re-encode when
+/// the container won't take that.
+fn trim_with_ffmpeg(src: &Path, start_ms: f64, end_ms: f64, dest: &Path) -> Result<(), String> {
+    let ss = format!("{:.3}", start_ms / 1000.0);
+    let t = format!("{:.3}", (end_ms - start_ms) / 1000.0);
+    let run = |extra: &[&str]| -> Result<std::process::Output, String> {
+        let mut c = std::process::Command::new("ffmpeg");
+        c.args(["-hide_banner", "-loglevel", "error", "-y", "-ss", &ss, "-i"]).arg(src).args(["-t", &t, "-map", "0"]).args(extra).arg(dest);
+        c.stdin(std::process::Stdio::null());
+        c.output().map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { "Trimming needs ffmpeg, which isn't installed.".to_string() } else { e.to_string() })
+    };
+    // A stream copy can only start on a keyframe: use it when the start is
+    // one (or there's no video), otherwise re-encode for an exact cut.
+    if starts_on_keyframe(src, start_ms / 1000.0) {
+        let o = run(&["-c", "copy", "-avoid_negative_ts", "make_zero"])?;
+        if o.status.success() && dest.metadata().map(|m| m.len() > 0).unwrap_or(false) {
+            return Ok(());
+        }
+    }
+    let o = run(&["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-c:s", "copy"])?;
+    if o.status.success() {
+        return Ok(());
+    }
+    Err(format!("ffmpeg couldn't trim it: {}", String::from_utf8_lossy(&o.stderr).lines().last().unwrap_or("unknown error")))
+}
+
+fn starts_on_keyframe(src: &Path, start: f64) -> bool {
+    if start <= 0.0 {
+        return true;
+    }
+    let iv = format!("{:.3}%{:.3}", (start - 3.0).max(0.0), start + 1.0);
+    let Ok(o) = std::process::Command::new("ffprobe")
+        .args(["-v", "error", "-select_streams", "v:0", "-skip_frame", "nokey", "-show_entries", "frame=pts_time", "-of", "csv=p=0", "-read_intervals", &iv])
+        .arg(src)
+        .stdin(std::process::Stdio::null())
+        .output()
+    else {
+        return false;
+    };
+    let text = String::from_utf8_lossy(&o.stdout);
+    let times: Vec<f64> = text.lines().filter_map(|l| l.trim().trim_end_matches(',').parse().ok()).collect();
+    // No video stream: audio frames are all keyframes.
+    if times.is_empty() {
+        let has_video = std::process::Command::new("ffprobe")
+            .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=index", "-of", "csv=p=0"])
+            .arg(src)
+            .output()
+            .map(|o| !o.stdout.is_empty())
+            .unwrap_or(true);
+        return !has_video;
+    }
+    times.iter().any(|t| (t - start).abs() < 0.05)
+}
+
+/// "photo (edited).jpg", "photo (edited 2).jpg"... next to `p`.
+fn sibling_name(p: &Path, tag: &str, ext: &str) -> PathBuf {
+    let dir = p.parent().unwrap_or(Path::new("/"));
+    let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    for n in 1.. {
+        let name = if n == 1 { format!("{stem} ({tag}).{ext}") } else { format!("{stem} ({tag} {n}).{ext}") };
+        let c = dir.join(name);
+        if c.symlink_metadata().is_err() {
+            return c;
+        }
+    }
+    unreachable!()
+}
+
+/// Write a new version of `orig` with `make(dest)`: next to it ("copy") or
+/// in its place ("replace": the original goes to the Trash; Undo puts it
+/// back). Answers {path} or {error}.
+fn save_edit(orig: &Path, mode: &str, tag: &str, ext: &str, label: &str, qt: &CxxQtThread<ffi::Grove>, make: impl Fn(&Path) -> Result<(), String>) -> Value {
+    let same_ext = orig.extension().map(|e| e.to_string_lossy().to_lowercase()) == Some(ext.to_lowercase());
+    if mode == "replace" && same_ext {
+        let dir = orig.parent().unwrap_or(Path::new("/"));
+        let tmp = dir.join(format!(".{}.grove-edit.{ext}", orig.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+        if let Err(e) = make(&tmp) {
+            let _ = std::fs::remove_file(&tmp);
+            return json!({"error": e});
+        }
+        let item = match trash::trash(orig) {
+            Ok(i) => i,
+            Err(e) => {
+                let _ = std::fs::remove_file(&tmp);
+                return json!({"error": format!("Couldn't move the original to the Trash: {e}")});
+            }
+        };
+        if let Err(e) = std::fs::rename(&tmp, orig) {
+            let _ = trash::restore(&item, None);
+            return json!({"error": e.to_string()});
+        }
+        ffi::Grove::push_history(qt, label, Action::Seq(vec![Action::Trashed { items: vec![item] }, Action::Moved { pairs: vec![(tmp, orig.to_path_buf())] }]));
+        ffi::Grove::touched(qt, vec![dir.to_string_lossy().into_owned()]);
+        return json!({"path": orig.to_string_lossy(), "replaced": true});
+    }
+    let dest = sibling_name(orig, tag, ext);
+    if let Err(e) = make(&dest) {
+        let _ = std::fs::remove_file(&dest);
+        return json!({"error": e});
+    }
+    ffi::Grove::push_history(qt, label, Action::Exists { paths: vec![dest.clone()] });
+    ffi::Grove::touched(qt, vec![dest.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()]);
+    json!({"path": dest.to_string_lossy(), "replaced": false, "converted": mode == "replace"})
 }
 
 pub fn templates_dir() -> PathBuf {

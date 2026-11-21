@@ -23,6 +23,7 @@
 #include <QtGui/QImageWriter>
 #include <QtGui/QKeyEvent>
 #include <QtGui/QPainter>
+#include <QtGui/QPainterPath>
 #include <QtGui/QTransform>
 #include <QtGui/QWindow>
 #include <QtPdf/QPdfDocument>
@@ -31,6 +32,7 @@
 #include <QtQuick/QQuickImageProvider>
 #include <QtQuick/QQuickWindow>
 #include <atomic>
+#include <algorithm>
 
 static QString fromRust(const rust::String& s) { return QString::fromUtf8(s.data(), int(s.size())); }
 static rust::String toRust(const QString& s) { const QByteArray b = s.toUtf8(); return rust::String(b.constData(), size_t(b.size())); }
@@ -326,6 +328,76 @@ QString grove_image_rotate(const QString& path, int degrees)
     QImageWriter w(path, fmt);
     if (fmt == "jpeg" || fmt == "jpg") w.setQuality(95);
     if (!w.write(img)) return QStringLiteral("Couldn't save the rotated picture: ") + w.errorString();
+    return QString();
+}
+
+QString grove_markup_render(const QString& src, const QString& opsJson, const QString& dest)
+{
+    QImageReader r(src);
+    r.setAutoTransform(true);
+    QImage img = r.read();
+    if (img.isNull()) return QStringLiteral("This picture can't be opened.");
+    const QJsonObject spec = QJsonDocument::fromJson(opsJson.toUtf8()).object();
+    img = img.convertToFormat(img.hasAlphaChannel() ? QImage::Format_ARGB32_Premultiplied : QImage::Format_RGB32);
+    {
+        QPainter p(&img);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setRenderHint(QPainter::TextAntialiasing);
+        for (const QJsonValue& v : spec.value(QStringLiteral("ops")).toArray()) {
+            const QJsonObject o = v.toObject();
+            const QString t = o.value(QStringLiteral("t")).toString();
+            QColor c(o.value(QStringLiteral("c")).toString(QStringLiteral("#ff3b30")));
+            c.setAlphaF(o.value(QStringLiteral("a")).toDouble(1.0));
+            const double w = o.value(QStringLiteral("w")).toDouble(4);
+            QPen pen(c, w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+            p.setPen(pen);
+            p.setBrush(Qt::NoBrush);
+            const QPointF a(o.value(QStringLiteral("x1")).toDouble(), o.value(QStringLiteral("y1")).toDouble());
+            const QPointF b(o.value(QStringLiteral("x2")).toDouble(), o.value(QStringLiteral("y2")).toDouble());
+            if (t == QLatin1String("pen")) {
+                const QJsonArray pts = o.value(QStringLiteral("p")).toArray();
+                QPainterPath path;
+                for (int i = 0; i + 1 < pts.size(); i += 2) {
+                    const QPointF q(pts[i].toDouble(), pts[i + 1].toDouble());
+                    if (i == 0) path.moveTo(q); else path.lineTo(q);
+                }
+                if (pts.size() == 2) path.lineTo(QPointF(pts[0].toDouble() + 0.01, pts[1].toDouble()));
+                // A highlighter shouldn't darken where its stroke crosses itself.
+                p.drawPath(path);
+            } else if (t == QLatin1String("rect")) {
+                p.drawRect(QRectF(a, b).normalized());
+            } else if (t == QLatin1String("ellipse")) {
+                p.drawEllipse(QRectF(a, b).normalized());
+            } else if (t == QLatin1String("line") || t == QLatin1String("arrow")) {
+                p.drawLine(a, b);
+                if (t == QLatin1String("arrow")) {
+                    const QLineF l(b, a);
+                    const double len = std::max(12.0, w * 4);
+                    QLineF h1 = l; h1.setLength(len); h1.setAngle(l.angle() + 28);
+                    QLineF h2 = l; h2.setLength(len); h2.setAngle(l.angle() - 28);
+                    p.drawLine(h1);
+                    p.drawLine(h2);
+                }
+            } else if (t == QLatin1String("text")) {
+                QFont f;
+                f.setPixelSize(std::max(6, int(o.value(QStringLiteral("s")).toDouble(24))));
+                f.setBold(true);
+                p.setFont(f);
+                p.drawText(a, o.value(QStringLiteral("text")).toString());
+            }
+        }
+    }
+    const QJsonArray crop = spec.value(QStringLiteral("crop")).toArray();
+    if (crop.size() == 4) {
+        const QRect cr = QRectF(crop[0].toDouble(), crop[1].toDouble(), crop[2].toDouble(), crop[3].toDouble()).toAlignedRect().intersected(img.rect());
+        if (cr.width() > 1 && cr.height() > 1) img = img.copy(cr);
+    }
+    const int rot = spec.value(QStringLiteral("rotate")).toInt(0) % 360;
+    if (rot != 0) img = img.transformed(QTransform().rotate(rot), Qt::SmoothTransformation);
+    QImageWriter wr(dest);
+    const QByteArray fmt = wr.format().toLower();
+    if (fmt == "jpeg" || fmt == "jpg") { wr.setQuality(92); img = img.convertToFormat(QImage::Format_RGB32); }
+    if (!wr.write(img)) return QStringLiteral("Couldn't save the picture: ") + wr.errorString();
     return QString();
 }
 

@@ -117,6 +117,7 @@ Window {
                 ToggleRow { label: "Remember each folder's view"; help: "Folders reopen in the view, sort order and icon size you left them in."; key: "per_folder_views" }
                 ToggleRow { label: "Show previews (thumbnails)"; help: "Pictures, videos and PDFs show their contents instead of an icon."; key: "show_thumbnails" }
                 ToggleRow { label: "Thumbnails in list view"; help: "Small previews next to names in list view too."; key: "list_thumbnails" }
+                ToggleRow { label: "Previews in tooltips"; help: "Hovering an item shows a bigger preview with its kind, size and date (Dolphin)."; key: "preview_tooltips" }
                 ToggleRow { label: "Status bar"; help: "The line at the bottom with item counts and the icon size slider."; key: "show_status_bar" }
                 ToggleRow { label: "Grove's own title bar"; help: "Window buttons in the sidebar, like macOS. Off uses the desktop's title bar (applies to new windows)."; key: "client_decorations" }
                 ToggleRow { label: "Git status badges"; help: "Show which files changed in git folders (M, A, ?)."; key: "show_git_status" }

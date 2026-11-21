@@ -26,6 +26,7 @@ pub mod ffi {
         fn grove_can_read_image(path: &QString) -> bool;
         fn grove_image_rotate(path: &QString, degrees: i32) -> QString;
         fn grove_image_convert(path: &QString, format: &QString) -> QString;
+        fn grove_markup_render(src: &QString, ops: &QString, dest: &QString) -> QString;
         fn grove_test_key(key: i32, modifiers: i32, text: &QString);
         fn grove_set_icon_theme(dark: bool, mac: bool);
         fn grove_grab_windows(path: &QString);
@@ -250,6 +251,16 @@ pub mod ffi {
         fn extract(self: Pin<&mut Grove>, archive: &QString, dest: &QString) -> i32;
         #[qinvokable]
         fn compress(self: Pin<&mut Grove>, paths: &QString, format: &QString) -> i32;
+
+        // --- Quick Look editing ---
+        /// Save markup over a picture. mode: "replace" (the original goes to
+        /// the Trash, Undo puts it back) or "copy" (a new file next to it).
+        #[qinvokable]
+        fn markup_save(self: &Grove, key: &QString, path: &QString, ops: &QString, mode: &QString);
+        /// Cut a video/audio file to start..end (ms) with ffmpeg (stream copy
+        /// when it can, re-encoding otherwise). mode as for markup_save.
+        #[qinvokable]
+        fn media_trim(self: &Grove, key: &QString, path: &QString, start_ms: f64, end_ms: f64, mode: &QString);
 
         // --- portal file chooser ---
         #[qinvokable]

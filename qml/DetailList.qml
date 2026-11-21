@@ -370,6 +370,17 @@ Item {
                 path: rowItem.path
                 enabledFor: rowItem.isDir && !root.pane.special
             }
+            PreviewTip {
+                x: mouse.x + mouse.mouseX + 14
+                y: rowItem.height + 2
+                hovering: mouse.containsMouse && !mouse.pressed && !rowItem.renaming
+                pane: root.pane
+                row: rowItem.index
+                path: rowItem.path
+                name: rowItem.name
+                thumb: rowItem.thumb
+                mtime: rowItem.mtime
+            }
         }
     }
 

@@ -885,12 +885,22 @@ ApplicationWindow {
     Timer {
         id: shotTimer
         interval: Number(bw.app.grove.env("GROVE_SHOT_DELAY") || 2500)
-        onTriggered: {
-            const steps = (bw.app.grove.env("GROVE_TEST") || "").split(";").filter(s => s)
-            for (const s of steps) bw.testStep(s)
-            shotTimer2.start()
-        }
+        onTriggered: bw.runSteps((bw.app.grove.env("GROVE_TEST") || "").split(";").filter(s => s))
     }
+    // "sleep=MS" waits before the steps after it (async things to settle).
+    function runSteps(steps) {
+        for (let i = 0; i < steps.length; i++) {
+            if (steps[i].indexOf("sleep=") === 0) {
+                stepTimer.rest = steps.slice(i + 1)
+                stepTimer.interval = Number(steps[i].substring(6))
+                stepTimer.start()
+                return
+            }
+            bw.testStep(steps[i])
+        }
+        shotTimer2.start()
+    }
+    Timer { id: stepTimer; property var rest: []; onTriggered: bw.runSteps(rest) }
     Timer {
         id: shotTimer2
         interval: Number(bw.app.grove.env("GROVE_SHOT_DELAY2") || 1500)
@@ -916,6 +926,13 @@ ApplicationWindow {
         else if (cmd === "customize") toolbarSheet.open()
         else if (cmd === "shortcut") { const i = arg.indexOf(":"); const c = Object.assign({}, app.settings.shortcuts || {}); c[arg.substring(0, i)] = arg.substring(i + 1).split("|"); setSetting("shortcuts", c) }
         else if (cmd === "record") { settingsWin.page = "keyboard"; showSettings(); settingsWin.record(arg) }
+        else if (cmd === "qledit") {
+            ql.editing = arg
+            if (arg === "markup") ql.markupDemo()
+            else { ql.trimFrom(2000, 5000) }
+        }
+        else if (cmd === "qlsave") ql.saveEdit(arg)
+        else if (cmd === "tip") { setSetting("preview_tooltips", true); p.testTip = Number(arg) }
         else if (cmd === "recordkey") settingsWin.recordSeq(arg)
         else if (cmd === "key") { const [k, m] = arg.split(":"); app.grove.testKey(Number(k), Number(m || 0), "") }
         else if (cmd === "settings") { if (arg) settingsWin.page = arg; showSettings() }

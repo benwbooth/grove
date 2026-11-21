@@ -103,8 +103,8 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 |---|---|---|---|
 | Space to preview, arrows to move | ✅ | – | ✅ |
 | Images incl. HEIC/AVIF/RAW (via thumbnailers), video/audio, PDF, text/code with highlighting, Markdown, archives, folders | ✅ | 🟡 | ✅ |
-| Markup (draw/annotate), trim video | ✅ | – | ❌ (rotate/convert images are Quick Actions) |
-| Tooltip previews | – | ✅ | ❌ |
+| Markup (draw/annotate), trim video | ✅ | – | ✅ Quick Look: pen, highlighter, shapes, arrows, text, crop, rotate; trim video/audio (ffmpeg stream copy when the cut starts on a keyframe, exact re-encode otherwise); Save (original to the Trash, Undo) or Save as Copy |
+| Tooltip previews | – | ✅ | ✅ Settings › Previews in tooltips: preview, kind, size, dimensions, date (icon and list views) |
 
 ## Integration
 

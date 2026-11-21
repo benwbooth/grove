@@ -127,7 +127,9 @@ pub fn preview(path: &str, dark: bool) -> Value {
         return with(json!({"kind": "other", "note": "grove can't show this kind of picture. Installing libheif or a RAW thumbnailer adds support."}));
     }
     if m.name.starts_with("video/") || m.name.starts_with("audio/") {
-        return with(json!({"kind": "media", "video": m.name.starts_with("video/")}));
+        // The length (for trimming before the player knows it).
+        let secs = crate::media::probe(path).map(|x| x.2).unwrap_or(0.0);
+        return with(json!({"kind": "media", "video": m.name.starts_with("video/"), "seconds": secs}));
     }
     if m.name == "application/pdf" {
         return with(json!({"kind": "pdf"}));

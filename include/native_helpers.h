@@ -28,6 +28,10 @@ bool grove_can_read_image(const QString& path);
 // Rotate an image file in place (degrees: 90, -90, 180) / convert it.
 QString grove_image_rotate(const QString& path, int degrees);
 QString grove_image_convert(const QString& path, const QString& format);
+// Quick Look markup: draw `opsJson` ({ops, crop, rotate}, image pixels)
+// over `src` and save the result to `dest` (format from its extension).
+// "" on success, else what went wrong. Safe off the UI thread (QImage).
+QString grove_markup_render(const QString& src, const QString& opsJson, const QString& dest);
 // The model told its views rows first..last changed.
 void grove_rows_changed(QAbstractListModel& model, int32_t first, int32_t last);
 // layoutAboutToBeChanged (done=false) / layoutChanged (done=true).

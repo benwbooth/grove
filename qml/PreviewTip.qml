@@ -16,9 +16,10 @@ ToolTip {
     property bool hovering: false
     readonly property bool rich: !!(pane && pane.app && pane.app.settings.preview_tooltips)
     property var item: null
-    visible: hovering && (rich || truncated)
+    readonly property bool forced: !!pane && pane.testTip === row && row >= 0
+    visible: (hovering || forced) && (rich || truncated)
     onVisibleChanged: if (visible && rich && row >= 0) item = pane.itemAt(row)
-    delay: rich ? 700 : Theme.tooltipDelay
+    delay: forced ? 0 : rich ? 700 : Theme.tooltipDelay
     timeout: 15000
     padding: 0
     topPadding: 0.001
