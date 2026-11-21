@@ -188,6 +188,15 @@ Item {
         cacheBuffer: root.rowH * 20
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        section.property: root.pane.groupBy !== "" ? "section" : ""
+        section.criteria: ViewSection.FullString
+        section.delegate: Item {
+            required property string section
+            width: list.width
+            height: Math.round(30 * Theme.pt)
+            GLabel { x: 14; anchors.bottom: parent.bottom; anchors.bottomMargin: 5; text: parent.section; font.bold: true; color: Theme.fgSecondary }
+            Rectangle { x: 10; width: parent.width - 20; height: 1; anchors.bottom: parent.bottom; color: Theme.separator }
+        }
 
         delegate: Item {
             id: rowItem

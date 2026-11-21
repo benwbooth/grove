@@ -753,5 +753,6 @@ ApplicationWindow {
         else if (cmd === "share") share([arg])
         else if (cmd === "versions") showVersions(arg)
         else if (cmd === "panel") setPanel(arg, true)
+        else if (cmd === "group") p.setGroupBy(arg)
     }
 }

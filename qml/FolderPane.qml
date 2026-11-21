@@ -31,6 +31,8 @@ FocusScope {
     property bool dropHover: false
     property var gitMap: ({})
     property bool inGit: false
+    property string groupBy: ""
+    function setGroupBy(g) { groupBy = g; fm.applyGroupBy(g); if (g && viewMode !== "list") setView("list"); rememberView() }
     readonly property bool inTrash: path.indexOf("trash:") === 0
     readonly property bool special: path.indexOf(":///") > 0 || inTrash || path.indexOf("recent:") === 0
     readonly property bool inArchive: path.indexOf("archive://") === 0
@@ -126,7 +128,7 @@ FocusScope {
     // ---------- views ----------
     function rememberView() {
         if (!path || special || !app || !app.settings.per_folder_views) return
-        grove.setFolderView(path, JSON.stringify({ view: viewMode, sort: fm.sortKey, descending: fm.descending, icon_size: iconSize }))
+        grove.setFolderView(path, JSON.stringify({ view: viewMode, sort: fm.sortKey, descending: fm.descending, icon_size: iconSize, group: groupBy }))
     }
     function applyRememberedView(p) {
         let v = {}
@@ -134,6 +136,8 @@ FocusScope {
         const s = app ? app.settings : {}
         viewMode = v.view || (pane.searching ? "list" : (s.default_view || "icons"))
         iconSize = v.icon_size || s.icon_size || 64
+        groupBy = v.group || ""
+        fm.applyGroupBy(groupBy)
         fm.applySort(v.sort || "name", !!v.descending)
     }
     function setView(mode) {
@@ -687,6 +691,15 @@ FocusScope {
             GMenuSeparator {}
             GMenuItem { text: "Descending"; checkable: true; checked: fm.descending; onTriggered: { fm.applySort(fm.sortKey, !fm.descending); pane.rememberView() } }
             GMenuItem { text: "Folders First"; checkable: true; checked: fm.foldersFirst; onTriggered: pane.win.setSetting("folders_first", !fm.foldersFirst) }
+        }
+        GMenu {
+            title: "Group by"
+            GMenuItem { text: "None"; checkable: true; checked: pane.groupBy === ""; onTriggered: pane.setGroupBy("") }
+            GMenuItem { text: "Kind"; checkable: true; checked: pane.groupBy === "kind"; onTriggered: pane.setGroupBy("kind") }
+            GMenuItem { text: "Date Modified"; checkable: true; checked: pane.groupBy === "date"; onTriggered: pane.setGroupBy("date") }
+            GMenuItem { text: "Size"; checkable: true; checked: pane.groupBy === "size"; onTriggered: pane.setGroupBy("size") }
+            GMenuItem { text: "Name"; checkable: true; checked: pane.groupBy === "name"; onTriggered: pane.setGroupBy("name") }
+            GMenuItem { text: "Tags"; checkable: true; checked: pane.groupBy === "tags"; onTriggered: pane.setGroupBy("tags") }
         }
         GMenuItem { text: "Show Hidden Files"; checkable: true; checked: fm.showHidden; shortcutText: "Ctrl+H"; onTriggered: pane.win.toggleHidden() }
         GMenuSeparator { visible: pane.inTrash }

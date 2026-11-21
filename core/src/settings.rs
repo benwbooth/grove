@@ -153,6 +153,8 @@ pub struct FolderView {
     pub descending: bool,
     #[serde(default)]
     pub icon_size: u32,
+    #[serde(default)]
+    pub group: String,
 }
 
 fn views_path() -> PathBuf {

@@ -170,6 +170,12 @@ pub mod qobject {
         /// (folders always show; [] shows everything).
         #[qinvokable]
         fn apply_patterns(self: Pin<&mut FolderModel>, json: &QString);
+        /// Group items (Finder's "Use Groups", Dolphin's "Show in Groups"):
+        /// "", "kind", "date", "size", "name", "tags".
+        #[qinvokable]
+        fn apply_group_by(self: Pin<&mut FolderModel>, key: &QString);
+        #[qinvokable]
+        fn grouping(self: &FolderModel) -> QString;
         /// Folders panel: show folders only.
         #[qinvokable]
         fn apply_dirs_only(self: Pin<&mut FolderModel>, on: bool);
@@ -256,12 +262,13 @@ pub struct FolderModelRust {
     searching: bool,
     patterns: Vec<(bool, String)>,
     dirs_only: bool,
+    group_by: String,
 }
 
 const ROLES: &[&str] = &[
     "name", "path", "isDir", "isLink", "size", "sizeText", "mtime", "dateText", "kind", "mime", "iconName", "hidden", "selected", "depth",
     "expanded", "tags", "tagColors", "note", "git", "cut", "thumb", "row", "broken", "ext", "created", "createdText",
-    "rating", "addedText", "openedText", "permissions", "owner", "group", "fullPath",
+    "rating", "addedText", "openedText", "permissions", "owner", "group", "fullPath", "section",
 ];
 
 fn qs(s: &str) -> QString {
@@ -301,7 +308,7 @@ impl FolderModelRust {
 }
 
 /// Sort `all` and keep expanded folders' contents right under them.
-fn flatten(all: &[ItemRef], s: Sort) -> Vec<ItemRef> {
+fn flatten(all: &[ItemRef], s: Sort, group: &str) -> Vec<ItemRef> {
     let mut groups: HashMap<String, Vec<ItemRef>> = HashMap::new();
     let mut roots: Vec<ItemRef> = Vec::new();
     for it in all {
@@ -311,7 +318,16 @@ fn flatten(all: &[ItemRef], s: Sort) -> Vec<ItemRef> {
             groups.entry(it.borrow().parent.clone()).or_default().push(it.clone());
         }
     }
-    let cmp = |a: &ItemRef, b: &ItemRef| listing::compare(&a.borrow().e, &b.borrow().e, s);
+    let cmp = |a: &ItemRef, b: &ItemRef| {
+        let (x, y) = (a.borrow(), b.borrow());
+        if !group.is_empty() && x.e.depth == 0 {
+            let o = group_rank(group, &x).cmp(&group_rank(group, &y));
+            if o != std::cmp::Ordering::Equal {
+                return o;
+            }
+        }
+        listing::compare(&x.e, &y.e, s)
+    };
     roots.sort_by(cmp);
     for g in groups.values_mut() {
         g.sort_by(cmp);
@@ -394,6 +410,7 @@ impl qobject::FolderModel {
             "permissions" => QVariant::from(&qs(&format!("{}{}", if it.e.is_dir { "d" } else if it.e.is_link { "l" } else { "-" }, crate::info::rwx(it.e.mode)))),
             "owner" => QVariant::from(&qs(&crate::info::user_name_cached(it.e.uid))),
             "group" => QVariant::from(&qs(&crate::info::group_name_cached(it.e.gid))),
+            "section" => QVariant::from(&qs(&group_label(&r.group_by, &it))),
             "fullPath" => QVariant::from(&qs(it.e.path.rsplit_once('/').map(|x| x.0).unwrap_or(""))),
             "hidden" => QVariant::from(&it.e.hidden),
             "selected" => QVariant::from(&it.selected),
@@ -572,7 +589,7 @@ impl qobject::FolderModel {
 
     fn resort(mut self: Pin<&mut Self>) {
         let s = self.rust().sort();
-        let all = flatten(&self.rust().all, s);
+        let all = flatten(&self.rust().all, s, &self.rust().group_by.clone());
         self.as_mut().rust_mut().all = all;
         self.refilter();
     }
@@ -1090,6 +1107,15 @@ impl qobject::FolderModel {
         }
     }
 
+    fn apply_group_by(mut self: Pin<&mut Self>, key: &QString) {
+        self.as_mut().rust_mut().group_by = key.to_string();
+        self.resort();
+    }
+
+    fn grouping(&self) -> QString {
+        qs(&self.rust().group_by)
+    }
+
     fn apply_dirs_only(mut self: Pin<&mut Self>, on: bool) {
         self.as_mut().rust_mut().dirs_only = on;
         self.refilter();
@@ -1122,6 +1148,52 @@ impl qobject::FolderModel {
 
     fn last_load_ms(&self) -> i32 {
         self.rust().load_ms
+    }
+}
+
+fn date_bucket(t: i64) -> (u8, &'static str) {
+    let age = grove_core::util::now_secs() - t;
+    match age {
+        a if a < 86400 => (0, "Today"),
+        a if a < 2 * 86400 => (1, "Yesterday"),
+        a if a < 7 * 86400 => (2, "Previous 7 Days"),
+        a if a < 30 * 86400 => (3, "Previous 30 Days"),
+        a if a < 365 * 86400 => (4, "This Year"),
+        _ => (5, "Earlier"),
+    }
+}
+
+fn size_bucket(it: &Item) -> (u8, &'static str) {
+    if it.e.is_dir {
+        return (0, "Folders");
+    }
+    match it.e.size {
+        n if n < 100_000 => (1, "Tiny (under 100 KB)"),
+        n if n < 1_000_000 => (2, "Small (under 1 MB)"),
+        n if n < 100_000_000 => (3, "Medium (under 100 MB)"),
+        n if n < 1_000_000_000 => (4, "Large (under 1 GB)"),
+        _ => (5, "Huge (1 GB or more)"),
+    }
+}
+
+/// Sort key of an item's group.
+fn group_rank(g: &str, it: &Item) -> String {
+    match g {
+        "date" => date_bucket(it.e.mtime).0.to_string(),
+        "size" => size_bucket(it).0.to_string(),
+        _ => group_label(g, it).to_lowercase(),
+    }
+}
+
+/// The group heading an item goes under.
+pub fn group_label(g: &str, it: &Item) -> String {
+    match g {
+        "kind" => if it.e.is_dir { "Folders".into() } else { it.mime.comment.clone() },
+        "date" => date_bucket(it.e.mtime).1.into(),
+        "size" => size_bucket(it).1.into(),
+        "name" => it.e.name.chars().next().map(|c| if c.is_alphabetic() { c.to_uppercase().to_string() } else { "#".into() }).unwrap_or_default(),
+        "tags" => it.tags.first().cloned().unwrap_or_else(|| "No Tags".into()),
+        _ => String::new(),
     }
 }
 
