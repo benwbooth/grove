@@ -208,6 +208,7 @@ FocusScope {
         fwdStack = t.fwd || []
         if (t.view) applyViewState(t.view)
     }
+    function viewLoaderItem() { return viewLoader.item }
     function setView(mode) {
         viewMode = mode
         rememberView()

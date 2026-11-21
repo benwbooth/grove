@@ -269,7 +269,7 @@ Item {
         reuseItems: true
         cacheBuffer: Math.round(root.cellH * 2)
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        ScrollBar.vertical: GScrollBar {}
 
         delegate: Item {
             id: gd
@@ -313,7 +313,7 @@ Item {
         clip: true
         cacheBuffer: Math.round(root.cellH * 3)
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        ScrollBar.vertical: GScrollBar {}
         delegate: Item {
             id: vr
             required property var modelData
@@ -414,14 +414,14 @@ Item {
         border.width: 1
     }
 
+    // Test hook: n wheel notches down (negative: up).
+    function testWheel(n) { kinetic.wheel({ pixelDelta: Qt.point(0, 0), angleDelta: Qt.point(0, -120 * n) }) }
+    Kinetic { id: kinetic; target: root.flick; notch: root.cellH * 0.6; onTargetChanged: stop() }
     WheelHandler {
         acceptedModifiers: Qt.NoModifier
-        onWheel: (e) => {
-            const f = root.flick
-            const d = e.pixelDelta.y !== 0 ? e.pixelDelta.y : e.angleDelta.y / 120 * root.cellH * 0.6
-            f.contentY = Math.max(f.originY, Math.min(f.contentY - d, f.originY + Math.max(0, f.contentHeight - f.height)))
-        }
+        onWheel: (e) => kinetic.wheel(e)
     }
+    PointHandler { acceptedButtons: Qt.AllButtons; onActiveChanged: if (active) kinetic.stop() }
     WheelHandler {
         acceptedModifiers: Qt.ControlModifier
         onWheel: (e) => root.pane.zoom(e.angleDelta.y > 0 ? 1 : -1)

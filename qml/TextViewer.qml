@@ -27,6 +27,9 @@ Window {
             PushButton { text: "Copy"; tip: "Copy all of the text"; onClicked: { area.selectAll(); area.copy(); area.deselect() } }
         }
         ScrollView {
+            id: gsv3
+            ScrollBar.vertical: GScrollBar { parent: gsv3; x: gsv3.width - width; y: gsv3.topPadding; height: gsv3.availableHeight }
+            ScrollBar.horizontal: GScrollBar { parent: gsv3; x: gsv3.leftPadding; y: gsv3.height - height; width: gsv3.availableWidth }
             anchors.top: head.bottom
             anchors.topMargin: 10
             anchors.bottom: parent.bottom

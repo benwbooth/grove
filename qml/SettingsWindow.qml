@@ -93,6 +93,9 @@ Window {
         GButton { text: "Keyboard"; capsule: true; flat: false; checked: sw.page === "keyboard"; tip: "Every action and its shortcut: click one to change it"; onClicked: sw.page = "keyboard" }
     }
     ScrollView {
+        id: gsv1
+        ScrollBar.vertical: GScrollBar { parent: gsv1; x: gsv1.width - width; y: gsv1.topPadding; height: gsv1.availableHeight }
+        ScrollBar.horizontal: GScrollBar { parent: gsv1; x: gsv1.leftPadding; y: gsv1.height - height; width: gsv1.availableWidth }
         anchors.fill: parent
         anchors.topMargin: pages.y + pages.height + 6
         contentWidth: availableWidth
@@ -119,7 +122,7 @@ Window {
                 ToggleRow { label: "Thumbnails in list view"; help: "Small previews next to names in list view too."; key: "list_thumbnails" }
                 ToggleRow { label: "Previews in tooltips"; help: "Hovering an item shows a bigger preview with its kind, size and date (Dolphin)."; key: "preview_tooltips" }
                 ToggleRow { label: "Status bar"; help: "The line at the bottom with item counts and the icon size slider."; key: "show_status_bar" }
-                ToggleRow { label: "Grove's own title bar"; help: "Window buttons in the sidebar, like macOS. Off uses the desktop's title bar (applies to new windows)."; key: "client_decorations" }
+                ToggleRow { label: "Grove's own title bar"; help: "macOS-style window buttons in the sidebar. Off (the default) uses the desktop's title bar like other apps (applies to new windows)."; key: "client_decorations" }
                 ToggleRow { label: "Git status badges"; help: "Show which files changed in git folders (M, A, ?)."; key: "show_git_status" }
             }
             Group {

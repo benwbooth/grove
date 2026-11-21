@@ -11,7 +11,7 @@ ApplicationWindow {
     property var initialPaths: []
     property var initialSelect: []
     property var initialStates: []       // tab states (a torn-off tab, the session)
-    readonly property bool clientDecorations: app.settings.client_decorations !== false
+    readonly property bool clientDecorations: app.settings.client_decorations === true
     readonly property bool chooserMode: false
     property bool sidebarShown: true
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
@@ -954,6 +954,7 @@ ApplicationWindow {
         const p = activePane
         if (cmd === "view") p.setView(arg)
         else if (cmd === "go") p.navigate(arg)
+        else if (cmd === "wheel") { const v = p.viewLoaderItem(); if (v && v.testWheel) v.testWheel(Number(arg)) }
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")
         else if (cmd === "split") currentTab.toggleSplit()

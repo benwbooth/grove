@@ -66,8 +66,9 @@ pub struct Settings {
     pub show_path_bar: bool,
     #[serde(default = "t")]
     pub show_status_bar: bool,
-    /// Draw grove's own title bar (traffic lights in the sidebar).
-    #[serde(default = "t")]
+    /// Draw grove's own title bar (traffic lights in the sidebar). Off by
+    /// default: the desktop's (arbor's Breeze-style) title bar, like every app.
+    #[serde(default)]
     pub client_decorations: bool,
     /// Show file extensions.
     #[serde(default = "t")]

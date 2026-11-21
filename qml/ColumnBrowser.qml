@@ -68,7 +68,7 @@ Item {
         model: root.chain.length + 1
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
+        ScrollBar.horizontal: GScrollBar {}
         onCountChanged: Qt.callLater(positionViewAtEnd)
 
         delegate: Item {
@@ -117,7 +117,9 @@ Item {
                 clip: true
                 reuseItems: true
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical: GScrollBar {}
+                Kinetic { id: colKinetic; target: lv; notch: 66 }
+                WheelHandler { acceptedModifiers: Qt.NoModifier; onWheel: (e) => colKinetic.wheel(e) }
                 delegate: Item {
                     id: r
                     required property int index

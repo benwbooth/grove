@@ -13,6 +13,8 @@ QtObject {
     property var hearth: ({})
     // Bumped when the icon theme changes so cached theme icons reload.
     property int iconRev: 0
+    // hearth's Reduce motion: no gliding or extra animation.
+    readonly property bool reduceMotion: hearth.reduceMotion === true
     // Toolbar glyph: the "-symbolic" form of each name first (one-colour
     // glyphs as in Finder's toolbar), then the names as given.
     function glyph(name) {

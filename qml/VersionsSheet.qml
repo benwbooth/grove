@@ -36,7 +36,7 @@ Sheet {
             anchors.margins: 4
             clip: true
             model: vs.list
-            ScrollBar.vertical: ScrollBar {}
+            ScrollBar.vertical: GScrollBar {}
             delegate: Item {
                 required property var modelData
                 width: lv.width

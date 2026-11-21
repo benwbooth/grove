@@ -197,7 +197,7 @@ Item {
         reuseItems: true
         cacheBuffer: root.rowH * 20
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+        ScrollBar.vertical: GScrollBar {}
         section.property: root.pane.groupBy !== "" ? "section" : ""
         section.criteria: ViewSection.FullString
         section.delegate: Item {
@@ -397,11 +397,12 @@ Item {
         }
     }
 
+    // Test hook: n wheel notches down (negative: up).
+    function testWheel(n) { kinetic.wheel({ pixelDelta: Qt.point(0, 0), angleDelta: Qt.point(0, -120 * n) }) }
+    Kinetic { id: kinetic; target: list; notch: root.rowH * 3 }
     WheelHandler {
         acceptedModifiers: Qt.NoModifier
-        onWheel: (e) => {
-            const d = e.pixelDelta.y !== 0 ? e.pixelDelta.y : e.angleDelta.y / 120 * root.rowH * 3
-            list.contentY = Math.max(list.originY, Math.min(list.contentY - d, list.originY + Math.max(0, list.contentHeight - list.height)))
-        }
+        onWheel: (e) => kinetic.wheel(e)
     }
+    PointHandler { acceptedButtons: Qt.AllButtons; onActiveChanged: if (active) kinetic.stop() }
 }

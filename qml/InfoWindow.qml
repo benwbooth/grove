@@ -100,6 +100,9 @@ Window {
     }
 
     ScrollView {
+        id: gsv2
+        ScrollBar.vertical: GScrollBar { parent: gsv2; x: gsv2.width - width; y: gsv2.topPadding; height: gsv2.availableHeight }
+        ScrollBar.horizontal: GScrollBar { parent: gsv2; x: gsv2.leftPadding; y: gsv2.height - height; width: gsv2.availableWidth }
         anchors.fill: parent
         transform: Translate { x: 0.001; y: 0.001 }
         contentWidth: availableWidth

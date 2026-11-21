@@ -320,6 +320,9 @@ Window {
             }
 
             ScrollView {
+                id: gsv4
+                ScrollBar.vertical: GScrollBar { parent: gsv4; x: gsv4.width - width; y: gsv4.topPadding; height: gsv4.availableHeight }
+                ScrollBar.horizontal: GScrollBar { parent: gsv4; x: gsv4.leftPadding; y: gsv4.height - height; width: gsv4.availableWidth }
                 anchors.fill: parent
                 visible: ql.pv.kind === "code"
                 TextEdit {
@@ -337,6 +340,8 @@ Window {
             }
 
             ScrollView {
+                ScrollBar.vertical: GScrollBar { parent: mdView; x: mdView.width - width; y: mdView.topPadding; height: mdView.availableHeight }
+                ScrollBar.horizontal: GScrollBar { parent: mdView; x: mdView.leftPadding; y: mdView.height - height; width: mdView.availableWidth }
                 id: mdView
                 anchors.fill: parent
                 visible: ql.pv.kind === "markdown"
@@ -361,7 +366,7 @@ Window {
                 visible: ql.pv.kind === "archive"
                 clip: true
                 model: ql.pv.kind === "archive" ? ql.pv.entries : []
-                ScrollBar.vertical: ScrollBar {}
+                ScrollBar.vertical: GScrollBar {}
                 header: GLabel { text: ql.pv.total + " items in this archive" + (ql.pv.total > 500 ? " (first 500 shown)" : ""); color: Theme.fgSecondary; padding: 8 }
                 delegate: Item {
                     required property var modelData

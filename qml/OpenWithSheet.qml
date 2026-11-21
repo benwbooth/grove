@@ -29,7 +29,7 @@ Sheet {
             anchors.fill: parent; anchors.margins: 4
             clip: true
             model: ow.apps.filter(a => filter.text === "" || a.name.toLowerCase().indexOf(filter.text.toLowerCase()) >= 0)
-            ScrollBar.vertical: ScrollBar {}
+            ScrollBar.vertical: GScrollBar {}
             delegate: Rectangle {
                 required property var modelData
                 width: list.width; height: Theme.rowHeight + 4

@@ -22,7 +22,7 @@ Item {
         clip: true
         model: tree
         reuseItems: true
-        ScrollBar.vertical: ScrollBar {}
+        ScrollBar.vertical: GScrollBar {}
         delegate: Item {
             id: r
             required property int index

@@ -89,7 +89,7 @@ Item {
         clip: true
         reuseItems: true
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
+        ScrollBar.horizontal: GScrollBar {}
         delegate: Item {
             id: t
             required property int index
@@ -123,11 +123,7 @@ Item {
             FolderDrop { anchors.fill: parent; pane: root.pane; path: t.path; enabledFor: t.isDir }
             GTip { visible: false; text: t.name }
         }
-        WheelHandler {
-            onWheel: (e) => {
-                const d = e.angleDelta.y !== 0 ? e.angleDelta.y : e.angleDelta.x
-                strip.contentX = Math.max(strip.originX, Math.min(strip.contentX - d, strip.originX + Math.max(0, strip.contentWidth - strip.width)))
-            }
-        }
+        Kinetic { id: kinetic; target: strip; horizontal: true; notch: 120 }
+        WheelHandler { onWheel: (e) => kinetic.wheel(e) }
     }
 }

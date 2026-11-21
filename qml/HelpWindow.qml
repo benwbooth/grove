@@ -46,7 +46,7 @@ Window {
             x: 20
             width: parent.width - 40
             clip: true
-            ScrollBar.vertical: ScrollBar {}
+            ScrollBar.vertical: GScrollBar {}
             model: Help.shortcuts.filter(s => {
                 const q = field.text.toLowerCase()
                 return !q || (s.action + " " + Help.display(s).join(" ") + " " + s.note + " " + s.group).toLowerCase().indexOf(q) >= 0
