@@ -14,7 +14,7 @@ QtObject {
     // Bumped when the icon theme changes so cached theme icons reload.
     property int iconRev: 0
     // hearth's Reduce motion: no gliding or extra animation.
-    readonly property bool reduceMotion: hearth.reduceMotion === true
+    readonly property bool reduceMotion: (hearth || {}).reduceMotion === true
     // Toolbar glyph: the "-symbolic" form of each name first (one-colour
     // glyphs as in Finder's toolbar), then the names as given.
     function glyph(name) {
@@ -28,7 +28,7 @@ QtObject {
         return "image://icon/" + name + "?r=" + iconRev + t
     }
     readonly property bool hearthDark: {
-        const m = hearth.mode || "dark"
+        const m = (hearth || {}).mode || "dark"
         if (m === "light") return false
         if (m === "auto") { const h = new Date().getHours(); return h < 7 || h >= 19 }
         return true
@@ -38,7 +38,7 @@ QtObject {
     readonly property real pt: 1.125
 
     // --- colours ---
-    readonly property color accent: hearth.accent || (dark ? "#0a84ff" : "#007aff")
+    readonly property color accent: (hearth || {}).accent || (dark ? "#0a84ff" : "#007aff")
     readonly property color accentText: "#ffffff"
     readonly property color window: dark ? "#1e1e20" : "#ffffff"
     readonly property color content: dark ? "#1e1e20" : "#ffffff"
