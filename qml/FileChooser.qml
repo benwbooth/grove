@@ -136,7 +136,7 @@ ApplicationWindow {
                     Row {
                         spacing: 8
                         anchors.verticalCenter: parent.verticalCenter
-                        ComboBox {
+                        GCombo {
                             id: filterBox
                             visible: (fc.request.filters || []).length > 0
                             width: 220

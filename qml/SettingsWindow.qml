@@ -67,7 +67,7 @@ Window {
             GLabel { text: parent.parent.label; width: parent.width }
             GLabel { text: parent.parent.help; width: parent.width; font.pixelSize: Theme.small; color: Theme.fgSecondary; wrapMode: Text.Wrap; elide: Text.ElideNone }
         }
-        ComboBox {
+        GCombo {
             anchors.right: parent.right; anchors.rightMargin: 12
             anchors.verticalCenter: parent.verticalCenter
             width: 170

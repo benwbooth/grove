@@ -70,7 +70,7 @@ Sheet {
         Item {
             width: parent.width - 90; height: Theme.controlHeight
             GField { id: host; anchors.fill: parent; visible: cs.kind !== "rclone"; placeholderText: cs.kind === "webdav" ? "https://…" : "name or address, e.g. nas.local"; tip: "The computer's name or IP address" }
-            ComboBox {
+            GCombo {
                 id: remote
                 anchors.fill: parent
                 visible: cs.kind === "rclone"

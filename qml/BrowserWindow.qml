@@ -53,6 +53,13 @@ ApplicationWindow {
         tabBar.currentIndex = Math.min(tabBar.currentIndex, tabs.count - 1)
     }
     function tabAt(i) { return tabRepeater.itemAt(i) }
+    function tabPaths() {
+        const out = []
+        for (let i = 0; i < tabRepeater.count; i++) { const t = tabRepeater.itemAt(i); if (t && t.activePane) out.push(t.activePane.path.indexOf("search:") === 0 ? t.activePane.folderBeforeSearch : t.activePane.path) }
+        return out
+    }
+    onActivePaneChanged: if (app) app.saveSession()
+    Connections { target: bw.activePane; function onPathChanged() { bw.app.saveSession() } }
     function go(path) { if (activePane) { activePane.navigate(path); activePane.forceActiveFocus() } }
     function setSetting(name, value) { app.grove.setSetting(name, JSON.stringify(value)) }
     function toggleHidden() {

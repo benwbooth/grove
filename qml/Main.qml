@@ -21,6 +21,15 @@ Item {
     Component { id: winComp; BrowserWindow {} }
     Component { id: chooserComp; FileChooser {} }
 
+    // Windows and tabs, saved as they change, restored at the next start.
+    function saveSession() {
+        if (screenshot !== "" || portalMode) return
+        const ws = []
+        for (const w of windows) ws.push({ tabs: w.tabPaths() })
+        if (ws.length) grove.saveSession(JSON.stringify({ windows: ws }))
+    }
+    Timer { id: sessionTimer; interval: 2000; onTriggered: app.saveSession() }
+
     function openWindow(paths, selectPaths) {
         const w = winComp.createObject(null, { app: app, initialPaths: paths || [], initialSelect: selectPaths || [] })
         windows.push(w)
@@ -152,6 +161,12 @@ Item {
         try { req = JSON.parse(grove.env("GROVE_OPEN") || "null") } catch (e) {}
         if (portalMode) return
         if (req && req.paths && req.paths.length) handleOpen(req)
-        else if (!service) openWindow([grove.home()])
+        else if (!service) {
+            let sess = null
+            try { sess = JSON.parse(grove.session() || "null") } catch (e) {}
+            if (settings.restore_session !== false && sess && sess.windows && sess.windows.length && screenshot === "")
+                for (const w of sess.windows) openWindow(w.tabs.filter(t => t.indexOf("/") === 0), [])
+            else openWindow([grove.home()])
+        }
     }
 }

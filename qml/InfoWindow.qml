@@ -47,6 +47,29 @@ Window {
     Component.onCompleted: load()
 
     function fmt(t) { return t ? new Date(t * 1000).toLocaleString(Qt.locale(), "dddd, d MMMM yyyy 'at' h:mm AP") : "--" }
+    property var sums: ({})
+    function computeSum(a, then) {
+        const s0 = Object.assign({}, sums); s0[a] = "…"; sums = s0
+        Async.call(app.grove, k => app.grove.checksum(k, iw.path, a), r => {
+            const s = Object.assign({}, iw.sums)
+            s[a] = r.error ? "" : r.sum
+            iw.sums = s
+            if (r.error) iw.error = r.error
+            if (then) then()
+        })
+    }
+    function verify() {
+        const t = expected.text.trim().toLowerCase()
+        if (!t) { verdict.text = ""; return }
+        const a = t.length === 32 ? "md5" : t.length === 40 ? "sha1" : t.length === 64 ? "sha256" : t.length === 128 ? "sha512" : ""
+        if (!a) { verdict.text = "That doesn't look like an MD5, SHA-1, SHA-256 or SHA-512 checksum."; verdict.color = Theme.fgSecondary; return }
+        const check = () => {
+            const ok = iw.sums[a] === t
+            verdict.text = ok ? "✓ Matches (" + a.toUpperCase() + "): the file is intact." : "✗ Doesn't match (" + a.toUpperCase() + "): the file differs from the one the checksum is for."
+            verdict.color = ok ? Theme.good : Theme.danger
+        }
+        if (sums[a] && sums[a] !== "…") check(); else { verdict.text = "Calculating " + a.toUpperCase() + "…"; computeSum(a, check) }
+    }
     function setMode(bit, on) {
         const m = on ? (info.mode | bit) : (info.mode & ~bit)
         Async.call(app.grove, k => app.grove.setMode(k, iw.path, m, false), r => { if (r.error) iw.error = r.error; iw.load() })
@@ -176,7 +199,7 @@ Window {
             Section {
                 title: "Open With"
                 visible: !iw.info.isDir
-                ComboBox {
+                GCombo {
                     id: appBox
                     width: parent.width - 14
                     model: iw.apps.map(a => a.name + (a.isDefault ? " (default)" : ""))
@@ -199,6 +222,95 @@ Window {
                         }
                     }
                     GLabel { text: "Use this app for all " + (iw.info.kind || "") + " files."; color: Theme.fgSecondary; font.pixelSize: Theme.small; anchors.verticalCenter: parent.verticalCenter; width: 140; wrapMode: Text.Wrap; elide: Text.ElideNone }
+                }
+            }
+
+            Section {
+                title: "Rating"
+                Row {
+                    spacing: 4
+                    Repeater {
+                        model: 5
+                        GLabel {
+                            required property int index
+                            text: (iw.info.rating || 0) >= (index + 1) * 2 ? "★" : "☆"
+                            color: Theme.accent
+                            font.pixelSize: Theme.large
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    const r = (iw.info.rating || 0) === (parent.index + 1) * 2 ? 0 : (parent.index + 1) * 2
+                                    Async.call(iw.app.grove, k => iw.app.grove.setRating(k, JSON.stringify([iw.path]), r), x => iw.load())
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section {
+                title: "Locked"
+                GCheck {
+                    text: "Locked (nobody can change it, including you, until unlocked)"
+                    width: parent.width - 14
+                    checked: iw.info.mode !== undefined && (iw.info.mode & 0o222) === 0
+                    tip: "Finder's Locked: removes write permission for everyone. Untick to allow changes again."
+                    onToggled: {
+                        const m = checked ? (iw.info.mode & ~0o222) : (iw.info.mode | 0o200)
+                        Async.call(iw.app.grove, k => iw.app.grove.setMode(k, iw.path, m, false), r => { if (r.error) iw.error = r.error; iw.load() })
+                    }
+                }
+            }
+
+            Section {
+                title: "Folder Icon"
+                visible: !!iw.info.isDir
+                open: false
+                GLabel { width: parent.width - 14; text: "A theme icon name (e.g. folder-music) or a picture's path. Saved in the folder's .directory file, so Dolphin shows it too."; wrapMode: Text.Wrap; elide: Text.ElideNone; font.pixelSize: Theme.small; color: Theme.fgSecondary }
+                Row {
+                    spacing: 8
+                    GField { id: iconField; width: 180; text: (iw.info.customIcon || "").split("|")[0]; placeholderText: "folder-music" }
+                    PushButton { text: "Set"; onClicked: Async.call(iw.app.grove, k => iw.app.grove.setFolderIcon(k, iw.path, iconField.text.trim()), r => { if (r.error) iw.error = r.error; iw.load() }) }
+                    PushButton { text: "Reset"; onClicked: { iconField.text = ""; Async.call(iw.app.grove, k => iw.app.grove.setFolderIcon(k, iw.path, ""), r => iw.load()) } }
+                }
+            }
+
+            Section {
+                title: "Checksums"
+                visible: !iw.info.isDir
+                open: false
+                GLabel { width: parent.width - 14; text: "Check a download: paste the checksum the website gives to compare."; wrapMode: Text.Wrap; elide: Text.ElideNone; font.pixelSize: Theme.small; color: Theme.fgSecondary }
+                GField { id: expected; width: parent.width - 14; placeholderText: "Paste a checksum to verify"; onTextChanged: iw.verify() }
+                GLabel { id: verdict; width: parent.width - 14; visible: text !== ""; wrapMode: Text.Wrap; elide: Text.ElideNone }
+                Repeater {
+                    model: ["md5", "sha1", "sha256", "sha512"]
+                    Column {
+                        required property string modelData
+                        width: parent.width - 14
+                        Row {
+                            spacing: 8
+                            GLabel { text: parent.parent.modelData.toUpperCase(); width: 60; font.pixelSize: Theme.small; color: Theme.fgSecondary; anchors.verticalCenter: parent.verticalCenter }
+                            GButton {
+                                text: iw.sums[parent.parent.modelData] ? "Copy" : "Calculate"
+                                flat: false; capsule: true
+                                onClicked: {
+                                    const a = parent.parent.modelData
+                                    if (iw.sums[a]) { iw.app.grove.copyText(iw.sums[a]); return }
+                                    iw.computeSum(a)
+                                }
+                            }
+                        }
+                        TextEdit {
+                            width: parent.width
+                            visible: !!iw.sums[parent.modelData]
+                            readOnly: true; selectByMouse: true
+                            wrapMode: TextEdit.WrapAnywhere
+                            text: iw.sums[parent.modelData] || ""
+                            font.family: Theme.mono; font.pixelSize: Theme.caption
+                            renderType: Text.NativeRendering
+                            color: Theme.fg
+                        }
+                    }
                 }
             }
 

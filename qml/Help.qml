@@ -33,6 +33,8 @@ QtObject {
         { group: "View", action: "Quick Look", keys: "Space", also: "Ctrl+Y", note: "Finder: Space, ⌘Y. Arrow keys move between files while it's open" },
         { group: "View", action: "Split view", keys: "F3", also: "", note: "Dolphin: F3" },
         { group: "View", action: "Terminal panel", keys: "F4", also: "", note: "Dolphin: F4" },
+        { group: "View", action: "Information panel / preview pane", keys: "F11", also: "Ctrl+Shift+P", note: "Dolphin: F11  ·  Finder: ⇧⌘P" },
+        { group: "View", action: "Folders panel (tree)", keys: "F7", also: "", note: "Dolphin: F7" },
         { group: "View", action: "Sidebar", keys: "Ctrl+Alt+S", also: "F9", note: "Finder: ⌃⌘S  ·  Dolphin: F9" },
         { group: "View", action: "Expand / collapse folder (list view)", keys: "Right / Left", also: "", note: "Finder" },
 
@@ -47,6 +49,8 @@ QtObject {
         { group: "Edit", action: "Paste", keys: "Ctrl+V", also: "", note: "Both" },
         { group: "Edit", action: "Move here (paste and remove the originals)", keys: "Ctrl+Alt+V", also: "", note: "Finder: ⌥⌘V" },
         { group: "Edit", action: "Copy path", keys: "Ctrl+Alt+C", also: "", note: "Finder: ⌥⌘C" },
+        { group: "Edit", action: "Copy to the other side (split view)", keys: "Shift+F5", also: "", note: "Dolphin: Copy to Other View" },
+        { group: "Edit", action: "Move to the other side (split view)", keys: "Shift+F6", also: "", note: "Dolphin: Move to Other View" },
         { group: "Edit", action: "Duplicate", keys: "Ctrl+D", also: "", note: "Finder: ⌘D" },
         { group: "Edit", action: "Make alias (link)", keys: "Ctrl+Alt+A", also: "", note: "Finder: ⌃⌘A" },
         { group: "Edit", action: "Rename", keys: "F2", also: "", note: "Dolphin: F2 (several items: batch rename)" },
