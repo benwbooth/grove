@@ -52,6 +52,10 @@
               # The linker wrapper rejects output paths outside the build dir.
               export NIX_ENFORCE_PURITY=0
               cd "$workDir/src"
+              # cxx-qt copies its QML exports with fs::copy, which also
+              # chmods the destination: that fails on a file left by another
+              # nixbld user. The exports are regenerated every build anyway.
+              rm -rf "$workDir/target/cxxqt"
               CARGO_HOME="$NIX_BUILD_TOP/.cargo" CARGO_TARGET_DIR="$workDir/target" \
                 cargo build ${cargoArgs} --offline --locked -j "$NIX_BUILD_CORES"
               find "$workDir/target" -mindepth 1 -user "$(id -u)" ! -perm -o+w -exec chmod a+rwX {} + 2>/dev/null || true
