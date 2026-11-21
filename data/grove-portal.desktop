@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Grove File Chooser
+Comment=Grove's open and save dialog for xdg-desktop-portal
+Exec=grove --portal
+Icon=grove
+NoDisplay=true
+Terminal=false

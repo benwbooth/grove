@@ -1,0 +1,163 @@
+//! grove's settings (~/.config/grove/settings.json), favourites and the
+//! view each folder was last shown in.
+
+use crate::util;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+fn t() -> bool {
+    true
+}
+fn icon_default() -> u32 {
+    64
+}
+fn view_default() -> String {
+    "icons".into()
+}
+fn theme_default() -> String {
+    "auto".into()
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Settings {
+    /// Command for "Open in Terminal" ("" = automatic).
+    #[serde(default)]
+    pub terminal: String,
+    #[serde(default)]
+    pub show_hidden: bool,
+    #[serde(default = "t")]
+    pub folders_first: bool,
+    /// View for folders never seen before: icons, list, columns, gallery.
+    #[serde(default = "view_default")]
+    pub default_view: String,
+    #[serde(default = "icon_default")]
+    pub icon_size: u32,
+    /// Remember each folder's view (Finder does).
+    #[serde(default = "t")]
+    pub per_folder_views: bool,
+    /// Open items with one click (Dolphin's default) instead of two.
+    #[serde(default)]
+    pub single_click: bool,
+    /// Ask before moving to the Trash.
+    #[serde(default)]
+    pub confirm_trash: bool,
+    /// Ask before emptying the Trash.
+    #[serde(default = "t")]
+    pub confirm_empty_trash: bool,
+    #[serde(default = "t")]
+    pub show_thumbnails: bool,
+    /// Thumbnails of files bigger than this many MB are skipped (0 = none).
+    #[serde(default)]
+    pub thumbnail_max_mb: u32,
+    /// Show a preview in item tooltips.
+    #[serde(default)]
+    pub preview_tooltips: bool,
+    /// auto (follow hearth / the system), dark, light.
+    #[serde(default = "theme_default")]
+    pub theme: String,
+    #[serde(default = "t")]
+    pub show_path_bar: bool,
+    #[serde(default = "t")]
+    pub show_status_bar: bool,
+    /// Draw grove's own title bar (traffic lights in the sidebar).
+    #[serde(default = "t")]
+    pub client_decorations: bool,
+    /// Show file extensions.
+    #[serde(default = "t")]
+    pub show_extensions: bool,
+    #[serde(default = "t")]
+    pub show_git_status: bool,
+    /// Search content as well as names in the toolbar search.
+    #[serde(default)]
+    pub search_contents: bool,
+    /// Respect .gitignore in searches.
+    #[serde(default)]
+    pub search_respect_ignore: bool,
+    #[serde(default)]
+    pub favourites: Vec<String>,
+    /// Sidebar sections the user collapsed.
+    #[serde(default)]
+    pub collapsed_sections: Vec<String>,
+    /// Shown the welcome sheet.
+    #[serde(default)]
+    pub welcomed: bool,
+    #[serde(default)]
+    pub sidebar_width: u32,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        serde_json::from_str("{}").unwrap()
+    }
+}
+
+pub fn path() -> PathBuf {
+    util::grove_config().join("settings.json")
+}
+
+pub fn default_favourites() -> Vec<String> {
+    let h = util::home();
+    let mut v = vec![h.to_string_lossy().into_owned()];
+    for d in ["Desktop", "Documents", "Downloads", "Pictures", "Music", "Videos"] {
+        let p = h.join(d);
+        if p.is_dir() {
+            v.push(p.to_string_lossy().into_owned());
+        }
+    }
+    v
+}
+
+pub fn load() -> Settings {
+    let mut s: Settings = std::fs::read_to_string(path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    if s.favourites.is_empty() && !path().exists() {
+        s.favourites = default_favourites();
+    }
+    s
+}
+
+pub fn save(s: &Settings) -> Result<(), String> {
+    util::write_atomic(&path(), serde_json::to_string_pretty(s).unwrap().as_bytes()).map_err(|e| e.to_string())
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct FolderView {
+    pub view: String,
+    #[serde(default)]
+    pub sort: String,
+    #[serde(default)]
+    pub descending: bool,
+    #[serde(default)]
+    pub icon_size: u32,
+}
+
+fn views_path() -> PathBuf {
+    util::grove_state().join("folder-views.json")
+}
+
+pub fn folder_views() -> HashMap<String, FolderView> {
+    std::fs::read_to_string(views_path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
+
+pub fn save_folder_views(m: &HashMap<String, FolderView>) {
+    let _ = util::write_atomic(&views_path(), serde_json::to_string(m).unwrap().as_bytes());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn defaults_and_roundtrip() {
+        let _g = crate::test_env_lock();
+        let t = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", t.path());
+        let s = load();
+        assert!(s.folders_first && s.per_folder_views && !s.show_hidden);
+        assert_eq!(s.default_view, "icons");
+        let mut s2 = s.clone();
+        s2.show_hidden = true;
+        save(&s2).unwrap();
+        assert!(load().show_hidden);
+        std::env::remove_var("XDG_CONFIG_HOME");
+    }
+}

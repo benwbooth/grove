@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Grove
+GenericName=File Manager
+Comment=Browse, organize and preview your files
+Exec=grove %U
+Icon=grove
+Terminal=false
+Categories=Qt;System;FileTools;FileManager;Utility;Core;
+MimeType=inode/directory;
+Keywords=files;folders;finder;dolphin;explorer;browser;
+StartupWMClass=grove
+DBusActivatable=false
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=grove --new-window

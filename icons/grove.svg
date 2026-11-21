@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5ac8fa"/>
+      <stop offset="1" stop-color="#0a84ff"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9ef07a"/>
+      <stop offset="1" stop-color="#30b158"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.45"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- squircle tile -->
+  <path d="M128 12c78 0 116 38 116 116s-38 116-116 116S12 206 12 128 50 12 128 12z" fill="url(#bg)"/>
+  <!-- folder -->
+  <path d="M52 92c0-8 6-14 14-14h38l14 14h72c8 0 14 6 14 14v70c0 8-6 14-14 14H66c-8 0-14-6-14-14z" fill="#e8f4ff"/>
+  <path d="M52 112c0-8 6-14 14-14h124c8 0 14 6 14 14v64c0 8-6 14-14 14H66c-8 0-14-6-14-14z" fill="#ffffff"/>
+  <!-- three trees: a grove -->
+  <g transform="translate(0,6)">
+    <rect x="96" y="150" width="6" height="20" rx="2" fill="#8a5a2b"/>
+    <path d="M99 112l-20 40h40z" fill="url(#leaf)"/>
+    <rect x="125" y="146" width="7" height="24" rx="2" fill="#8a5a2b"/>
+    <path d="M128 100l-24 50h48z" fill="url(#leaf)"/>
+    <rect x="154" y="150" width="6" height="20" rx="2" fill="#8a5a2b"/>
+    <path d="M157 112l-20 40h40z" fill="url(#leaf)"/>
+  </g>
+  <path d="M128 12c78 0 116 38 116 116s-38 116-116 116S12 206 12 128 50 12 128 12z" fill="url(#sheen)"/>
+</svg>

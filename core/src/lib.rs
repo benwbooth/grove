@@ -1,0 +1,21 @@
+//! grove's core: everything that isn't the Qt user interface.
+
+pub mod apps;
+pub mod listing;
+pub mod mounts;
+pub mod ops;
+pub mod recents;
+pub mod rename;
+pub mod search;
+pub mod settings;
+pub mod tags;
+pub mod thumbs;
+pub mod trash;
+pub mod util;
+
+/// Tests that change process-wide environment variables (XDG_*) take this.
+#[cfg(test)]
+pub(crate) fn test_env_lock() -> std::sync::MutexGuard<'static, ()> {
+    static L: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    L.lock().unwrap_or_else(|e| e.into_inner())
+}
