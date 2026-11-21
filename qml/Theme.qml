@@ -51,7 +51,7 @@ QtObject {
     readonly property var families: Qt.fontFamilies()
     function has(f) { return families.indexOf(f) >= 0 }
     readonly property string family: has("SF Pro") ? "SF Pro" : has("SF Pro Text") ? "SF Pro Text"
-        : has("Inter") ? "Inter" : has("Inter Variable") ? "Inter Variable" : ""
+        : has("Inter") ? "Inter" : has("Inter Variable") ? "Inter Variable" : has("Noto Sans") ? "Noto Sans" : "sans-serif"
     // Inter is ~4% larger than SF at the same size.
     readonly property real fontScale: family.indexOf("Inter") === 0 ? 0.962 : 1.0
     readonly property real body: Math.round(13 * pt * fontScale * 10) / 10       // 13 pt

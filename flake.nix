@@ -90,6 +90,7 @@
             postFixup = ''
               wrapQtApp $out/bin/grove \
                 --suffix PATH : ${pkgs.lib.makeBinPath (runtimeFor pkgs)} \
+                --set-default GROVE_FONT_DIR ${pkgs.inter}/share/fonts/truetype \
                 --suffix XDG_DATA_DIRS : ${pkgs.lib.concatMapStringsSep ":" (p: "${p}/share") [ pkgs.ffmpegthumbnailer pkgs.libheif ]}
             '';
             meta = {
@@ -121,6 +122,7 @@
             shellHook = ''
               ln -sfn ${qtEnv} .qt-env
               export NIX_LDFLAGS="''${NIX_LDFLAGS//"-rpath $out/lib"/}"
+              export GROVE_FONT_DIR=''${GROVE_FONT_DIR:-${pkgs.inter}/share/fonts/truetype}
               export XDG_DATA_DIRS="${pkgs.ffmpegthumbnailer}/share:${pkgs.libheif}/share:''${XDG_DATA_DIRS:-}"
             '';
           };

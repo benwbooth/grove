@@ -38,7 +38,7 @@ Item {
             color: Theme.separator
             Rectangle { anchors.centerIn: parent; width: 7; height: parent.height; color: "transparent" }
         }
-        Pane {
+        FolderPane {
             id: first
             win: tp.win
             SplitView.fillWidth: true
@@ -47,7 +47,7 @@ Item {
             onActivated: tp.activePane = first
             focus: true
         }
-        Pane {
+        FolderPane {
             id: second
             win: tp.win
             visible: tp.split

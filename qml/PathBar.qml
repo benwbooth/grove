@@ -12,7 +12,7 @@ Item {
     implicitHeight: Theme.controlHeight
 
     function segments() {
-        if (!pane) return []
+        if (!pane || !grove) return []
         const p = pane.path
         if (p.indexOf("/") !== 0) return [{ name: pane.title, path: p, icon: p.indexOf("trash:") === 0 ? "user-trash" : p.indexOf("recent:") === 0 ? "document-open-recent" : "edit-find" }]
         const home = grove.home()

@@ -6,7 +6,7 @@ import QtQuick.Layouts
 // A grove window: the glass sidebar, the toolbar, tabs (each one or two
 // panes), the status bar with the zoom slider, and the dialogs.
 ApplicationWindow {
-    id: win
+    id: bw
     property var app
     property var initialPaths: []
     property var initialSelect: []
@@ -27,16 +27,26 @@ ApplicationWindow {
     flags: clientDecorations ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     title: activePane ? activePane.title + " — Grove" : "Grove"
 
-    onActiveChanged: if (active) app.activeWindow = win
+    onActiveChanged: if (active) app.activeWindow = bw
 
     ListModel { id: tabs }
+    Connections {
+        target: bw.app
+        function onSettingsChanged() {
+            const h = !!bw.app.settings.show_hidden, f = bw.app.settings.folders_first !== false
+            bw.forEachPane(p => {
+                if (p.model.showHidden !== h) p.model.applyShowHidden(h)
+                if (p.model.foldersFirst !== f) p.model.applyFoldersFirst(f)
+            })
+        }
+    }
 
     function newTab(path, select) {
         tabs.append({ path: path || app.grove.home(), select: JSON.stringify(select || []) })
         tabBar.currentIndex = tabs.count - 1
     }
     function closeTab(i) {
-        if (tabs.count <= 1) { win.close(); return }
+        if (tabs.count <= 1) { bw.close(); return }
         const t = tabRepeater.itemAt(i)
         if (t) app.closedTabs.push(t.activePane.path)
         tabs.remove(i)
@@ -155,32 +165,33 @@ ApplicationWindow {
         anchors.fill: parent
         // Text on exact half pixels smears at 4/3 scale.
         transform: Translate { x: 0.001; y: 0.001 }
+        Rectangle { anchors.fill: parent; color: Theme.window }
 
         Sidebar {
             id: sidebar
-            win: win
-            visible: win.sidebarShown
+            win: bw
+            visible: bw.sidebarShown
             x: 8; y: 8
-            width: win.sidebarWidth
+            width: bw.sidebarWidth
             height: parent.height - 16
-            currentPath: win.activePane ? win.activePane.path : ""
+            currentPath: bw.activePane ? bw.activePane.path : ""
         }
         MouseArea {
-            visible: win.sidebarShown
+            visible: bw.sidebarShown
             x: sidebar.x + sidebar.width
             width: 8
             height: parent.height
             cursorShape: Qt.SplitHCursor
             property real sx: 0
             property real sw: 0
-            onPressed: (m) => { sx = mapToItem(root, m.x, 0).x; sw = win.sidebarWidth }
-            onPositionChanged: (m) => { if (pressed) win.sidebarWidth = Math.max(150, Math.min(400, sw + mapToItem(root, m.x, 0).x - sx)) }
-            onReleased: win.setSetting("sidebar_width", Math.round(win.sidebarWidth))
+            onPressed: (m) => { sx = mapToItem(root, m.x, 0).x; sw = bw.sidebarWidth }
+            onPositionChanged: (m) => { if (pressed) bw.sidebarWidth = Math.max(150, Math.min(400, sw + mapToItem(root, m.x, 0).x - sx)) }
+            onReleased: bw.setSetting("sidebar_width", Math.round(bw.sidebarWidth))
         }
 
         Item {
             id: main
-            x: win.sidebarShown ? sidebar.x + sidebar.width + 8 : 0
+            x: bw.sidebarShown ? sidebar.x + sidebar.width + 8 : 0
             width: parent.width - x
             height: parent.height
 
@@ -191,19 +202,19 @@ ApplicationWindow {
                 height: Theme.toolbarHeight
                 MouseArea {
                     anchors.fill: parent
-                    onPressed: win.startSystemMove()
-                    onDoubleClicked: win.visibility === Window.Maximized ? win.showNormal() : win.showMaximized()
+                    onPressed: bw.startSystemMove()
+                    onDoubleClicked: bw.visibility === Window.Maximized ? bw.showNormal() : bw.showMaximized()
                 }
                 Row {
                     id: leftTools
-                    x: win.sidebarShown ? 4 : (win.clientDecorations ? 12 : 8)
+                    x: bw.sidebarShown ? 4 : (bw.clientDecorations ? 12 : 8)
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 8
                     GButton {
-                        visible: !win.sidebarShown && win.clientDecorations
+                        visible: !bw.sidebarShown && bw.clientDecorations
                         iconName: "window-close"; iconSize: 12
                         tip: "Close window"
-                        onClicked: win.close()
+                        onClicked: bw.close()
                     }
                     Item {
                         width: navGroup.implicitWidth + 4
@@ -212,20 +223,20 @@ ApplicationWindow {
                         Row {
                             id: navGroup
                             anchors.centerIn: parent
-                            GButton { iconName: "go-previous"; capsule: true; enabled: win.activePane && win.activePane.backStack.length > 0; tip: Help.tip("Back"); onClicked: win.activePane.goBack() }
-                            GButton { iconName: "go-next"; capsule: true; enabled: win.activePane && win.activePane.fwdStack.length > 0; tip: Help.tip("Forward"); onClicked: win.activePane.goForward() }
-                            GButton { iconName: "go-up"; capsule: true; enabled: win.activePane && win.activePane.parentOf(win.activePane.path) !== ""; tip: Help.tip("Enclosing folder"); onClicked: win.activePane.goUp() }
+                            GButton { iconName: "go-previous"; capsule: true; enabled: bw.activePane && bw.activePane.backStack.length > 0; tip: Help.tip("Back"); onClicked: bw.activePane.goBack() }
+                            GButton { iconName: "go-next"; capsule: true; enabled: bw.activePane && bw.activePane.fwdStack.length > 0; tip: Help.tip("Forward"); onClicked: bw.activePane.goForward() }
+                            GButton { iconName: "go-up"; capsule: true; enabled: bw.activePane && bw.activePane.parentOf(bw.activePane.path) !== ""; tip: Help.tip("Enclosing folder"); onClicked: bw.activePane.goUp() }
                         }
                     }
                     GButton {
                         iconName: "sidebar-show-symbolic|view-split-left-right|sidebar-expand-left"
                         tip: Help.tip("Show or hide the sidebar", "Sidebar")
-                        onClicked: win.sidebarShown = !win.sidebarShown
+                        onClicked: bw.sidebarShown = !bw.sidebarShown
                     }
                 }
                 PathBar {
                     id: pathBar
-                    pane: win.activePane
+                    pane: bw.activePane
                     anchors.left: leftTools.right
                     anchors.leftMargin: 10
                     anchors.right: rightTools.left
@@ -245,14 +256,14 @@ ApplicationWindow {
                             { icon: "view-file-columns|view-split-left-right", tip: Help.tip("View in columns", "Columns"), value: "columns" },
                             { icon: "view-preview|view-list-images", tip: Help.tip("View as a gallery", "Gallery"), value: "gallery" }
                         ]
-                        current: win.activePane ? win.activePane.viewMode : ""
-                        onPicked: (v) => win.activePane.setView(v)
+                        current: bw.activePane ? bw.activePane.viewMode : ""
+                        onPicked: (v) => bw.activePane.setView(v)
                     }
                     GButton {
                         iconName: "view-split-left-right"
-                        checked: win.currentTab && win.currentTab.split
+                        checked: bw.currentTab && bw.currentTab.split
                         tip: Help.tip("Split view: two folders side by side", "Split view")
-                        onClicked: win.currentTab.toggleSplit()
+                        onClicked: bw.currentTab.toggleSplit()
                     }
                     GButton {
                         id: actionButton
@@ -260,7 +271,7 @@ ApplicationWindow {
                         tip: "More actions: new folder, sort, show hidden files, settings, help"
                         onClicked: actionMenu.popup(actionButton, 0, actionButton.height + 4)
                     }
-                    JobsButton { app: win.app; win: win }
+                    JobsButton { app: bw.app; win: bw }
                     GField {
                         id: search
                         width: Math.round(190 * Theme.pt)
@@ -268,14 +279,14 @@ ApplicationWindow {
                         clearable: true
                         placeholderText: "Search"
                         tip: Help.tip("Search names below this folder (choose Contents in the bar to search inside files)", "Search")
-                        onTextEdited: win.activePane.startSearch(text)
-                        onTextChanged: if (text === "" && win.activePane && win.activePane.searching) win.activePane.endSearch(true)
-                        Keys.onEscapePressed: { text = ""; win.activePane.forceActiveFocus() }
-                        Keys.onDownPressed: win.activePane.forceActiveFocus()
-                        Keys.onReturnPressed: win.activePane.forceActiveFocus()
+                        onTextEdited: bw.activePane.startSearch(text)
+                        onTextChanged: if (text === "" && bw.activePane && bw.activePane.searching) bw.activePane.endSearch(true)
+                        Keys.onEscapePressed: { text = ""; bw.activePane.forceActiveFocus() }
+                        Keys.onDownPressed: bw.activePane.forceActiveFocus()
+                        Keys.onReturnPressed: bw.activePane.forceActiveFocus()
                         Connections {
-                            target: win.activePane
-                            function onSearchingChanged() { if (!win.activePane.searching && search.text !== "") search.text = "" }
+                            target: bw.activePane
+                            function onSearchingChanged() { if (!bw.activePane.searching && search.text !== "") search.text = "" }
                         }
                     }
                 }
@@ -284,7 +295,7 @@ ApplicationWindow {
             // ---------- tabs ----------
             TabStrip {
                 id: tabBar
-                win: win
+                win: bw
                 model: tabs
                 anchors.top: toolbar.bottom
                 width: parent.width
@@ -305,7 +316,7 @@ ApplicationWindow {
                         required property string path
                         required property string select
                         required property int index
-                        win: win
+                        win: bw
                         initialPath: path
                         initialSelect: JSON.parse(select)
                     }
@@ -324,7 +335,7 @@ ApplicationWindow {
                     x: 12
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - zoomRow.width - 40
-                    text: win.activePane ? win.activePane.model.status : ""
+                    text: bw.activePane ? bw.activePane.model.status : ""
                     font.pixelSize: Theme.small
                     color: Theme.fgSecondary
                 }
@@ -334,7 +345,7 @@ ApplicationWindow {
                     anchors.rightMargin: 14
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 6
-                    visible: win.activePane && win.activePane.viewMode === "icons"
+                    visible: bw.activePane && bw.activePane.viewMode === "icons"
                     GIcon { name: "zoom-out"; size: 12; anchors.verticalCenter: parent.verticalCenter; opacity: 0.6 }
                     Slider {
                         id: zoom
@@ -343,8 +354,8 @@ ApplicationWindow {
                         from: 0; to: 8; stepSize: 1
                         snapMode: Slider.SnapAlways
                         readonly property var sizes: [16, 24, 32, 48, 64, 96, 128, 192, 256]
-                        value: win.activePane ? Math.max(0, sizes.indexOf(win.activePane.iconSize)) : 4
-                        onMoved: { win.activePane.iconSize = sizes[value]; win.activePane.rememberView() }
+                        value: bw.activePane ? Math.max(0, sizes.indexOf(bw.activePane.iconSize)) : 4
+                        onMoved: { bw.activePane.iconSize = sizes[value]; bw.activePane.rememberView() }
                         hoverEnabled: true
                         background: Rectangle {
                             x: zoom.leftPadding; y: zoom.topPadding + zoom.availableHeight / 2 - 2
@@ -367,7 +378,7 @@ ApplicationWindow {
 
         // Window edge resizing for grove's own decorations.
         Repeater {
-            model: win.clientDecorations && win.visibility !== Window.Maximized ? [
+            model: bw.clientDecorations && bw.visibility !== Window.Maximized ? [
                 { e: Qt.LeftEdge, x: 0, y: 6, w: 5, h: -12, c: Qt.SizeHorCursor },
                 { e: Qt.RightEdge, x: -5, y: 6, w: 5, h: -12, c: Qt.SizeHorCursor },
                 { e: Qt.TopEdge, x: 6, y: 0, w: -12, h: 4, c: Qt.SizeVerCursor },
@@ -384,7 +395,7 @@ ApplicationWindow {
                 width: modelData.w <= 0 ? root.width + modelData.w : modelData.w
                 height: modelData.h <= 0 ? root.height + modelData.h : modelData.h
                 cursorShape: modelData.c
-                onPressed: win.startSystemResize(modelData.e)
+                onPressed: bw.startSystemResize(modelData.e)
             }
         }
 
@@ -394,30 +405,30 @@ ApplicationWindow {
     // ---------- menus ----------
     GMenu {
         id: actionMenu
-        GMenuItem { text: "New Window"; iconName: "window-new"; shortcutText: "Ctrl+N"; onTriggered: win.app.openWindow([win.activePane.path.indexOf("/") === 0 ? win.activePane.path : win.app.grove.home()]) }
-        GMenuItem { text: "New Tab"; iconName: "tab-new"; shortcutText: "Ctrl+T"; onTriggered: win.newTab(win.activePane.path.indexOf("/") === 0 ? win.activePane.path : win.app.grove.home(), []) }
-        GMenuItem { text: "New Folder"; iconName: "folder-new"; shortcutText: "Ctrl+Shift+N"; onTriggered: win.activePane.newFolder() }
+        GMenuItem { text: "New Window"; iconName: "window-new"; shortcutText: "Ctrl+N"; onTriggered: bw.app.openWindow([bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home()]) }
+        GMenuItem { text: "New Tab"; iconName: "tab-new"; shortcutText: "Ctrl+T"; onTriggered: bw.newTab(bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home(), []) }
+        GMenuItem { text: "New Folder"; iconName: "folder-new"; shortcutText: "Ctrl+Shift+N"; onTriggered: bw.activePane.newFolder() }
         GMenuSeparator {}
-        GMenuItem { text: win.app.grove.undoLabel ? "Undo " + win.app.grove.undoLabel : "Undo"; iconName: "edit-undo"; shortcutText: "Ctrl+Z"; enabled: win.app.grove.undoLabel !== ""; onTriggered: win.app.grove.undo() }
-        GMenuItem { text: win.app.grove.redoLabel ? "Redo " + win.app.grove.redoLabel : "Redo"; iconName: "edit-redo"; shortcutText: "Ctrl+Shift+Z"; enabled: win.app.grove.redoLabel !== ""; onTriggered: win.app.grove.redo() }
+        GMenuItem { text: bw.app.grove.undoLabel ? "Undo " + bw.app.grove.undoLabel : "Undo"; iconName: "edit-undo"; shortcutText: "Ctrl+Z"; enabled: bw.app.grove.undoLabel !== ""; onTriggered: bw.app.grove.undo() }
+        GMenuItem { text: bw.app.grove.redoLabel ? "Redo " + bw.app.grove.redoLabel : "Redo"; iconName: "edit-redo"; shortcutText: "Ctrl+Shift+Z"; enabled: bw.app.grove.redoLabel !== ""; onTriggered: bw.app.grove.redo() }
         GMenuSeparator {}
-        GMenuItem { text: "Filter This Folder"; iconName: "view-filter"; shortcutText: "Ctrl+I"; onTriggered: win.openFilter() }
-        GMenuItem { text: "Show Hidden Files"; checkable: true; checked: !!win.app.settings.show_hidden; shortcutText: "Ctrl+H"; onTriggered: win.toggleHidden() }
-        GMenuItem { text: "Split View"; checkable: true; checked: win.currentTab && win.currentTab.split; shortcutText: "F3"; onTriggered: win.currentTab.toggleSplit() }
-        GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: "Ctrl+Alt+T"; onTriggered: win.app.grove.openTerminal(win.activePane.path) }
-        GMenuItem { text: "Connect to Server…"; iconName: "network-connect"; shortcutText: "Ctrl+K"; onTriggered: win.connectServer() }
+        GMenuItem { text: "Filter This Folder"; iconName: "view-filter"; shortcutText: "Ctrl+I"; onTriggered: bw.openFilter() }
+        GMenuItem { text: "Show Hidden Files"; checkable: true; checked: !!bw.app.settings.show_hidden; shortcutText: "Ctrl+H"; onTriggered: bw.toggleHidden() }
+        GMenuItem { text: "Split View"; checkable: true; checked: bw.currentTab && bw.currentTab.split; shortcutText: "F3"; onTriggered: bw.currentTab.toggleSplit() }
+        GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: "Ctrl+Alt+T"; onTriggered: bw.app.grove.openTerminal(bw.activePane.path) }
+        GMenuItem { text: "Connect to Server…"; iconName: "network-connect"; shortcutText: "Ctrl+K"; onTriggered: bw.connectServer() }
         GMenuSeparator {}
-        GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; enabled: win.app.trashCount > 0; onTriggered: win.emptyTrash() }
+        GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; enabled: bw.app.trashCount > 0; onTriggered: bw.emptyTrash() }
         GMenuSeparator {}
-        GMenuItem { text: "Settings…"; iconName: "configure"; shortcutText: "Ctrl+,"; onTriggered: win.showSettings() }
-        GMenuItem { text: "Help and Keyboard Shortcuts"; iconName: "help-contents"; shortcutText: "F1"; onTriggered: win.showHelp("") }
+        GMenuItem { text: "Settings…"; iconName: "configure"; shortcutText: "Ctrl+,"; onTriggered: bw.showSettings() }
+        GMenuItem { text: "Help and Keyboard Shortcuts"; iconName: "help-contents"; shortcutText: "F1"; onTriggered: bw.showHelp("") }
     }
     function openFilter() {
         const p = activePane
         p.filterOpen = true
         filterFocus.restart()
     }
-    Timer { id: filterFocus; interval: 30; onTriggered: { const f = win.findFilterField(win.activePane); if (f) f.forceActiveFocus() } }
+    Timer { id: filterFocus; interval: 30; onTriggered: { const f = bw.findFilterField(bw.activePane); if (f) f.forceActiveFocus() } }
     function findFilterField(item) {
         if (!item) return null
         for (let i = 0; i < item.children.length; i++) {
@@ -430,7 +441,7 @@ ApplicationWindow {
     }
 
     // ---------- dialogs ----------
-    ConflictDialog { id: conflict; app: win.app }
+    ConflictDialog { id: conflict; app: bw.app }
     Sheet {
         id: confirmSheet
         property string actionText: "OK"
@@ -441,9 +452,9 @@ ApplicationWindow {
             PushButton { text: confirmSheet.actionText; primary: !confirmSheet.destructive; destructive: confirmSheet.destructive; focus: true; onClicked: { confirmSheet.close(); if (confirmSheet.fn) confirmSheet.fn() } }
         ]
     }
-    BatchRename { id: renameSheet; app: win.app; win: win }
-    ConnectServer { id: connectSheet; app: win.app; win: win }
-    OpenWithSheet { id: openWithSheet; app: win.app; win: win }
+    BatchRename { id: renameSheet; app: bw.app; win: bw }
+    ConnectServer { id: connectSheet; app: bw.app; win: bw }
+    OpenWithSheet { id: openWithSheet; app: bw.app; win: bw }
     Sheet {
         id: saveSheet
         property var pane
@@ -458,81 +469,81 @@ ApplicationWindow {
                 text: "Save"; primary: true; enabled: smartName.text !== ""
                 onClicked: {
                     const p = saveSheet.pane
-                    const q = { name: p.searchContents ? "" : p.searchText, content: p.searchContents ? p.searchText : "", include_hidden: !!win.app.settings.show_hidden }
-                    win.app.grove.saveSmartFolder(smartName.text, p.searchRoot, JSON.stringify(q))
+                    const q = { name: p.searchContents ? "" : p.searchText, content: p.searchContents ? p.searchText : "", include_hidden: !!bw.app.settings.show_hidden }
+                    bw.app.grove.saveSmartFolder(smartName.text, p.searchRoot, JSON.stringify(q))
                     saveSheet.close()
-                    win.toast("info", "Saved “" + smartName.text + "” in the sidebar")
+                    bw.toast("info", "Saved “" + smartName.text + "” in the sidebar")
                 }
             }
         ]
     }
-    QuickLook { id: ql; app: win.app; win: win }
-    SettingsWindow { id: settingsWin; app: win.app }
-    HelpWindow { id: helpWin; app: win.app }
-    Welcome { id: welcome; app: win.app; win: win }
+    QuickLook { id: ql; app: bw.app; win: bw }
+    SettingsWindow { id: settingsWin; app: bw.app }
+    HelpWindow { id: helpWin; app: bw.app }
+    Welcome { id: welcome; app: bw.app; win: bw }
 
     // ---------- shortcuts ----------
-    component Key: Shortcut { context: Qt.WindowShortcut; enabled: !win.modalOpen }
-    Key { sequences: ["Alt+Left", "Ctrl+["]; onActivated: win.activePane.goBack() }
-    Key { sequences: ["Alt+Right", "Ctrl+]"]; onActivated: win.activePane.goForward() }
-    Key { sequences: ["Alt+Up", "Ctrl+Up"]; onActivated: win.activePane.goUp() }
-    Key { sequences: ["Ctrl+Down"]; onActivated: win.activePane.openSelected(false) }
+    component Key: Shortcut { context: Qt.WindowShortcut; enabled: !bw.modalOpen }
+    Key { sequences: ["Alt+Left", "Ctrl+["]; onActivated: bw.activePane.goBack() }
+    Key { sequences: ["Alt+Right", "Ctrl+]"]; onActivated: bw.activePane.goForward() }
+    Key { sequences: ["Alt+Up", "Ctrl+Up"]; onActivated: bw.activePane.goUp() }
+    Key { sequences: ["Ctrl+Down"]; onActivated: bw.activePane.openSelected(false) }
     Key { sequences: ["Ctrl+L", "Ctrl+Shift+G", "F6"]; onActivated: pathBar.edit() }
-    Key { sequences: ["Ctrl+Shift+H", "Alt+Home"]; onActivated: win.go(win.app.grove.home()) }
-    Key { sequences: ["Ctrl+Shift+D"]; onActivated: win.go(win.app.grove.home() + "/Desktop") }
-    Key { sequences: ["Ctrl+Shift+O"]; onActivated: win.go(win.app.grove.home() + "/Documents") }
-    Key { sequences: ["Ctrl+Alt+L"]; onActivated: win.go(win.app.grove.home() + "/Downloads") }
-    Key { sequences: ["Ctrl+Shift+F"]; onActivated: win.go("recent:///") }
-    Key { sequences: ["Ctrl+Shift+C"]; onActivated: win.go("/") }
-    Key { sequences: ["Ctrl+Shift+T"]; onActivated: win.go("trash:///") }
-    Key { sequences: ["Ctrl+K"]; onActivated: win.connectServer() }
-    Key { sequences: ["F5", "Ctrl+R"]; onActivated: win.activePane.reload() }
-    Key { sequences: ["Ctrl+1"]; onActivated: win.activePane.setView("icons") }
-    Key { sequences: ["Ctrl+2"]; onActivated: win.activePane.setView("list") }
-    Key { sequences: ["Ctrl+3"]; onActivated: win.activePane.setView("columns") }
-    Key { sequences: ["Ctrl+4"]; onActivated: win.activePane.setView("gallery") }
-    Key { sequences: ["Ctrl++", "Ctrl+="]; onActivated: win.activePane.zoom(1) }
-    Key { sequences: ["Ctrl+-"]; onActivated: win.activePane.zoom(-1) }
-    Key { sequences: ["Ctrl+H", "Ctrl+Shift+."]; onActivated: win.toggleHidden() }
-    Key { sequences: ["Ctrl+I"]; onActivated: win.openFilter() }
-    Key { sequences: ["Ctrl+Y"]; onActivated: win.activePane.quickLook() }
-    Key { sequences: ["F3"]; onActivated: win.currentTab.toggleSplit() }
-    Key { sequences: ["Ctrl+Alt+S", "F9"]; onActivated: win.sidebarShown = !win.sidebarShown }
-    Key { sequences: ["Ctrl+N"]; onActivated: win.app.openWindow([win.activePane.path.indexOf("/") === 0 ? win.activePane.path : win.app.grove.home()]) }
-    Key { sequences: ["Ctrl+T"]; onActivated: win.newTab(win.activePane.path.indexOf("/") === 0 ? win.activePane.path : win.app.grove.home(), []) }
-    Key { sequences: ["Ctrl+W"]; onActivated: win.closeTab(tabBar.currentIndex) }
+    Key { sequences: ["Ctrl+Shift+H", "Alt+Home"]; onActivated: bw.go(bw.app.grove.home()) }
+    Key { sequences: ["Ctrl+Shift+D"]; onActivated: bw.go(bw.app.grove.home() + "/Desktop") }
+    Key { sequences: ["Ctrl+Shift+O"]; onActivated: bw.go(bw.app.grove.home() + "/Documents") }
+    Key { sequences: ["Ctrl+Alt+L"]; onActivated: bw.go(bw.app.grove.home() + "/Downloads") }
+    Key { sequences: ["Ctrl+Shift+F"]; onActivated: bw.go("recent:///") }
+    Key { sequences: ["Ctrl+Shift+C"]; onActivated: bw.go("/") }
+    Key { sequences: ["Ctrl+Shift+T"]; onActivated: bw.go("trash:///") }
+    Key { sequences: ["Ctrl+K"]; onActivated: bw.connectServer() }
+    Key { sequences: ["F5", "Ctrl+R"]; onActivated: bw.activePane.reload() }
+    Key { sequences: ["Ctrl+1"]; onActivated: bw.activePane.setView("icons") }
+    Key { sequences: ["Ctrl+2"]; onActivated: bw.activePane.setView("list") }
+    Key { sequences: ["Ctrl+3"]; onActivated: bw.activePane.setView("columns") }
+    Key { sequences: ["Ctrl+4"]; onActivated: bw.activePane.setView("gallery") }
+    Key { sequences: ["Ctrl++", "Ctrl+="]; onActivated: bw.activePane.zoom(1) }
+    Key { sequences: ["Ctrl+-"]; onActivated: bw.activePane.zoom(-1) }
+    Key { sequences: ["Ctrl+H", "Ctrl+Shift+."]; onActivated: bw.toggleHidden() }
+    Key { sequences: ["Ctrl+I"]; onActivated: bw.openFilter() }
+    Key { sequences: ["Ctrl+Y"]; onActivated: bw.activePane.quickLook() }
+    Key { sequences: ["F3"]; onActivated: bw.currentTab.toggleSplit() }
+    Key { sequences: ["Ctrl+Alt+S", "F9"]; onActivated: bw.sidebarShown = !bw.sidebarShown }
+    Key { sequences: ["Ctrl+N"]; onActivated: bw.app.openWindow([bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home()]) }
+    Key { sequences: ["Ctrl+T"]; onActivated: bw.newTab(bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home(), []) }
+    Key { sequences: ["Ctrl+W"]; onActivated: bw.closeTab(tabBar.currentIndex) }
     Key { sequences: ["Ctrl+Tab"]; onActivated: tabBar.currentIndex = (tabBar.currentIndex + 1) % tabs.count }
     Key { sequences: ["Ctrl+Shift+Tab", "Ctrl+Backtab"]; onActivated: tabBar.currentIndex = (tabBar.currentIndex + tabs.count - 1) % tabs.count }
-    Key { sequences: ["Ctrl+C"]; onActivated: win.activePane.copy(false) }
-    Key { sequences: ["Ctrl+X"]; onActivated: win.activePane.copy(true) }
-    Key { sequences: ["Ctrl+V"]; onActivated: win.activePane.paste(false) }
-    Key { sequences: ["Ctrl+Alt+V"]; onActivated: win.activePane.paste(true) }
-    Key { sequences: ["Ctrl+Alt+C"]; onActivated: win.activePane.copyPath() }
-    Key { sequences: ["Ctrl+D"]; onActivated: win.activePane.duplicate() }
-    Key { sequences: ["Ctrl+Alt+A"]; onActivated: win.activePane.makeAlias() }
-    Key { sequences: ["F2"]; onActivated: win.activePane.rename() }
-    Key { sequences: ["Shift+F2"]; onActivated: { const s = win.activePane.selectedPaths(); if (s.length) win.batchRename(s) } }
-    Key { sequences: ["Ctrl+Shift+N", "F10"]; onActivated: win.activePane.newFolder() }
-    Key { sequences: ["Ctrl+Alt+N"]; onActivated: win.activePane.newFile("") }
-    Key { sequences: ["Delete", "Ctrl+Backspace"]; onActivated: win.activePane.trashSelected() }
-    Key { sequences: ["Shift+Delete"]; onActivated: win.activePane.deleteSelected() }
-    Key { sequences: ["Ctrl+Z"]; onActivated: win.app.grove.undo() }
-    Key { sequences: ["Ctrl+Shift+Z"]; onActivated: win.app.grove.redo() }
-    Key { sequences: ["Ctrl+A"]; onActivated: win.activePane.model.selectAll() }
-    Key { sequences: ["Ctrl+Shift+A"]; onActivated: win.activePane.model.invertSelection() }
-    Key { sequences: ["Alt+Return", "Ctrl+Shift+I"]; onActivated: { const s = win.activePane.selectedPaths(); win.showInfo(s.length ? s : [win.activePane.path]) } }
+    Key { sequences: ["Ctrl+C"]; onActivated: bw.activePane.copy(false) }
+    Key { sequences: ["Ctrl+X"]; onActivated: bw.activePane.copy(true) }
+    Key { sequences: ["Ctrl+V"]; onActivated: bw.activePane.paste(false) }
+    Key { sequences: ["Ctrl+Alt+V"]; onActivated: bw.activePane.paste(true) }
+    Key { sequences: ["Ctrl+Alt+C"]; onActivated: bw.activePane.copyPath() }
+    Key { sequences: ["Ctrl+D"]; onActivated: bw.activePane.duplicate() }
+    Key { sequences: ["Ctrl+Alt+A"]; onActivated: bw.activePane.makeAlias() }
+    Key { sequences: ["F2"]; onActivated: bw.activePane.rename() }
+    Key { sequences: ["Shift+F2"]; onActivated: { const s = bw.activePane.selectedPaths(); if (s.length) bw.batchRename(s) } }
+    Key { sequences: ["Ctrl+Shift+N", "F10"]; onActivated: bw.activePane.newFolder() }
+    Key { sequences: ["Ctrl+Alt+N"]; onActivated: bw.activePane.newFile("") }
+    Key { sequences: ["Delete", "Ctrl+Backspace"]; onActivated: bw.activePane.trashSelected() }
+    Key { sequences: ["Shift+Delete"]; onActivated: bw.activePane.deleteSelected() }
+    Key { sequences: ["Ctrl+Z"]; onActivated: bw.app.grove.undo() }
+    Key { sequences: ["Ctrl+Shift+Z"]; onActivated: bw.app.grove.redo() }
+    Key { sequences: ["Ctrl+A"]; onActivated: bw.activePane.model.selectAll() }
+    Key { sequences: ["Ctrl+Shift+A"]; onActivated: bw.activePane.model.invertSelection() }
+    Key { sequences: ["Alt+Return", "Ctrl+Shift+I"]; onActivated: { const s = bw.activePane.selectedPaths(); bw.showInfo(s.length ? s : [bw.activePane.path]) } }
     Key { sequences: ["Ctrl+F"]; onActivated: { search.forceActiveFocus(); search.selectAll() } }
-    Key { sequences: ["Ctrl+Alt+T"]; onActivated: win.app.grove.openTerminal(win.activePane.path) }
-    Key { sequences: ["Ctrl+E"]; onActivated: { const p = win.activePane.path; for (const l of (sidebar.places.locations || []).concat(sidebar.places.network || [])) if (l.ejectable && (p === l.path || p.indexOf(l.path + "/") === 0)) win.eject(l.path, l.name) } }
-    Key { sequences: ["Ctrl+,"]; onActivated: win.showSettings() }
-    Key { sequences: ["F1", "Ctrl+?", "Ctrl+Shift+/"]; onActivated: win.showHelp("") }
-    Key { sequences: ["Ctrl+Alt+1"]; onActivated: win.activePane.toggleTag("Red") }
-    Key { sequences: ["Ctrl+Alt+2"]; onActivated: win.activePane.toggleTag("Orange") }
-    Key { sequences: ["Ctrl+Alt+3"]; onActivated: win.activePane.toggleTag("Yellow") }
-    Key { sequences: ["Ctrl+Alt+4"]; onActivated: win.activePane.toggleTag("Green") }
-    Key { sequences: ["Ctrl+Alt+5"]; onActivated: win.activePane.toggleTag("Blue") }
-    Key { sequences: ["Ctrl+Alt+6"]; onActivated: win.activePane.toggleTag("Purple") }
-    Key { sequences: ["Ctrl+Alt+7"]; onActivated: win.activePane.toggleTag("Gray") }
+    Key { sequences: ["Ctrl+Alt+T"]; onActivated: bw.app.grove.openTerminal(bw.activePane.path) }
+    Key { sequences: ["Ctrl+E"]; onActivated: { const p = bw.activePane.path; for (const l of (sidebar.places.locations || []).concat(sidebar.places.network || [])) if (l.ejectable && (p === l.path || p.indexOf(l.path + "/") === 0)) bw.eject(l.path, l.name) } }
+    Key { sequences: ["Ctrl+,"]; onActivated: bw.showSettings() }
+    Key { sequences: ["F1", "Ctrl+?", "Ctrl+Shift+/"]; onActivated: bw.showHelp("") }
+    Key { sequences: ["Ctrl+Alt+1"]; onActivated: bw.activePane.toggleTag("Red") }
+    Key { sequences: ["Ctrl+Alt+2"]; onActivated: bw.activePane.toggleTag("Orange") }
+    Key { sequences: ["Ctrl+Alt+3"]; onActivated: bw.activePane.toggleTag("Yellow") }
+    Key { sequences: ["Ctrl+Alt+4"]; onActivated: bw.activePane.toggleTag("Green") }
+    Key { sequences: ["Ctrl+Alt+5"]; onActivated: bw.activePane.toggleTag("Blue") }
+    Key { sequences: ["Ctrl+Alt+6"]; onActivated: bw.activePane.toggleTag("Purple") }
+    Key { sequences: ["Ctrl+Alt+7"]; onActivated: bw.activePane.toggleTag("Gray") }
 
     Component.onCompleted: {
         const paths = initialPaths.length ? initialPaths : [app.grove.home()]
@@ -544,17 +555,17 @@ ApplicationWindow {
     // Test hook: --screenshot FILE grabs the window and quits.
     Timer {
         id: shotTimer
-        interval: Number(win.app.grove.env("GROVE_SHOT_DELAY") || 2500)
+        interval: Number(bw.app.grove.env("GROVE_SHOT_DELAY") || 2500)
         onTriggered: {
-            const steps = (win.app.grove.env("GROVE_TEST") || "").split(";").filter(s => s)
-            for (const s of steps) win.testStep(s)
+            const steps = (bw.app.grove.env("GROVE_TEST") || "").split(";").filter(s => s)
+            for (const s of steps) bw.testStep(s)
             shotTimer2.start()
         }
     }
     Timer {
         id: shotTimer2
-        interval: Number(win.app.grove.env("GROVE_SHOT_DELAY2") || 1500)
-        onTriggered: root.grabToImage(r => { r.saveToFile(win.app.screenshot); console.log("grove: screenshot " + win.app.screenshot + " (" + win.activePane.model.lastLoadMs() + " ms listing, " + win.activePane.model.count + " items)"); Qt.quit() })
+        interval: Number(bw.app.grove.env("GROVE_SHOT_DELAY2") || 1500)
+        onTriggered: root.grabToImage(r => { r.saveToFile(bw.app.screenshot); console.log("grove: screenshot " + bw.app.screenshot + " (" + bw.activePane.model.lastLoadMs() + " ms listing, " + bw.activePane.model.count + " items)"); Qt.quit() })
     }
     function testStep(s) {
         const [cmd, arg] = s.split("=")

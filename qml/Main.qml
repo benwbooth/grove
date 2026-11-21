@@ -145,6 +145,7 @@ Item {
     Component.onCompleted: {
         Theme.mode = settings.theme || "auto"
         try { Theme.hearth = JSON.parse(grove.env("GROVE_HEARTH") || "{}") } catch (e) {}
+        grove.setIconTheme(Theme.dark)
         grove.start()
         refreshTrash()
         let req = null

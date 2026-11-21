@@ -2,6 +2,7 @@
 #include "grove/src/bridge.cxxqt.h"
 
 #include <QtCore/QBuffer>
+#include <QtCore/QDebug>
 #include <QtCore/QFile>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
@@ -11,6 +12,8 @@
 #include <QtCore/QThreadPool>
 #include <QtCore/QUrl>
 #include <QtGui/QClipboard>
+#include <QtGui/QFontDatabase>
+#include <QtCore/QDir>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QIcon>
 #include <QtGui/QImageReader>
@@ -147,7 +150,8 @@ public:
     {
         const int s = qMax(16, qMax(req.width(), req.height()));
         QIcon icon;
-        for (const QString& n : id.split(QLatin1Char('|'), Qt::SkipEmptyParts)) {
+        const QString decoded = QUrl::fromPercentEncoding(id.toUtf8());
+        for (const QString& n : decoded.split(QLatin1Char('|'), Qt::SkipEmptyParts)) {
             if (n.startsWith(QLatin1Char('/'))) { icon = QIcon(n); if (!icon.isNull()) break; continue; }
             if (QIcon::hasThemeIcon(n)) { icon = QIcon::fromTheme(n); break; }
         }
@@ -171,9 +175,34 @@ void grove_create_app()
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Grove"));
     QGuiApplication::setOrganizationName(QStringLiteral("grove"));
     QGuiApplication::setDesktopFileName(QStringLiteral("grove"));
+    // Inter (SF Pro's open relative) when SF Pro isn't installed: the
+    // package hands its folder over in GROVE_FONT_DIR, as hearth does.
+    const QString fontDir = QString::fromLocal8Bit(qgetenv("GROVE_FONT_DIR"));
+    if (!fontDir.isEmpty()) {
+        const QFileInfoList files = QDir(fontDir).entryInfoList({ QStringLiteral("Inter.ttc") }, QDir::Files);
+        for (const QFileInfo& f : files) QFontDatabase::addApplicationFont(f.absoluteFilePath());
+    }
+    // Icon theme folders from the XDG directories (some platform plugins,
+    // e.g. offscreen, leave only Qt's resources).
+    {
+        QStringList paths = QIcon::themeSearchPaths();
+        const QString home = QString::fromLocal8Bit(qgetenv("HOME"));
+        QString dataHome = QString::fromLocal8Bit(qgetenv("XDG_DATA_HOME"));
+        if (dataHome.isEmpty()) dataHome = home + QStringLiteral("/.local/share");
+        QStringList want { dataHome + QStringLiteral("/icons"), home + QStringLiteral("/.icons") };
+        QString dirs = QString::fromLocal8Bit(qgetenv("XDG_DATA_DIRS"));
+        if (dirs.isEmpty()) dirs = QStringLiteral("/usr/local/share:/usr/share");
+        for (const QString& d : dirs.split(QLatin1Char(':'), Qt::SkipEmptyParts)) want << d + QStringLiteral("/icons");
+        want << QStringLiteral("/run/current-system/sw/share/icons") << home + QStringLiteral("/.nix-profile/share/icons");
+        for (const QString& w : want)
+            if (!paths.contains(w) && QFile::exists(w)) paths << w;
+        QIcon::setThemeSearchPaths(paths);
+    }
     if (QIcon::themeName().isEmpty() || QIcon::themeName() == QLatin1String("hicolor"))
         QIcon::setThemeName(QStringLiteral("breeze"));
     QIcon::setFallbackThemeName(QStringLiteral("breeze"));
+    if (qEnvironmentVariableIsSet("GROVE_DEBUG_ICONS"))
+        qWarning() << "grove icons: theme" << QIcon::themeName() << "paths" << QIcon::themeSearchPaths() << "has folder" << QIcon::hasThemeIcon(QStringLiteral("folder"));
     QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("grove"), QIcon::fromTheme(QStringLiteral("system-file-manager"))));
 }
 
@@ -311,4 +340,11 @@ void grove_test_key(int32_t key, int32_t modifiers, const QString& text)
     QKeyEvent release(QEvent::KeyRelease, key, Qt::KeyboardModifiers(modifiers), text);
     QGuiApplication::sendEvent(w, &press);
     QGuiApplication::sendEvent(w, &release);
+}
+
+void grove_set_icon_theme(bool dark)
+{
+    const QString cur = QIcon::themeName();
+    if (cur.startsWith(QLatin1String("breeze"), Qt::CaseInsensitive))
+        QIcon::setThemeName(dark ? QStringLiteral("breeze-dark") : QStringLiteral("breeze"));
 }

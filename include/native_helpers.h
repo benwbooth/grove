@@ -32,5 +32,7 @@ QString grove_image_convert(const QString& path, const QString& format);
 void grove_rows_changed(QAbstractListModel& model, int32_t first, int32_t last);
 // layoutAboutToBeChanged (done=false) / layoutChanged (done=true).
 void grove_layout_changing(QAbstractListModel& model, bool done);
+// Breeze or Breeze Dark icons to match grove's light/dark look.
+void grove_set_icon_theme(bool dark);
 // Test hook: send a key press to the focused window.
 void grove_test_key(int32_t key, int32_t modifiers, const QString& text);

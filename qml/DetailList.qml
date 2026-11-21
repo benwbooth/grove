@@ -15,7 +15,7 @@ Item {
     property real wTags: Math.round(70 * Theme.pt)
     property real wWhere: Math.round(200 * Theme.pt)
     readonly property int rowH: Theme.rowHeight
-    readonly property bool thumbs: pane.app.settings.show_thumbnails !== false
+    readonly property bool thumbs: !pane.app || pane.app.settings.show_thumbnails !== false
 
     function positionAt(row) { if (row >= 0) list.positionViewAtIndex(row, ListView.Contain) }
     function handleKey(e) {

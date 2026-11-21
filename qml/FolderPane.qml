@@ -10,7 +10,7 @@ FocusScope {
 
     property var win
     property var app: win ? win.app : null
-    property Grove grove: app ? app.grove : null
+    property var grove: app ? app.grove : null
     property alias model: fm
     property string path: ""
     property string title: titleFor(path)
@@ -509,13 +509,13 @@ FocusScope {
                 spacing: 6
                 GLabel { text: "Search:"; color: Theme.fgSecondary; anchors.verticalCenter: parent.verticalCenter }
                 GButton {
-                    text: "Home"; checked: pane.searchRoot === pane.grove.home(); flat: false; capsule: true
+                    text: "Home"; checked: pane.grove && pane.searchRoot === pane.grove.home(); flat: false; capsule: true
                     tip: "Search everything in your home folder"
                     onClicked: { pane.searchRoot = pane.grove.home(); pane.runSearch() }
                 }
                 GButton {
                     text: "“" + pane.titleFor(pane.folderBeforeSearch) + "”"
-                    visible: pane.folderBeforeSearch !== pane.grove.home() && pane.folderBeforeSearch.indexOf("/") === 0
+                    visible: pane.grove && pane.folderBeforeSearch !== pane.grove.home() && pane.folderBeforeSearch.indexOf("/") === 0
                     checked: pane.searchRoot === pane.folderBeforeSearch; flat: false; capsule: true
                     tip: "Search only in the folder you were in"
                     onClicked: { pane.searchRoot = pane.folderBeforeSearch; pane.runSearch() }
@@ -561,10 +561,10 @@ FocusScope {
         focus: true
         sourceComponent: pane.viewMode === "list" ? listComp : pane.viewMode === "columns" ? columnComp : pane.viewMode === "gallery" ? galleryComp : iconComp
     }
-    Component { id: iconComp; IconGrid { pane: pane } }
-    Component { id: listComp; DetailList { pane: pane } }
-    Component { id: columnComp; ColumnBrowser { pane: pane } }
-    Component { id: galleryComp; Gallery { pane: pane } }
+    Component { id: iconComp; IconGrid { pane: viewLoader.parent } }
+    Component { id: listComp; DetailList { pane: viewLoader.parent } }
+    Component { id: columnComp; ColumnBrowser { pane: viewLoader.parent } }
+    Component { id: galleryComp; Gallery { pane: viewLoader.parent } }
 
     // Empty / error / loading states.
     Column {
@@ -615,7 +615,7 @@ FocusScope {
         bgMenu.popup()
     }
 
-    ItemMenu { id: itemMenu; pane: pane }
+    ItemMenu { id: itemMenu; pane: itemMenu.parent }
 
     GMenu {
         id: bgMenu

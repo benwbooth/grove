@@ -956,6 +956,10 @@ impl ffi::Grove {
         });
     }
 
+    pub fn set_icon_theme(&self, dark: bool) {
+        ffi::grove_set_icon_theme(dark);
+    }
+
     pub fn quit_app(&self) {
         std::process::exit(0);
     }

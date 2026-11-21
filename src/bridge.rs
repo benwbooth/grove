@@ -27,6 +27,7 @@ pub mod ffi {
         fn grove_image_rotate(path: &QString, degrees: i32) -> QString;
         fn grove_image_convert(path: &QString, format: &QString) -> QString;
         fn grove_test_key(key: i32, modifiers: i32, text: &QString);
+        fn grove_set_icon_theme(dark: bool);
     }
 
     // Called by the C++ thumbnail provider (on its worker threads).
@@ -42,10 +43,10 @@ pub mod ffi {
     extern "RustQt" {
         #[qobject]
         #[qml_element]
-        #[qproperty(QString, undo_label)]
-        #[qproperty(QString, redo_label)]
-        #[qproperty(i32, places_revision)]
-        #[qproperty(QString, settings_json)]
+        #[qproperty(QString, undo_label, cxx_name = "undoLabel")]
+        #[qproperty(QString, redo_label, cxx_name = "redoLabel")]
+        #[qproperty(i32, places_revision, cxx_name = "placesRevision")]
+        #[qproperty(QString, settings_json, cxx_name = "settingsJson")]
         type Grove = super::GroveRust;
     }
 
@@ -232,6 +233,8 @@ pub mod ffi {
         fn write_text(self: &Grove, path: &QString, text: &QString);
         #[qinvokable]
         fn quit_app(self: &Grove);
+        #[qinvokable]
+        fn set_icon_theme(self: &Grove, dark: bool);
     }
 }
 

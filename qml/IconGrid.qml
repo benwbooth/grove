@@ -13,7 +13,7 @@ Item {
     readonly property real cellW: Math.max(icon + 36, Math.round(icon * 1.45) + 20)
     readonly property real cellH: icon + 14 + Math.ceil(Theme.body * 1.3) * labelLines + 12
     readonly property int cols: Math.max(1, Math.floor((grid.width) / cellW))
-    readonly property bool thumbs: pane.app.settings.show_thumbnails !== false
+    readonly property bool thumbs: !pane.app || pane.app.settings.show_thumbnails !== false
 
     function positionAt(row) { if (row >= 0) grid.positionViewAtIndex(row, GridView.Contain) }
     function handleKey(e) {
@@ -95,7 +95,7 @@ Item {
         reuseItems: true
         cacheBuffer: Math.round(root.cellH * 2)
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; parent: root; anchors.right: root.right; anchors.top: root.top; anchors.bottom: root.bottom }
+        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
         delegate: Item {
             id: cell
