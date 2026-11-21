@@ -11,7 +11,7 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Icon view with zoom slider / Ctrl+wheel | ✅ | ✅ | ✅ |
 | List/details view, sortable columns | ✅ | ✅ | ✅ |
 | Expandable folders in list view | ✅ | ✅ | ✅ (triangles, Right/Left) |
-| Choosable columns (dates, size, kind, tags, rating, permissions, owner, group, path) | ✅ | ✅ | ✅ right-click the header; 🟡 no image dimensions / media duration columns |
+| Choosable columns (dates, size, kind, tags, rating, permissions, owner, group, path) | ✅ | ✅ | ✅ right-click the header; also Dimensions (pictures, video) and Duration (video, audio), read off the UI thread |
 | Column view (Miller columns) + preview column | ✅ | – | ✅ |
 | Gallery view (big preview + filmstrip) | ✅ | – | ✅ |
 | Per-folder view memory (view, sort, icon size, groups) | ✅ | ✅ | ✅ |
@@ -32,14 +32,14 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Keyboard-only navigation, type-to-select | ✅ | ✅ | ✅ |
 | Selection mode (checkboxes) | – | ✅ | ✅ toolbar, menu or Ctrl+Shift+S; clicks and Space tick items; a bar with actions; Esc leaves |
 | Spring-loaded folders when dragging | ✅ | – | ✅ |
-| Status bar with selection summary, free space | – | ✅ | 🟡 summary yes; free space shows in the sidebar capacity bars and Get Info |
+| Status bar with selection summary, free space | – | ✅ | ✅ summary and “… available” |
 
 ## Sidebar and panels
 
 | Feature | F | D | grove |
 |---|---|---|---|
 | Favourites/Places, drag to add, reorder, remove | ✅ | ✅ | ✅ |
-| Hidden places entries | – | ✅ | ❌ |
+| Hidden places entries | – | ✅ | ✅ right-click › Hide; right-click a heading › Show Hidden Entries / Unhide All |
 | Recents | ✅ | ✅ | ✅ (shared recently-used.xbel) |
 | Locations: home, computer, disks with capacity + eject, unmounted disks (click to mount) | ✅ | ✅ | ✅ (udisks2 over D-Bus) |
 | Network: saved servers, connected shares, mDNS discovery | ✅ | ✅ | ✅ |

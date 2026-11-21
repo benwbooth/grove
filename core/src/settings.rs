@@ -116,6 +116,9 @@ pub struct Settings {
     /// Toolbar items in order (Customize Toolbar); empty = the default set.
     #[serde(default)]
     pub toolbar: Vec<String>,
+    /// Sidebar entries the user hid (paths, "tag:Red", "smart:Name"...).
+    #[serde(default)]
+    pub hidden_places: Vec<String>,
     /// Keyboard shortcuts changed from the defaults: {action id: [keys]}.
     #[serde(default)]
     pub shortcuts: serde_json::Value,

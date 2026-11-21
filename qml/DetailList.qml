@@ -25,7 +25,9 @@ Item {
         permissions: { label: "Permissions", w: 110 },
         owner: { label: "Owner", w: 90 },
         group: { label: "Group", w: 90 },
-        path: { label: "Path", w: 240 }
+        path: { label: "Path", w: 240 },
+        dims: { label: "Dimensions", w: 110, right: true },
+        duration: { label: "Duration", w: 80, right: true }
     })
     readonly property var columns: {
         let c = (pane.app && pane.app.settings.list_columns) ? pane.app.settings.list_columns.slice() : ["modified", "size", "kind", "tags"]
@@ -34,6 +36,14 @@ Item {
         return c.filter(k => allColumns[k] !== undefined)
     }
     property var widths: ({})
+    // Durations come later (ffprobe, off the UI thread): re-read on changes.
+    property int rev: 0
+    function bump() { rev++ }
+    Connections {
+        target: root.fm
+        enabled: root.columns.indexOf("duration") >= 0
+        function onDataChanged() { Qt.callLater(root.bump) }
+    }
     function colW(k) { return (widths[k] || allColumns[k].w) * Theme.pt }
     readonly property real fixedW: { let t = 0; for (const k of columns) t += colW(k); return t }
     readonly property real wName: Math.max(220, width - fixedW - 30)
@@ -146,7 +156,7 @@ Item {
         Instantiator {
             onObjectAdded: (i, o) => colMenu.insertItem(i, o)
             onObjectRemoved: (i, o) => colMenu.removeItem(o)
-            model: ["modified", "created", "added", "opened", "size", "kind", "tags", "rating", "permissions", "owner", "group", "path"]
+            model: ["modified", "created", "added", "opened", "size", "kind", "tags", "rating", "permissions", "owner", "group", "path", "dims", "duration"]
             GMenuItem {
                 required property string modelData
                 text: root.allColumns[modelData].label
@@ -228,6 +238,7 @@ Item {
             required property string owner
             required property string group
             required property string fullPath
+            required property string dims
             width: list.width
             height: root.rowH
             readonly property bool renaming: root.pane.renamingRow === index
@@ -245,6 +256,8 @@ Item {
                 case "owner": return owner
                 case "group": return group
                 case "path": return fullPath
+                case "dims": return dims
+                case "duration": root.rev; return root.fm.durationAt(index)
                 }
                 return ""
             }

@@ -87,6 +87,7 @@ QtObject {
         { id: "terminal", group: "Other", action: "Open in Terminal", defaults: ["Ctrl+Alt+T"], fixed: "", note: "" },
         { id: "eject", group: "Other", action: "Eject", defaults: ["Ctrl+E"], fixed: "", note: "Finder: ⌘E" },
         { id: "settings", group: "Other", action: "Settings", defaults: ["Ctrl+,"], fixed: "", note: "Finder: ⌘," },
+        { id: "hideplace", group: "Other", action: "Hide a sidebar entry", defaults: [], fixed: "right-click › Hide", note: "Dolphin. Right-click a section heading › Show Hidden Entries to bring it back" },
         { id: "customizetoolbar", group: "Other", action: "Customize Toolbar…", defaults: [], fixed: "", note: "Finder: right-click the toolbar" },
         { id: "burn", group: "Other", action: "Burn to Disc…", defaults: [], fixed: "", note: "Finder: File › Burn to Disc" },
         { id: "markup", group: "View", action: "Markup (in Quick Look)", defaults: [], fixed: "", note: "Finder: pen, highlighter, shapes, text, crop, rotate" },

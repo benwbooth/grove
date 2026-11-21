@@ -179,6 +179,10 @@ pub mod qobject {
         /// Runs of rows under one group heading: [{label, start, count}].
         #[qinvokable]
         fn group_ranges(self: &FolderModel) -> QString;
+        /// A video's or song's length ("3:25"), asking ffprobe the first
+        /// time (the row changes when it's known).
+        #[qinvokable]
+        fn duration_at(self: &FolderModel, row: i32) -> QString;
         /// Folders panel: show folders only.
         #[qinvokable]
         fn apply_dirs_only(self: Pin<&mut FolderModel>, on: bool);
@@ -1126,6 +1130,13 @@ impl qobject::FolderModel {
 
     fn grouping(&self) -> QString {
         qs(&self.rust().group_by)
+    }
+
+    fn duration_at(&self, row: i32) -> QString {
+        match self.rust().vis.get(row as usize) {
+            Some(it) => qs(&self.media_of(&it.borrow(), true).duration),
+            None => QString::default(),
+        }
     }
 
     fn group_ranges(&self) -> QString {

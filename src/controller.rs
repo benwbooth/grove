@@ -1134,6 +1134,19 @@ impl ffi::Grove {
         });
     }
 
+    pub fn free_space(&self, key: &QString, path: &QString) {
+        let p = path.to_string();
+        self.answer_on("statfs", key, move || {
+            let Ok(c) = std::ffi::CString::new(p) else { return json!({}) };
+            let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
+            if unsafe { libc::statvfs(c.as_ptr(), &mut st) } != 0 {
+                return json!({});
+            }
+            let f = st.f_frsize as u64;
+            json!({"free": st.f_bavail as u64 * f, "total": st.f_blocks as u64 * f})
+        });
+    }
+
     pub fn optical_drives(&self, key: &QString) {
         self.answer(key, || json!(crate::burn::drives().into_iter().map(|d| json!({"dev": d.dev, "name": d.name, "canWrite": d.can_write})).collect::<Vec<_>>()));
     }

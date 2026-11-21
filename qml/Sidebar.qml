@@ -12,6 +12,16 @@ Item {
     property var places: ({})
     property string currentPath: ""
     property var collapsed: app.settings.collapsed_sections || []
+    // Dolphin's hidden places: entries the user hid (right-click › Hide),
+    // shown dimmed again with "Show Hidden Entries".
+    readonly property var hiddenPlaces: app.settings.hidden_places || []
+    property bool showHiddenPlaces: false
+    function setHidden(key, hide) {
+        const h = hiddenPlaces.filter(k => k !== key)
+        if (hide) h.push(key)
+        app.grove.setSetting("hidden_places", JSON.stringify(h))
+        if (hide) win.toast("info", "Hidden from the sidebar. Right-click a section heading › Show Hidden Entries brings it back.")
+    }
 
     function reload() { Async.call(app.grove, k => app.grove.places(k), r => sb.places = r) }
     Component.onCompleted: reload()
@@ -98,8 +108,14 @@ Item {
                 color: Theme.fgTertiary
                 visible: hm.containsMouse
             }
-            MouseArea { id: hm; anchors.fill: parent; hoverEnabled: true; onClicked: sb.toggleSection(sec.name) }
-            GTip { visible: hm.containsMouse && sec.tip !== ""; text: sec.tip + (sec.open ? " Click to hide." : " Click to show.") }
+            MouseArea {
+                id: hm
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                onClicked: (m) => { if (m.button === Qt.RightButton) sectionMenu.popup(); else sb.toggleSection(sec.name) }
+            }
+            GTip { visible: hm.containsMouse && sec.tip !== ""; text: sec.tip + (sec.open ? " Click to hide." : " Click to show.") + " Right-click to show hidden entries." }
         }
     }
 
@@ -116,9 +132,18 @@ Item {
         property bool dim: false
         property bool dropTarget: false
         property int favIndex: -1
+        // Identifies it for hiding (a path, or "tag:Red", "smart:Name"...).
+        property string key: path
+        property bool shown: true
+        readonly property bool isHidden: key !== "" && sb.hiddenPlaces.indexOf(key) >= 0
+        visible: shown && (!isHidden || sb.showHiddenPlaces)
+        opacity: isHidden ? 0.5 : 1
         signal activated()
         signal ejected()
         signal menu()
+        // Places without a menu of their own get the general one.
+        onMenu: if (!customMenu) placeMenu.popup()
+        property bool customMenu: false
         width: parent ? parent.width : 0
         height: Theme.sidebarRow + (total > 0 ? 6 : 0)
         readonly property bool current: path !== "" && path === sb.currentPath
@@ -173,7 +198,7 @@ Item {
             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
             drag.target: pl.favIndex >= 0 ? dragProxy : null
             onClicked: (m) => {
-                if (m.button === Qt.RightButton) pl.menu()
+                if (m.button === Qt.RightButton) { placeMenu.target = pl; pl.menu() }
                 else if (m.button === Qt.MiddleButton && pl.path) sb.win.newTab(pl.path, [])
                 else pl.activated()
             }
@@ -248,6 +273,7 @@ Item {
                         dropTarget: true
                         tip: modelData.path
                         onActivated: sb.win.go(modelData.path)
+                        customMenu: true
                         onMenu: favMenu.openFor(modelData.path)
                     }
                 }
@@ -285,7 +311,7 @@ Item {
                     label: sb.app.grove.env("USER") || "Home"; icon: "user-home"; path: sb.places.home || ""
                     tip: "Your home folder (Ctrl+Shift+H)"; dropTarget: true
                     // Finder lists home once, under Favourites.
-                    visible: !(sb.places.favourites || []).some(f => f.path === sb.places.home)
+                    shown: !(sb.places.favourites || []).some(f => f.path === sb.places.home)
                     onActivated: sb.win.go(sb.places.home)
                 }
                 Repeater {
@@ -313,6 +339,7 @@ Item {
                     tip: "Items you deleted. Drag items here to move them to the Trash; right-click to empty it."
                     dropTarget: true
                     onActivated: sb.win.go("trash:///")
+                    customMenu: true
                     onMenu: trashMenu.popup()
                 }
             }
@@ -340,10 +367,13 @@ Item {
                         dim: true
                         tip: "Saved server — click to connect"
                         onActivated: sb.win.connectSaved(modelData)
+                        key: "server:" + modelData.name
+                        customMenu: true
                         onMenu: serverMenu.openFor(modelData.name)
                     }
                 }
                 Place {
+                    key: "connect"
                     label: "Connect to Server…"; icon: "network-connect|network-workgroup"
                     tip: "Open an SFTP, Windows (SMB) or WebDAV share, a cloud drive or a phone (Ctrl+K)"
                     onActivated: sb.win.connectServer()
@@ -361,6 +391,7 @@ Item {
                         label: modelData.name
                         dot: modelData.color !== "" ? modelData.color : "transparent"
                         icon: "tag"
+                        key: "tag:" + modelData.name
                         tip: "Everything in your home folder tagged “" + modelData.name + "”"
                         onActivated: sb.win.activePane.showTag(modelData.name)
                     }
@@ -379,6 +410,8 @@ Item {
                         icon: "folder-saved-search|edit-find"
                         tip: "Saved search in " + modelData.root
                         onActivated: sb.win.activePane.runSmartFolder(modelData)
+                        key: "smart:" + modelData.name
+                        customMenu: true
                         onMenu: smartMenu.openFor(modelData.name)
                     }
                 }
@@ -393,22 +426,49 @@ Item {
         GMenuItem { text: "Open in New Tab"; iconName: "tab-new"; onTriggered: sb.win.newTab(favMenu.path, []) }
         GMenuItem { text: "Get Info"; iconName: "documentinfo"; onTriggered: sb.win.showInfo([favMenu.path]) }
         GMenuItem { text: "Remove from Sidebar"; iconName: "list-remove"; onTriggered: sb.app.grove.removeFavourite(favMenu.path) }
+        HideItem {}
+    }
+    // Hide / show the entry right-clicked (Dolphin's "Hide").
+    component HideItem: GMenuItem {
+        readonly property var t: placeMenu.target
+        text: t && t.isHidden ? "Show “" + t.label + "”" : "Hide " + (t ? "“" + t.label + "”" : "")
+        iconName: t && t.isHidden ? "view-visible|visibility" : "view-hidden|hint"
+        enabled: !!t && t.key !== ""
+        tip: "Hidden entries come back with Show Hidden Entries (right-click a section heading)"
+        onTriggered: sb.setHidden(t.key, !t.isHidden)
+    }
+    GMenu {
+        id: placeMenu
+        property var target: null
+        GMenuItem { text: "Open in New Tab"; iconName: "tab-new"; enabled: !!placeMenu.target && placeMenu.target.path !== ""; onTriggered: sb.win.newTab(placeMenu.target.path, []) }
+        GMenuItem { text: "Get Info"; iconName: "documentinfo"; enabled: !!placeMenu.target && placeMenu.target.path.indexOf("/") === 0; onTriggered: sb.win.showInfo([placeMenu.target.path]) }
+        HideItem {}
+        GMenuSeparator {}
+        GMenuItem { text: "Show Hidden Entries"; checkable: true; checked: sb.showHiddenPlaces; enabled: sb.hiddenPlaces.length > 0; onTriggered: sb.showHiddenPlaces = !sb.showHiddenPlaces }
+    }
+    GMenu {
+        id: sectionMenu
+        GMenuItem { text: "Show Hidden Entries"; checkable: true; checked: sb.showHiddenPlaces; enabled: sb.hiddenPlaces.length > 0; tip: "Entries you hid show dimmed, so you can unhide them (right-click › Show)"; onTriggered: sb.showHiddenPlaces = !sb.showHiddenPlaces }
+        GMenuItem { text: "Unhide All"; enabled: sb.hiddenPlaces.length > 0; tip: "Show every entry you hid"; onTriggered: sb.app.grove.setSetting("hidden_places", "[]") }
     }
     GMenu {
         id: trashMenu
         GMenuItem { text: "Open"; onTriggered: sb.win.go("trash:///") }
         GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; enabled: sb.app.trashCount > 0; onTriggered: sb.win.emptyTrash() }
+        HideItem {}
     }
     GMenu {
         id: serverMenu
         property string name: ""
         function openFor(n) { name = n; popup() }
         GMenuItem { text: "Forget This Server"; iconName: "list-remove"; onTriggered: Async.call(sb.app.grove, k => sb.app.grove.forgetServer(k, serverMenu.name), r => sb.reload()) }
+        HideItem {}
     }
     GMenu {
         id: smartMenu
         property string name: ""
         function openFor(n) { name = n; popup() }
         GMenuItem { text: "Remove Smart Folder"; iconName: "list-remove"; onTriggered: sb.app.grove.removeSmartFolder(smartMenu.name) }
+        HideItem {}
     }
 }

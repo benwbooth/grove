@@ -470,13 +470,29 @@ ApplicationWindow {
                 height: app.settings.show_status_bar !== false ? Math.round(26 * Theme.pt) : 0
                 visible: height > 0
                 Rectangle { width: parent.width; height: 1; color: Theme.separator }
+                // Dolphin's status bar: the summary, and the free space (Finder
+                // puts "… available" there too).
+                property string freeText: ""
+                function refreshFree() {
+                    const p = bw.activePane ? bw.activePane.path : ""
+                    if (p.indexOf("/") !== 0) { freeText = ""; return }
+                    Async.call(bw.app.grove, k => bw.app.grove.freeSpace(k, p), r => {
+                        if (!bw.activePane || bw.activePane.path !== p) return
+                        statusBar.freeText = r.total > 0 ? bw.app.size(r.free) + " available" : ""
+                    })
+                }
+                Connections { target: bw; function onActivePaneChanged() { statusBar.refreshFree() } }
+                Connections { target: bw.activePane ? bw.activePane.model : null; function onLoaded() { statusBar.refreshFree() } }
+                Connections { target: bw.app.grove; function onFoldersTouched() { freeTimer.restart() } }
+                Timer { id: freeTimer; interval: 800; onTriggered: statusBar.refreshFree() }
                 GLabel {
                     x: 12
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - zoomRow.width - 40
-                    text: bw.activePane ? bw.activePane.model.status : ""
+                    text: (bw.activePane ? bw.activePane.model.status : "") + (statusBar.freeText ? ", " + statusBar.freeText : "")
                     font.pixelSize: Theme.small
                     color: Theme.fgSecondary
+                    elide: Text.ElideRight
                 }
                 Row {
                     id: zoomRow
@@ -965,6 +981,9 @@ ApplicationWindow {
         else if (cmd === "qlsave") ql.saveEdit(arg)
         else if (cmd === "burn") burn(arg ? arg.split(",") : [p.path])
         else if (cmd === "burngo") burnSheet.goImage()
+        else if (cmd === "hideplace") setSetting("hidden_places", arg.split(","))
+        else if (cmd === "showhiddenplaces") sidebar.showHiddenPlaces = true
+        else if (cmd === "columns") setSetting("list_columns", arg.split(","))
         else if (cmd === "tip") { setSetting("preview_tooltips", true); p.testTip = Number(arg) }
         else if (cmd === "recordkey") settingsWin.recordSeq(arg)
         else if (cmd === "key") { const [k, m] = arg.split(":"); app.grove.testKey(Number(k), Number(m || 0), "") }

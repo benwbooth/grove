@@ -262,6 +262,10 @@ pub mod ffi {
         #[qinvokable]
         fn media_trim(self: &Grove, key: &QString, path: &QString, start_ms: f64, end_ms: f64, mode: &QString);
 
+        /// Free and total bytes on the disk holding `path` ({free, total}).
+        #[qinvokable]
+        fn free_space(self: &Grove, key: &QString, path: &QString);
+
         // --- burning ---
         /// Optical drives: JSON [{dev, name, canWrite}].
         #[qinvokable]
