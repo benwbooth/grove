@@ -164,6 +164,11 @@ ApplicationWindow {
         }
         Toast { id: toastBox; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 70 }
     }
+    Timer {
+        running: fc.app.screenshot !== ""
+        interval: 2500
+        onTriggered: { fc.app.grove.grabWindows(fc.app.screenshot); fc.app.grove.chooserDone(fc.request.id, false, "[]", "{}"); fc.answered = true; Qt.quit() }
+    }
     Component.onCompleted: {
         let start = request.currentFolder || ""
         if (request.currentFile) {

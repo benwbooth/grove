@@ -46,16 +46,49 @@ fn opt_bytes(o: &HashMap<String, OwnedValue>, k: &str) -> String {
 
 type Filter = (String, Vec<(u32, String)>);
 
+/// a(sa(us)) from a variant, walked by hand (robust to how it was packed).
+fn parse_filters(v: &Value) -> Vec<Filter> {
+    let v = match v {
+        Value::Value(inner) => inner.as_ref(),
+        x => x,
+    };
+    let Value::Array(arr) = v else { return vec![] };
+    let mut out = vec![];
+    for item in arr.iter() {
+        let Value::Structure(st) = item else { continue };
+        let f = st.fields();
+        let name = match f.first() {
+            Some(Value::Str(s)) => s.to_string(),
+            _ => continue,
+        };
+        let mut pats = vec![];
+        if let Some(Value::Array(pa)) = f.get(1) {
+            for p in pa.iter() {
+                if let Value::Structure(ps) = p {
+                    let pf = ps.fields();
+                    if let (Some(Value::U32(k)), Some(Value::Str(pat))) = (pf.first(), pf.get(1)) {
+                        pats.push((*k, pat.to_string()));
+                    }
+                }
+            }
+        }
+        out.push((name, pats));
+    }
+    out
+}
+
 fn filters(o: &HashMap<String, OwnedValue>) -> Vec<serde_json::Value> {
-    let f: Vec<Filter> = o.get("filters").and_then(|v| v.try_clone().ok()).and_then(|v| Vec::<Filter>::try_from(v).ok()).unwrap_or_default();
+    let f: Vec<Filter> = o.get("filters").map(|v| parse_filters(v)).unwrap_or_default();
     f.into_iter()
         .map(|(name, pats)| json!({"name": name, "patterns": pats.into_iter().map(|(k, p)| json!({"mime": k == 1, "pattern": p})).collect::<Vec<_>>()}))
         .collect()
 }
 
 fn current_filter(o: &HashMap<String, OwnedValue>) -> String {
-    let f: Option<Filter> = o.get("current_filter").and_then(|v| v.try_clone().ok()).and_then(|v| Filter::try_from(v).ok());
-    f.map(|x| x.0).unwrap_or_default()
+    let Some(v) = o.get("current_filter") else { return String::new() };
+    let v: &Value = v;
+    let arr = Value::Array(zbus::zvariant::Array::from(vec![v.try_clone().unwrap_or(Value::from(""))]));
+    parse_filters(&arr).into_iter().next().map(|x| x.0).unwrap_or_default()
 }
 
 impl Chooser {
