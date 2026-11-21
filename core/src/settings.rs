@@ -84,6 +84,27 @@ pub struct Settings {
     pub welcomed: bool,
     #[serde(default)]
     pub sidebar_width: u32,
+    /// List view columns after the name, in order.
+    #[serde(default = "default_columns")]
+    pub list_columns: Vec<String>,
+    /// Dolphin's Information panel / Finder's preview pane on the right.
+    #[serde(default)]
+    pub info_panel: bool,
+    /// Dolphin's Folders panel (a tree) next to the sidebar.
+    #[serde(default)]
+    pub folders_panel: bool,
+    /// Reopen last time's windows and tabs.
+    #[serde(default = "t")]
+    pub restore_session: bool,
+    /// Opening an archive shows what's inside (as a folder).
+    #[serde(default = "t")]
+    pub browse_archives: bool,
+    #[serde(default)]
+    pub list_thumbnails: bool,
+}
+
+fn default_columns() -> Vec<String> {
+    ["modified", "size", "kind", "tags"].iter().map(|s| s.to_string()).collect()
 }
 
 impl Default for Settings {

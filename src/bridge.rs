@@ -209,6 +209,27 @@ pub mod ffi {
         #[qinvokable]
         fn run_service_menu(self: &Grove, exec: &QString, paths: &QString);
 
+        // --- Dolphin/Finder extras ---
+        #[qinvokable]
+        fn checksum(self: &Grove, key: &QString, path: &QString, algo: &QString);
+        #[qinvokable]
+        fn versions(self: &Grove, key: &QString, path: &QString);
+        #[qinvokable]
+        fn git_action(self: &Grove, key: &QString, dir: &QString, action: &QString, paths: &QString, arg: &QString);
+        #[qinvokable]
+        fn compare_files(self: &Grove, key: &QString, a: &QString, b: &QString, dark: bool);
+        #[qinvokable]
+        fn mount_image(self: &Grove, key: &QString, path: &QString);
+        #[qinvokable]
+        fn set_rating(self: &Grove, key: &QString, paths: &QString, rating: i32);
+        #[qinvokable]
+        fn set_folder_icon(self: &Grove, key: &QString, dir: &QString, icon: &QString);
+        /// Windows and tabs from last time (JSON), read at start-up.
+        #[qinvokable]
+        fn session(self: &Grove) -> QString;
+        #[qinvokable]
+        fn save_session(self: &Grove, json: &QString);
+
         // --- remote places (phase 2) ---
         #[qinvokable]
         fn connect_server(self: &Grove, key: &QString, json: &QString);

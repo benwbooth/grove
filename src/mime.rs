@@ -120,3 +120,59 @@ pub fn thumbable(e: &Entry, m: &MimeRec) -> bool {
     let ts = grove_core::thumbs::thumbnailers();
     ts.iter().any(|t| t.mime_types.iter().any(|x| x == n))
 }
+
+/// A folder's own icon from its .directory file (Dolphin's way: an
+/// [Desktop Entry] Icon= theme name or image path).
+pub fn custom_folder_icon(dir: &std::path::Path) -> String {
+    let Ok(t) = std::fs::read_to_string(dir.join(".directory")) else { return String::new() };
+    let mut in_entry = false;
+    for l in t.lines() {
+        let l = l.trim();
+        if l.starts_with('[') {
+            in_entry = l == "[Desktop Entry]";
+        } else if in_entry {
+            if let Some(v) = l.strip_prefix("Icon=") {
+                let v = v.trim();
+                if v.starts_with('/') || v.starts_with("./") {
+                    let p = if let Some(r) = v.strip_prefix("./") { dir.join(r) } else { std::path::PathBuf::from(v) };
+                    return format!("{}|folder", p.display());
+                }
+                return format!("{v}|folder");
+            }
+        }
+    }
+    String::new()
+}
+
+/// Set (or clear, with "") a folder's icon in its .directory file,
+/// keeping whatever else is in it.
+pub fn set_custom_folder_icon(dir: &std::path::Path, icon: &str) -> Result<(), String> {
+    let f = dir.join(".directory");
+    let text = std::fs::read_to_string(&f).unwrap_or_default();
+    let mut lines: Vec<String> = text.lines().map(String::from).collect();
+    let mut start = lines.iter().position(|l| l.trim() == "[Desktop Entry]");
+    if start.is_none() {
+        if !lines.is_empty() {
+            lines.push(String::new());
+        }
+        lines.push("[Desktop Entry]".into());
+        start = Some(lines.len() - 1);
+    }
+    let s = start.unwrap();
+    let end = lines.iter().enumerate().skip(s + 1).find(|(_, l)| l.trim().starts_with('[')).map(|(i, _)| i).unwrap_or(lines.len());
+    let existing = (s + 1..end).find(|&i| lines[i].trim_start().starts_with("Icon="));
+    match (existing, icon.is_empty()) {
+        (Some(i), true) => {
+            lines.remove(i);
+        }
+        (Some(i), false) => lines[i] = format!("Icon={icon}"),
+        (None, false) => lines.insert(s + 1, format!("Icon={icon}")),
+        (None, true) => {}
+    }
+    let only_header = lines.iter().filter(|l| !l.trim().is_empty()).count() == 1;
+    if only_header {
+        let _ = std::fs::remove_file(&f);
+        return Ok(());
+    }
+    std::fs::write(&f, lines.join("\n") + "\n").map_err(|e| grove_core::util::plain_error(&e, &f))
+}

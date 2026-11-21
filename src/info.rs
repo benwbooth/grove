@@ -81,6 +81,8 @@ pub fn info(path: &str) -> Value {
         "mine": m.uid() == unsafe { libc::getuid() },
         "writable": writable(p),
         "tags": grove_core::tags::get(p),
+        "rating": grove_core::tags::rating(p),
+        "customIcon": if m.is_dir() { crate::mime::custom_folder_icon(p) } else { String::new() },
         "comment": grove_core::tags::comment(p),
         "defaultApp": def.map(|a| json!({"id": a.id, "name": a.name, "icon": a.icon})),
         "mount": mount.display().to_string(),
@@ -137,4 +139,31 @@ pub fn set_owner(path: &str, owner: &str, group: &str, recursive: bool) -> Value
         }
     }
     pkexec(&args)
+}
+
+/// User/group names for list columns (cached: looked up once per id).
+pub fn user_name_cached(uid: u32) -> String {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static C: OnceLock<Mutex<HashMap<u32, String>>> = OnceLock::new();
+    let c = C.get_or_init(Default::default);
+    if let Some(n) = c.lock().unwrap().get(&uid) {
+        return n.clone();
+    }
+    let n = user_name(uid);
+    c.lock().unwrap().insert(uid, n.clone());
+    n
+}
+
+pub fn group_name_cached(gid: u32) -> String {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static C: OnceLock<Mutex<HashMap<u32, String>>> = OnceLock::new();
+    let c = C.get_or_init(Default::default);
+    if let Some(n) = c.lock().unwrap().get(&gid) {
+        return n.clone();
+    }
+    let n = group_name(gid);
+    c.lock().unwrap().insert(gid, n.clone());
+    n
 }

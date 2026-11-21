@@ -75,8 +75,70 @@ pub fn status(dir: &str) -> Value {
     let map = parse_porcelain(&top, &d, &out);
     // Paths back in the folder's own spelling (not canonicalized).
     let orig = Path::new(dir);
-    let m: HashMap<String, String> = map.into_iter().map(|(k, v)| (orig.join(Path::new(&k).strip_prefix(&d).unwrap_or(Path::new(&k))).to_string_lossy().into_owned(), v)).collect();
+    let mut m: HashMap<String, String> = map.into_iter().map(|(k, v)| (orig.join(Path::new(&k).strip_prefix(&d).unwrap_or(Path::new(&k))).to_string_lossy().into_owned(), v)).collect();
+    m.insert("__repo".into(), "1".into());
     json!(m)
+}
+
+fn run_git(dir: &str, args: &[&str]) -> (bool, String) {
+    match std::process::Command::new("git").arg("-C").arg(dir).args(args).env("GIT_TERMINAL_PROMPT", "0").output() {
+        Ok(o) => {
+            let mut t = String::from_utf8_lossy(&o.stdout).into_owned();
+            let e = String::from_utf8_lossy(&o.stderr);
+            if !e.trim().is_empty() {
+                if !t.is_empty() {
+                    t.push('\n');
+                }
+                t.push_str(e.trim());
+            }
+            (o.status.success(), t)
+        }
+        Err(_) => (false, "git isn't installed.".into()),
+    }
+}
+
+/// Dolphin's git menu: pull, push, commit, add, log, diff.
+pub fn action(dir: &str, action: &str, paths: &[PathBuf], arg: &str, dark: bool) -> Value {
+    let rel: Vec<String> = paths.iter().map(|p| p.to_string_lossy().into_owned()).collect();
+    let mut args: Vec<&str> = vec![];
+    let (ok, out) = match action {
+        "pull" => run_git(dir, &["pull", "--ff-only"]),
+        "push" => run_git(dir, &["push"]),
+        "add" => {
+            args.extend(["add", "--"]);
+            args.extend(rel.iter().map(String::as_str));
+            run_git(dir, &args)
+        }
+        "commit" => {
+            if arg.trim().is_empty() {
+                return json!({"error": "A commit needs a message describing the change."});
+            }
+            if rel.is_empty() {
+                run_git(dir, &["commit", "-a", "-m", arg])
+            } else {
+                args.extend(["commit", "-m", arg, "--"]);
+                args.extend(rel.iter().map(String::as_str));
+                run_git(dir, &args)
+            }
+        }
+        "log" => {
+            args.extend(["log", "--date=short", "--pretty=format:%h  %ad  %an  %s", "-n", "300", "--"]);
+            args.extend(rel.iter().map(String::as_str));
+            run_git(dir, &args)
+        }
+        "diff" => {
+            args.extend(["diff", "HEAD", "--"]);
+            args.extend(rel.iter().map(String::as_str));
+            let (ok, t) = run_git(dir, &args);
+            return json!({"ok": ok, "output": t, "html": crate::preview::highlight(&t, "x.diff", dark)});
+        }
+        _ => return json!({"error": format!("Unknown git action “{action}”.")}),
+    };
+    if ok {
+        json!({"ok": true, "output": out})
+    } else {
+        json!({"error": if out.is_empty() { format!("git {action} didn't work.") } else { out }})
+    }
 }
 
 #[cfg(test)]

@@ -83,6 +83,29 @@ pub fn toggle(paths: &[&Path], tag: &str) -> Result<bool, String> {
     Ok(!all)
 }
 
+/// Dolphin's rating (0–10, two per star) in `user.baloo.rating`.
+pub const RATING_ATTR: &str = "user.baloo.rating";
+
+pub fn rating(path: &Path) -> u8 {
+    match xattr::get(path, RATING_ATTR) {
+        Ok(Some(b)) => String::from_utf8_lossy(&b).trim().parse::<u8>().unwrap_or(0).min(10),
+        _ => 0,
+    }
+}
+
+pub fn set_rating(path: &Path, r: u8) -> Result<(), String> {
+    let r = r.min(10);
+    let res = if r == 0 {
+        match xattr::remove(path, RATING_ATTR) {
+            Err(e) if e.raw_os_error() == Some(libc::ENODATA) => Ok(()),
+            x => x,
+        }
+    } else {
+        xattr::set(path, RATING_ATTR, r.to_string().as_bytes())
+    };
+    res.map_err(|e| crate::util::plain_error(&e, path))
+}
+
 pub fn comment(path: &Path) -> String {
     match xattr::get(path, COMMENT_ATTR) {
         Ok(Some(b)) => String::from_utf8_lossy(&b).into_owned(),
@@ -162,5 +185,10 @@ mod tests {
         xattr::set(&f, TAGS_ATTR, b"a, b,,c").unwrap();
         assert_eq!(get(&f), vec!["a", "b", "c"]);
         assert_eq!(color_of("grey"), Some("#98989d"));
+        set_rating(&f, 8).unwrap();
+        assert_eq!(xattr::get(&f, RATING_ATTR).unwrap().unwrap(), b"8");
+        assert_eq!(rating(&f), 8);
+        set_rating(&f, 0).unwrap();
+        assert_eq!(rating(&f), 0);
     }
 }

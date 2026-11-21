@@ -1,21 +1,41 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// List view: sortable, resizable columns; folders expand in place with
+// List view (Finder's list, Dolphin's details): sortable, resizable,
+// choosable columns (right-click the header); folders expand in place with
 // their disclosure triangles (Right/Left keys too). Virtualized.
 Item {
     id: root
     property var pane
     property var fm: pane.model
     readonly property bool showWhere: pane.searching || pane.path.indexOf("recent:") === 0 || pane.inTrash || pane.inArchive
-    property real wName: Math.max(220, width - wDate - wSize - wKind - wTags - (showWhere ? wWhere : 0) - 30)
-    property real wDate: Math.round(170 * Theme.pt)
-    property real wSize: Math.round(80 * Theme.pt)
-    property real wKind: Math.round(130 * Theme.pt)
-    property real wTags: Math.round(70 * Theme.pt)
-    property real wWhere: Math.round(200 * Theme.pt)
     readonly property int rowH: Theme.rowHeight
     readonly property bool thumbs: !pane.app || pane.app.settings.show_thumbnails !== false
+    readonly property var allColumns: ({
+        where: { label: pane.inTrash ? "Original Location" : "Where", w: 200 },
+        modified: { label: "Date Modified", w: 170, sort: "modified" },
+        created: { label: "Date Created", w: 170, sort: "created" },
+        added: { label: "Date Added", w: 170, sort: "added" },
+        opened: { label: "Last Opened", w: 170, sort: "accessed" },
+        size: { label: "Size", w: 80, sort: "size", right: true },
+        kind: { label: "Kind", w: 130, sort: "kind" },
+        tags: { label: "Tags", w: 70 },
+        rating: { label: "Rating", w: 90 },
+        permissions: { label: "Permissions", w: 110 },
+        owner: { label: "Owner", w: 90 },
+        group: { label: "Group", w: 90 },
+        path: { label: "Path", w: 240 }
+    })
+    readonly property var columns: {
+        let c = (pane.app && pane.app.settings.list_columns) ? pane.app.settings.list_columns.slice() : ["modified", "size", "kind", "tags"]
+        if (pane.inTrash) c = c.map(k => k === "modified" ? "created" : k)
+        if (showWhere && c.indexOf("where") < 0) c.unshift("where")
+        return c.filter(k => allColumns[k] !== undefined)
+    }
+    property var widths: ({})
+    function colW(k) { return (widths[k] || allColumns[k].w) * Theme.pt }
+    readonly property real fixedW: { let t = 0; for (const k of columns) t += colW(k); return t }
+    readonly property real wName: Math.max(220, width - fixedW - 30)
 
     function positionAt(row) { if (row >= 0) list.positionViewAtIndex(row, ListView.Contain) }
     function handleKey(e) {
@@ -41,17 +61,18 @@ Item {
         }
         return false
     }
+    function stars(n) { let s = ""; for (let i = 0; i < 5; i++) s += (n >= (i + 1) * 2) ? "★" : (n === i * 2 + 1 ? "⯪" : "☆"); return n > 0 ? s : "" }
 
     component HeaderCell: Item {
         id: hc
         property string label: ""
         property string key: ""
+        property string col: ""
         property string tip: ""
         property real w: 100
-        signal resized(real w)
         width: w
         height: parent.height
-        readonly property bool sorted: root.fm.sortKey === key
+        readonly property bool sorted: key !== "" && root.fm.sortKey === key
         GLabel {
             x: 8
             width: parent.width - 24
@@ -73,19 +94,25 @@ Item {
             id: hm
             anchors.fill: parent
             hoverEnabled: true
-            enabled: hc.key !== ""
-            onClicked: root.pane.sortBy(hc.key)
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: (m) => { if (m.button === Qt.RightButton) colMenu.popup(); else if (hc.key !== "") root.pane.sortBy(hc.key) }
         }
-        GTip { visible: hm.containsMouse && hc.tip !== ""; text: hc.tip }
+        GTip { visible: hm.containsMouse; text: (hc.key ? "Sort by " + hc.label.toLowerCase() + " (click again to reverse). " : "") + "Right-click to choose columns." }
         Rectangle { anchors.right: parent.right; width: 1; height: parent.height - 8; anchors.verticalCenter: parent.verticalCenter; color: Theme.separator }
         MouseArea {
+            visible: hc.col !== ""
             width: 8; height: parent.height
             anchors.right: parent.right; anchors.rightMargin: -4
             cursorShape: Qt.SplitHCursor
             property real startX: 0
             property real startW: 0
             onPressed: (m) => { startX = mapToItem(root, m.x, 0).x; startW = hc.w }
-            onPositionChanged: (m) => { if (pressed) hc.resized(Math.max(50, startW + mapToItem(root, m.x, 0).x - startX)) }
+            onPositionChanged: (m) => {
+                if (!pressed) return
+                const w = Object.assign({}, root.widths)
+                w[hc.col] = Math.max(50, startW + mapToItem(root, m.x, 0).x - startX) / Theme.pt
+                root.widths = w
+            }
         }
     }
 
@@ -98,14 +125,40 @@ Item {
         Row {
             anchors.fill: parent
             anchors.leftMargin: 10
-            HeaderCell { label: "Name"; key: "name"; w: root.wName; tip: "Sort by name (click again to reverse)" }
-            HeaderCell { label: root.pane.inTrash ? "Original Location" : "Where"; w: root.wWhere; visible: root.showWhere; onResized: (w) => root.wWhere = w }
-            HeaderCell { label: root.pane.inTrash ? "Date Deleted" : "Date Modified"; key: root.pane.inTrash ? "created" : "modified"; w: root.wDate; tip: "Sort by date (newest first)"; onResized: (w) => root.wDate = w }
-            HeaderCell { label: "Size"; key: "size"; w: root.wSize; tip: "Sort by size (largest first)"; onResized: (w) => root.wSize = w }
-            HeaderCell { label: "Kind"; key: "kind"; w: root.wKind; tip: "Sort by kind of file"; onResized: (w) => root.wKind = w }
-            HeaderCell { label: "Tags"; w: root.wTags; onResized: (w) => root.wTags = w }
+            HeaderCell { label: "Name"; key: "name"; w: root.wName }
+            Repeater {
+                model: root.columns
+                HeaderCell {
+                    required property string modelData
+                    col: modelData
+                    label: root.allColumns[modelData].label
+                    key: root.allColumns[modelData].sort || ""
+                    w: root.colW(modelData)
+                }
+            }
         }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.separator }
+    }
+
+    GMenu {
+        id: colMenu
+        Instantiator {
+            onObjectAdded: (i, o) => colMenu.insertItem(i, o)
+            onObjectRemoved: (i, o) => colMenu.removeItem(o)
+            model: ["modified", "created", "added", "opened", "size", "kind", "tags", "rating", "permissions", "owner", "group", "path"]
+            GMenuItem {
+                required property string modelData
+                text: root.allColumns[modelData].label
+                checkable: true
+                checked: root.columns.indexOf(modelData) >= 0
+                onTriggered: {
+                    let c = (root.pane.app.settings.list_columns || ["modified", "size", "kind", "tags"]).slice()
+                    const i = c.indexOf(modelData)
+                    if (i >= 0) c.splice(i, 1); else c.push(modelData)
+                    root.pane.app.grove.setSetting("list_columns", JSON.stringify(c))
+                }
+            }
+        }
     }
 
     MouseArea {
@@ -148,6 +201,8 @@ Item {
             required property string iconName
             required property string dateText
             required property string createdText
+            required property string addedText
+            required property string openedText
             required property string sizeText
             required property string kind
             required property string tags
@@ -158,9 +213,31 @@ Item {
             required property bool hidden
             required property bool thumb
             required property real mtime
+            required property int rating
+            required property string permissions
+            required property string owner
+            required property string group
+            required property string fullPath
             width: list.width
             height: root.rowH
             readonly property bool renaming: root.pane.renamingRow === index
+            function cell(k) {
+                switch (k) {
+                case "where": return note
+                case "modified": return dateText
+                case "created": return createdText
+                case "added": return addedText
+                case "opened": return openedText
+                case "size": return sizeText
+                case "kind": return kind
+                case "rating": return root.stars(rating)
+                case "permissions": return permissions
+                case "owner": return owner
+                case "group": return group
+                case "path": return fullPath
+                }
+                return ""
+            }
 
             Rectangle {
                 anchors.fill: parent
@@ -215,7 +292,7 @@ Item {
                         asynchronous: true
                         sourceSize.width: Math.ceil(18 * Screen.devicePixelRatio)
                         sourceSize.height: Math.ceil(18 * Screen.devicePixelRatio)
-                        source: rowItem.thumb && root.thumbs && root.pane.app.settings.list_thumbnails ? "image://thumb/" + encodeURIComponent(rowItem.path) + "?m=" + rowItem.mtime : ""
+                        source: rowItem.thumb && root.thumbs && root.pane.app && root.pane.app.settings.list_thumbnails ? "image://thumb/" + encodeURIComponent(rowItem.path) + "?m=" + rowItem.mtime : ""
                     }
                     GitBadge { status: rowItem.git; anchors.right: ic.right; anchors.bottom: ic.bottom; anchors.margins: -4; scale: 0.8 }
                     GLabel {
@@ -238,13 +315,25 @@ Item {
                         sourceComponent: RenameField { pane: root.pane; row: rowItem.index; original: rowItem.name; isDir: rowItem.isDir }
                     }
                 }
-                GLabel { visible: root.showWhere; width: root.wWhere; leftPadding: 8; anchors.verticalCenter: parent.verticalCenter; text: rowItem.note; color: rowItem.dimColor; elide: Text.ElideMiddle }
-                GLabel { width: root.wDate; leftPadding: 8; anchors.verticalCenter: parent.verticalCenter; text: root.pane.inTrash ? rowItem.createdText : rowItem.dateText; color: rowItem.dimColor }
-                GLabel { width: root.wSize; leftPadding: 8; rightPadding: 12; horizontalAlignment: Text.AlignRight; anchors.verticalCenter: parent.verticalCenter; text: rowItem.sizeText; color: rowItem.dimColor }
-                GLabel { width: root.wKind; leftPadding: 8; anchors.verticalCenter: parent.verticalCenter; text: rowItem.kind; color: rowItem.dimColor }
-                Item {
-                    width: root.wTags; height: parent.height
-                    TagDots { x: 8; anchors.verticalCenter: parent.verticalCenter; tags: rowItem.tags; colors: rowItem.tagColors }
+                Repeater {
+                    model: root.columns
+                    Item {
+                        required property string modelData
+                        width: root.colW(modelData)
+                        height: rowItem.height
+                        GLabel {
+                            visible: parent.modelData !== "tags"
+                            anchors.fill: parent
+                            leftPadding: 8
+                            rightPadding: 12
+                            horizontalAlignment: root.allColumns[parent.modelData].right ? Text.AlignRight : Text.AlignLeft
+                            text: rowItem.cell(parent.modelData)
+                            color: parent.modelData === "rating" ? Theme.accent : rowItem.dimColor
+                            font.family: parent.modelData === "permissions" ? Theme.mono : Theme.family
+                            elide: parent.modelData === "where" || parent.modelData === "path" ? Text.ElideMiddle : Text.ElideRight
+                        }
+                        TagDots { visible: parent.modelData === "tags" && rowItem.tags !== ""; x: 8; anchors.verticalCenter: parent.verticalCenter; tags: rowItem.tags; colors: rowItem.tagColors }
+                    }
                 }
             }
             ItemMouse {

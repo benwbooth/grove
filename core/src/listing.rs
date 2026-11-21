@@ -22,6 +22,8 @@ pub struct Entry {
     pub mtime: i64,
     pub atime: i64,
     pub btime: i64,
+    /// Status change time (Finder's "Date Added" stand-in: when it was put here).
+    pub ctime: i64,
     pub mode: u32,
     pub uid: u32,
     pub gid: u32,
@@ -68,6 +70,7 @@ impl Entry {
             mtime: meta.mtime(),
             atime: meta.atime(),
             btime,
+            ctime: lmeta.ctime(),
             mode: meta.mode(),
             uid: meta.uid(),
             gid: meta.gid(),
@@ -99,6 +102,7 @@ pub enum SortKey {
     Created,
     Kind,
     Accessed,
+    Added,
 }
 
 impl SortKey {
@@ -108,7 +112,8 @@ impl SortKey {
             "modified" | "date" => SortKey::Modified,
             "created" => SortKey::Created,
             "kind" | "type" => SortKey::Kind,
-            "accessed" => SortKey::Accessed,
+            "accessed" | "opened" => SortKey::Accessed,
+            "added" => SortKey::Added,
             _ => SortKey::Name,
         }
     }
@@ -120,6 +125,7 @@ impl SortKey {
             SortKey::Created => "created",
             SortKey::Kind => "kind",
             SortKey::Accessed => "accessed",
+            SortKey::Added => "added",
         }
     }
 }
@@ -141,6 +147,7 @@ pub fn compare(a: &Entry, b: &Entry, s: Sort) -> Ordering {
         SortKey::Modified => a.mtime.cmp(&b.mtime),
         SortKey::Created => a.btime.cmp(&b.btime),
         SortKey::Accessed => a.atime.cmp(&b.atime),
+        SortKey::Added => a.ctime.cmp(&b.ctime),
         SortKey::Kind => natural_cmp(a.ext(), b.ext()),
     };
     let o = o.then_with(|| natural_cmp(&a.name, &b.name));

@@ -170,6 +170,12 @@ pub mod qobject {
         /// (folders always show; [] shows everything).
         #[qinvokable]
         fn apply_patterns(self: Pin<&mut FolderModel>, json: &QString);
+        /// Folders panel: show folders only.
+        #[qinvokable]
+        fn apply_dirs_only(self: Pin<&mut FolderModel>, on: bool);
+        /// Ratings changed on these paths (read again).
+        #[qinvokable]
+        fn refresh_ratings(self: Pin<&mut FolderModel>, paths: &QString);
         /// For performance checks: milliseconds the last listing took.
         #[qinvokable]
         fn last_load_ms(self: &FolderModel) -> i32;
@@ -186,6 +192,8 @@ pub struct Item {
     pub e: Entry,
     pub mime: Arc<MimeRec>,
     pub tags: Vec<String>,
+    pub rating: u8,
+    pub icon: String,
     pub selected: bool,
     pub expanded: bool,
     pub git: String,
@@ -200,6 +208,9 @@ pub struct RawItem {
     pub e: Entry,
     pub mime: Arc<MimeRec>,
     pub tags: Vec<String>,
+    pub rating: u8,
+    /// Custom icon (a folder's .directory Icon=, as Dolphin sets it).
+    pub icon: String,
 }
 
 pub fn raw_from_entry(e: Entry) -> RawItem {
@@ -208,8 +219,12 @@ pub fn raw_from_entry(e: Entry) -> RawItem {
     if mime.name == "application/octet-stream" && !e.is_dir && e.size > 0 && e.size < 8 << 20 && e.path.starts_with('/') {
         mime = std::sync::Arc::new(mime::deep(&e.path));
     }
-    let tags = if e.path.starts_with('/') { grove_core::tags::get(Path::new(&e.path)) } else { vec![] };
-    RawItem { e, mime, tags }
+    let local = e.path.starts_with('/');
+    let tags = if local { grove_core::tags::get(Path::new(&e.path)) } else { vec![] };
+    let rating = if local { grove_core::tags::rating(Path::new(&e.path)) } else { 0 };
+    let icon = if local && e.is_dir { crate::mime::custom_folder_icon(Path::new(&e.path)) } else { String::new() };
+    let icon = if icon.is_empty() { mime::icon_for(&e, &mime) } else { icon };
+    RawItem { e, mime, tags, rating, icon }
 }
 
 #[derive(Default)]
@@ -240,11 +255,13 @@ pub struct FolderModelRust {
     load_ms: i32,
     searching: bool,
     patterns: Vec<(bool, String)>,
+    dirs_only: bool,
 }
 
 const ROLES: &[&str] = &[
     "name", "path", "isDir", "isLink", "size", "sizeText", "mtime", "dateText", "kind", "mime", "iconName", "hidden", "selected", "depth",
     "expanded", "tags", "tagColors", "note", "git", "cut", "thumb", "row", "broken", "ext", "created", "createdText",
+    "rating", "addedText", "openedText", "permissions", "owner", "group", "fullPath",
 ];
 
 fn qs(s: &str) -> QString {
@@ -258,6 +275,9 @@ impl FolderModelRust {
 
     fn visible(&self, it: &Item) -> bool {
         if !self.show_hidden && it.e.hidden && !self.searching {
+            return false;
+        }
+        if self.dirs_only && !it.e.is_dir {
             return false;
         }
         if !self.patterns.is_empty() && !it.e.is_dir {
@@ -367,7 +387,14 @@ impl qobject::FolderModel {
             "createdText" => QVariant::from(&qs(&date_text(it.e.btime))),
             "kind" => QVariant::from(&qs(&it.mime.comment)),
             "mime" => QVariant::from(&qs(&it.mime.name)),
-            "iconName" => QVariant::from(&qs(&mime::icon_for(&it.e, &it.mime))),
+            "iconName" => QVariant::from(&qs(&it.icon)),
+            "rating" => QVariant::from(&(it.rating as i32)),
+            "addedText" => QVariant::from(&qs(&date_text(it.e.ctime))),
+            "openedText" => QVariant::from(&qs(&date_text(it.e.atime))),
+            "permissions" => QVariant::from(&qs(&format!("{}{}", if it.e.is_dir { "d" } else if it.e.is_link { "l" } else { "-" }, crate::info::rwx(it.e.mode)))),
+            "owner" => QVariant::from(&qs(&crate::info::user_name_cached(it.e.uid))),
+            "group" => QVariant::from(&qs(&crate::info::group_name_cached(it.e.gid))),
+            "fullPath" => QVariant::from(&qs(it.e.path.rsplit_once('/').map(|x| x.0).unwrap_or(""))),
             "hidden" => QVariant::from(&it.e.hidden),
             "selected" => QVariant::from(&it.selected),
             "depth" => QVariant::from(&(it.e.depth as i32)),
@@ -629,15 +656,15 @@ impl qobject::FolderModel {
         for mut raw in items {
             raw.e.depth = depth;
             match old.get(&raw.e.path) {
-                Some(o) if o.borrow().e == raw.e && o.borrow().tags == raw.tags => fresh.push(o.clone()),
+                Some(o) if o.borrow().e == raw.e && o.borrow().tags == raw.tags && o.borrow().rating == raw.rating => fresh.push(o.clone()),
                 Some(o) => {
                     let (sel, exp, git) = {
                         let b = o.borrow();
                         (b.selected, b.expanded, b.git.clone())
                     };
-                    fresh.push(Rc::new(RefCell::new(Item { e: raw.e, mime: raw.mime, tags: raw.tags, selected: sel, expanded: exp, git, parent: parent.clone() })));
+                    fresh.push(Rc::new(RefCell::new(Item { e: raw.e, mime: raw.mime, tags: raw.tags, rating: raw.rating, icon: raw.icon, selected: sel, expanded: exp, git, parent: parent.clone() })));
                 }
-                None => fresh.push(Rc::new(RefCell::new(Item { e: raw.e, mime: raw.mime, tags: raw.tags, selected: false, expanded: false, git: String::new(), parent: parent.clone() }))),
+                None => fresh.push(Rc::new(RefCell::new(Item { e: raw.e, mime: raw.mime, tags: raw.tags, rating: raw.rating, icon: raw.icon, selected: false, expanded: false, git: String::new(), parent: parent.clone() }))),
             }
         }
         // Drop the folder's old entries (and contents of removed folders).
@@ -732,7 +759,7 @@ impl qobject::FolderModel {
         if !items.is_empty() {
             let new: Vec<ItemRef> = items
                 .into_iter()
-                .map(|r| Rc::new(RefCell::new(Item { e: r.e, mime: r.mime, tags: r.tags, selected: false, expanded: false, git: String::new(), parent: String::new() })))
+                .map(|r| Rc::new(RefCell::new(Item { e: r.e, mime: r.mime, tags: r.tags, rating: r.rating, icon: r.icon, selected: false, expanded: false, git: String::new(), parent: String::new() })))
                 .collect();
             // Streaming: append (sorted at the end); a single batch is sorted now.
             let visible: Vec<ItemRef> = new.iter().filter(|i| self.rust().visible(&i.borrow())).cloned().collect();
@@ -1010,9 +1037,9 @@ impl qobject::FolderModel {
         let b = it.borrow();
         let v = serde_json::json!({
             "path": b.e.path, "name": b.e.name, "isDir": b.e.is_dir, "isLink": b.e.is_link, "size": b.e.size,
-            "mtime": b.e.mtime, "mime": b.mime.name, "kind": b.mime.comment, "icon": mime::icon_for(&b.e, &b.mime),
+            "mtime": b.e.mtime, "mime": b.mime.name, "kind": b.mime.comment, "icon": b.icon,
             "note": b.e.note, "key": b.e.key, "tags": b.tags, "depth": b.e.depth, "expanded": b.expanded,
-            "thumb": mime::thumbable(&b.e, &b.mime), "target": b.e.target, "selected": b.selected,
+            "thumb": mime::thumbable(&b.e, &b.mime), "target": b.e.target, "selected": b.selected, "rating": b.rating,
         });
         qs(&v.to_string())
     }
@@ -1055,6 +1082,27 @@ impl qobject::FolderModel {
             let p = it.borrow().e.path.clone();
             if set.contains(&p) {
                 it.borrow_mut().tags = grove_core::tags::get(Path::new(&p));
+                rows.push(i as i32);
+            }
+        }
+        for r in rows {
+            qobject::grove_rows_changed(self.as_mut().upcast_pin(), r, r);
+        }
+    }
+
+    fn apply_dirs_only(mut self: Pin<&mut Self>, on: bool) {
+        self.as_mut().rust_mut().dirs_only = on;
+        self.refilter();
+    }
+
+    fn refresh_ratings(mut self: Pin<&mut Self>, paths: &QString) {
+        let list: Vec<String> = serde_json::from_str(&paths.to_string()).unwrap_or_default();
+        let set: HashSet<String> = list.into_iter().collect();
+        let mut rows = Vec::new();
+        for (i, it) in self.rust().vis.iter().enumerate() {
+            let p = it.borrow().e.path.clone();
+            if set.contains(&p) {
+                it.borrow_mut().rating = grove_core::tags::rating(Path::new(&p));
                 rows.push(i as i32);
             }
         }
@@ -1161,6 +1209,7 @@ pub fn special_list(p: &str) -> Vec<RawItem> {
                     size: a.size,
                     mtime,
                     atime: 0,
+                    ctime: 0,
                     btime: 0,
                     mode: 0o644,
                     uid: 0,
@@ -1172,7 +1221,7 @@ pub fn special_list(p: &str) -> Vec<RawItem> {
                     key: String::new(),
                 };
                 let mime = mime::for_entry(&e);
-                RawItem { e, mime, tags: vec![] }
+                RawItem { icon: mime::icon_for(&e, &mime), e, mime, tags: vec![], rating: 0 }
             })
             .collect()
     } else {

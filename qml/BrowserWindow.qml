@@ -16,7 +16,7 @@ ApplicationWindow {
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
     property var currentTab: tabRepeater.count > 0 ? tabRepeater.itemAt(tabBar.currentIndex) : null
     property var activePane: currentTab ? currentTab.activePane : null
-    property bool modalOpen: conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || saveSheet.opened || openWithSheet.opened
+    property bool modalOpen: commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || saveSheet.opened || openWithSheet.opened
 
     width: 1180
     height: 720
@@ -154,10 +154,45 @@ ApplicationWindow {
             if (r.errors && r.errors.length) toast("error", r.errors.join("\n"))
         })
     }
+    function showVersions(path) { versionsSheet.start(path) }
+    function showText(heading, text, html, tool, action) {
+        const w = textComp.createObject(null, { heading: heading, text: text || "", html: html || "", tool: tool || "", toolAction: action || null })
+        w.show()
+    }
+    function gitAction(action, dir, paths, arg) {
+        Async.call(app.grove, k => app.grove.gitAction(k, dir, action, JSON.stringify(paths || []), arg || ""), r => {
+            if (r.error) { toast("error", r.error); return }
+            if (action === "log") showText("Git history", r.output, "", "")
+            else if (action === "diff") showText("Changes (git diff)", r.output, r.output ? r.html : "", "")
+            else toast("info", "git " + action + ": " + (r.output || "done").split("\n").slice(-2).join(" "))
+            forEachPane(p => { if (p.path.indexOf(dir) === 0) p.reload() })
+        })
+    }
+    function compareFiles(a, b) {
+        Async.call(app.grove, k => app.grove.compareFiles(k, a, b, Theme.dark), r => {
+            if (r.error) toast("error", r.error)
+            else if (r.same) toast("info", "The two items are identical.")
+            else showText("Differences", r.text, r.html, r.tool || "", r.tool ? () => app.grove.runCommand(JSON.stringify([r.tool, a, b]), "") : null)
+        })
+    }
+    function mountImage(path) {
+        toast("info", "Opening the disk image…")
+        Async.call(app.grove, k => app.grove.mountImage(k, path), r => { if (r.error) toast("error", r.error); else go(r.path) })
+    }
+    function toOtherPane(move) {
+        const o = currentTab && currentTab.otherPane()
+        if (!o) { toast("info", "Open split view (F3) first: this copies to the other side."); return }
+        const sel = activePane.selectedPaths()
+        if (sel.length) app.grove.runJob(move ? "move" : "copy", JSON.stringify(sel), o.path)
+    }
+    function setPanel(name, on) { setSetting(name, on) }
+    function askCommit(dir, paths) { commitSheet.dir = dir; commitSheet.paths = paths; commitSheet.open() }
+
     function showSettings() { settingsWin.show(); settingsWin.raise(); settingsWin.requestActivate() }
     function showHelp(search) { helpWin.query = search || ""; helpWin.show(); helpWin.raise(); helpWin.requestActivate() }
 
     Component { id: infoComp; InfoWindow {} }
+    Component { id: textComp; TextViewer {} }
 
     // ---------- layout ----------
     Item {
@@ -176,6 +211,15 @@ ApplicationWindow {
             height: parent.height - 16
             currentPath: bw.activePane ? bw.activePane.path : ""
         }
+        FoldersPanel {
+            id: foldersPanel
+            win: bw
+            visible: !!bw.app.settings.folders_panel
+            x: bw.sidebarShown ? sidebar.x + sidebar.width + 8 : 8
+            y: 8
+            width: Math.round(220 * Theme.pt)
+            height: parent.height - 16
+        }
         MouseArea {
             visible: bw.sidebarShown
             x: sidebar.x + sidebar.width
@@ -191,7 +235,7 @@ ApplicationWindow {
 
         Item {
             id: main
-            x: bw.sidebarShown ? sidebar.x + sidebar.width + 8 : 0
+            x: (bw.sidebarShown ? sidebar.x + sidebar.width + 8 : 0) + (foldersPanel.visible ? foldersPanel.width + 8 : 0)
             width: parent.width - x
             height: parent.height
 
@@ -307,7 +351,7 @@ ApplicationWindow {
                 id: stack
                 anchors.top: tabBar.bottom
                 anchors.bottom: statusBar.top
-                width: parent.width
+                width: parent.width - (infoPanel.visible ? infoPanel.width : 0)
                 currentIndex: tabBar.currentIndex
                 Repeater {
                     id: tabRepeater
@@ -319,6 +363,65 @@ ApplicationWindow {
                         win: bw
                         initialPath: path
                         initialSelect: JSON.parse(select)
+                    }
+                }
+            }
+
+            // Dolphin's Information panel / Finder's preview pane (F11, Ctrl+Shift+P).
+            Item {
+                id: infoPanel
+                visible: !!bw.app.settings.info_panel
+                anchors.top: tabBar.bottom
+                anchors.bottom: statusBar.top
+                anchors.right: parent.right
+                width: Math.round(260 * Theme.pt)
+                property var item: null
+                Rectangle { width: 1; height: parent.height; color: Theme.separator }
+                Connections {
+                    target: bw.activePane ? bw.activePane.model : null
+                    function onCurrentRowChanged() { infoPanel.refresh() }
+                    function onSelectionCountChanged() { infoPanel.refresh() }
+                }
+                function refresh() {
+                    const p = bw.activePane
+                    if (!p) { item = null; return }
+                    item = p.model.currentRow >= 0 && p.model.selectionCount > 0 ? p.itemAt(p.model.currentRow) : null
+                }
+                PreviewPanel {
+                    anchors.fill: parent
+                    anchors.bottomMargin: 50
+                    pane: bw.activePane
+                    item: infoPanel.item
+                    visible: infoPanel.item !== null
+                }
+                GLabel {
+                    anchors.centerIn: parent
+                    visible: infoPanel.item === null
+                    text: bw.activePane ? bw.activePane.model.status : ""
+                    color: Theme.fgSecondary
+                }
+                // Rating (Dolphin's stars, user.baloo.rating).
+                Row {
+                    visible: infoPanel.item !== null && bw.activePane && !bw.activePane.special
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 16
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 4
+                    Repeater {
+                        model: 5
+                        GLabel {
+                            required property int index
+                            text: infoPanel.item && infoPanel.item.rating >= (index + 1) * 2 ? "★" : "☆"
+                            color: Theme.accent
+                            font.pixelSize: Theme.large
+                            MouseArea {
+                                id: starMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: bw.activePane.setRating(infoPanel.item.rating === (parent.index + 1) * 2 ? 0 : (parent.index + 1) * 2, () => infoPanel.refresh())
+                            }
+                            GTip { visible: starMouse.containsMouse; text: "Rate " + (parent.index + 1) + " star" + (parent.index ? "s" : "") + " (shared with Dolphin)" }
+                        }
                     }
                 }
             }
@@ -414,6 +517,8 @@ ApplicationWindow {
         GMenuSeparator {}
         GMenuItem { text: "Filter This Folder"; iconName: "view-filter"; shortcutText: "Ctrl+I"; onTriggered: bw.openFilter() }
         GMenuItem { text: "Show Hidden Files"; checkable: true; checked: !!bw.app.settings.show_hidden; shortcutText: "Ctrl+H"; onTriggered: bw.toggleHidden() }
+        GMenuItem { text: "Information Panel"; checkable: true; checked: !!bw.app.settings.info_panel; shortcutText: "F11"; onTriggered: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
+        GMenuItem { text: "Folders Panel"; checkable: true; checked: !!bw.app.settings.folders_panel; shortcutText: "F7"; onTriggered: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
         GMenuItem { text: "Split View"; checkable: true; checked: bw.currentTab && bw.currentTab.split; shortcutText: "F3"; onTriggered: bw.currentTab.toggleSplit() }
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: "Ctrl+Alt+T"; onTriggered: bw.app.grove.openTerminal(bw.activePane.path) }
         GMenuItem { text: "Connect to Server…"; iconName: "network-connect"; shortcutText: "Ctrl+K"; onTriggered: bw.connectServer() }
@@ -453,6 +558,20 @@ ApplicationWindow {
         ]
     }
     BatchRename { id: renameSheet; app: bw.app; win: bw }
+    VersionsSheet { id: versionsSheet; app: bw.app; win: bw }
+    Sheet {
+        id: commitSheet
+        property string dir: ""
+        property var paths: []
+        title: paths.length ? "Commit " + paths.length + " Selected Items" : "Commit All Changes"
+        message: "Describe what changed. This records the changes in git (it doesn't push them)."
+        onOpened: { commitMsg.text = ""; commitMsg.forceActiveFocus() }
+        GField { id: commitMsg; width: parent.width; placeholderText: "What changed"; Keys.onReturnPressed: commitBtn.clicked() }
+        buttons: [
+            PushButton { text: "Cancel"; onClicked: commitSheet.close() },
+            PushButton { id: commitBtn; text: "Commit"; primary: true; enabled: commitMsg.text !== ""; onClicked: { bw.gitAction("commit", commitSheet.dir, commitSheet.paths, commitMsg.text); commitSheet.close() } }
+        ]
+    }
     ConnectServer { id: connectSheet; app: bw.app; win: bw }
     OpenWithSheet { id: openWithSheet; app: bw.app; win: bw }
     Sheet {
@@ -536,6 +655,10 @@ ApplicationWindow {
     Key { sequences: ["Ctrl+Alt+T"]; onActivated: bw.app.grove.openTerminal(bw.activePane.path) }
     Key { sequences: ["Ctrl+E"]; onActivated: { const p = bw.activePane.path; for (const l of (sidebar.places.locations || []).concat(sidebar.places.network || [])) if (l.ejectable && (p === l.path || p.indexOf(l.path + "/") === 0)) bw.eject(l.path, l.name) } }
     Key { sequences: ["Ctrl+,"]; onActivated: bw.showSettings() }
+    Key { sequences: ["F7"]; onActivated: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
+    Key { sequences: ["F11", "Ctrl+Shift+P"]; onActivated: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
+    Key { sequences: ["Shift+F5"]; onActivated: bw.toOtherPane(false) }
+    Key { sequences: ["Shift+F6"]; onActivated: bw.toOtherPane(true) }
     Key { sequences: ["F1", "Ctrl+?", "Ctrl+Shift+/"]; onActivated: bw.showHelp("") }
     Key { sequences: ["Ctrl+Alt+1"]; onActivated: bw.activePane.toggleTag("Red") }
     Key { sequences: ["Ctrl+Alt+2"]; onActivated: bw.activePane.toggleTag("Orange") }

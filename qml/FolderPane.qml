@@ -30,6 +30,7 @@ FocusScope {
     property string typeAhead: ""
     property bool dropHover: false
     property var gitMap: ({})
+    property bool inGit: false
     readonly property bool inTrash: path.indexOf("trash:") === 0
     readonly property bool special: path.indexOf(":///") > 0 || inTrash || path.indexOf("recent:") === 0
     readonly property bool inArchive: path.indexOf("archive://") === 0
@@ -46,7 +47,7 @@ FocusScope {
                 pane.pendingSelect = []
             }
             if (app && app.settings.show_git_status && !pane.special && !pane.searching) {
-                Async.call(grove, k => grove.gitStatus(k, pane.path), r => fm.setGitStatus(JSON.stringify(r || {})))
+                Async.call(grove, k => grove.gitStatus(k, pane.path), r => { pane.gitMap = r || {}; pane.inGit = !!r && r.__repo === "1"; fm.setGitStatus(JSON.stringify(r || {})) })
             }
         }
     }
@@ -150,7 +151,7 @@ FocusScope {
     }
     function sortBy(key) {
         if (fm.sortKey === key) fm.applySort(key, !fm.descending)
-        else fm.applySort(key, key === "modified" || key === "size" || key === "created")
+        else fm.applySort(key, ["modified", "size", "created", "added", "accessed"].indexOf(key) >= 0)
         rememberView()
     }
 
@@ -367,6 +368,22 @@ FocusScope {
         })
     }
     function quickLook() { win.quickLook(pane) }
+    function setRating(r, done) {
+        const sel = selectedPaths()
+        if (!sel.length) return
+        Async.call(grove, k => grove.setRating(k, JSON.stringify(sel), r), res => {
+            if (res.errors && res.errors.length) win.toast("error", res.errors.join("\n"))
+            fm.refreshRatings(JSON.stringify(sel))
+            if (done) done()
+        })
+    }
+    function showEnclosing() {
+        const it = currentItem()
+        if (!it) return
+        const dir = it.path.substring(0, it.path.lastIndexOf("/")) || "/"
+        endSearch(false)
+        navigate(dir, { select: [it.path] })
+    }
     function compress(fmt) { const sel = selectedPaths(); if (sel.length) grove.compress(JSON.stringify(sel), fmt || "zip") }
     function extract() { for (const p of selectedPaths()) grove.extract(p, "") }
 
@@ -639,6 +656,17 @@ FocusScope {
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: "Ctrl+Alt+T"; enabled: !pane.special; onTriggered: pane.grove.openTerminal(pane.path) }
         GMenuItem { text: "Copy Path"; iconName: "edit-copy-path"; shortcutText: "Ctrl+Alt+C"; onTriggered: pane.copyPath() }
         GMenuItem { text: "Add to Favourites"; iconName: "bookmark-new"; enabled: !pane.special; onTriggered: pane.grove.addFavourite(pane.path, -1) }
+        GMenuItem { text: "Browse Previous Versions…"; iconName: "document-open-recent"; enabled: !pane.special; tip: "Earlier copies of this folder from the hourly snapshots"; onTriggered: pane.win.showVersions(pane.path) }
+        GMenu {
+            id: gitBgMenu
+            title: "Git"
+            enabled: pane.inGit
+            GMenuItem { text: "Pull"; iconName: "vcs-pull|go-down"; onTriggered: pane.win.gitAction("pull", pane.path, [], "") }
+            GMenuItem { text: "Push"; iconName: "vcs-push|go-up"; onTriggered: pane.win.gitAction("push", pane.path, [], "") }
+            GMenuItem { text: "Commit All Changes…"; iconName: "vcs-commit|document-save"; onTriggered: pane.win.askCommit(pane.path, []) }
+            GMenuItem { text: "Show Changes"; iconName: "vcs-diff|document-preview"; onTriggered: pane.win.gitAction("diff", pane.path, [], "") }
+            GMenuItem { text: "Show History"; iconName: "vcs-log|view-history"; onTriggered: pane.win.gitAction("log", pane.path, [], "") }
+        }
         GMenuSeparator {}
         GMenu {
             title: "View as"
@@ -653,6 +681,8 @@ FocusScope {
             GMenuItem { text: "Kind"; checkable: true; checked: fm.sortKey === "kind"; onTriggered: pane.sortBy("kind") }
             GMenuItem { text: "Date Modified"; checkable: true; checked: fm.sortKey === "modified"; onTriggered: pane.sortBy("modified") }
             GMenuItem { text: "Date Created"; checkable: true; checked: fm.sortKey === "created"; onTriggered: pane.sortBy("created") }
+            GMenuItem { text: "Date Added"; checkable: true; checked: fm.sortKey === "added"; onTriggered: pane.sortBy("added") }
+            GMenuItem { text: "Last Opened"; checkable: true; checked: fm.sortKey === "accessed"; onTriggered: pane.sortBy("accessed") }
             GMenuItem { text: "Size"; checkable: true; checked: fm.sortKey === "size"; onTriggered: pane.sortBy("size") }
             GMenuSeparator {}
             GMenuItem { text: "Descending"; checkable: true; checked: fm.descending; onTriggered: { fm.applySort(fm.sortKey, !fm.descending); pane.rememberView() } }

@@ -1,6 +1,8 @@
 //! grove's core: everything that isn't the Qt user interface.
 
 pub mod apps;
+pub mod checksum;
+pub mod versions;
 pub mod listing;
 pub mod mounts;
 pub mod ops;

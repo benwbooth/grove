@@ -43,16 +43,25 @@ impl Default for GroveRust {
 pub struct Startup {
     pub settings: settings::Settings,
     pub views: HashMap<String, settings::FolderView>,
+    pub session: String,
+}
+
+fn session_path() -> PathBuf {
+    util::grove_state().join("session.json")
+}
+
+fn load_startup() -> Startup {
+    Startup { settings: settings::load(), views: settings::folder_views(), session: std::fs::read_to_string(session_path()).unwrap_or_default() }
 }
 
 static STARTUP: OnceLock<Startup> = OnceLock::new();
 
 pub fn init_startup() {
-    let _ = STARTUP.set(Startup { settings: settings::load(), views: settings::folder_views() });
+    let _ = STARTUP.set(load_startup());
 }
 
 fn startup() -> &'static Startup {
-    STARTUP.get_or_init(|| Startup { settings: settings::load(), views: settings::folder_views() })
+    STARTUP.get_or_init(load_startup)
 }
 
 fn history() -> &'static Mutex<History> {
@@ -953,6 +962,108 @@ impl ffi::Grove {
         let (p, t) = (path.to_string(), text.to_string());
         lane("files", move || {
             let _ = std::fs::write(p, t);
+        });
+    }
+
+    pub fn checksum(&self, key: &QString, path: &QString, algo: &QString) {
+        let (p, a) = (PathBuf::from(path.to_string()), algo.to_string());
+        self.answer(key, move || {
+            let c = AtomicBool::new(false);
+            match grove_core::checksum::compute(&p, &a, &c) {
+                Ok(sum) => json!({"algo": a, "sum": sum}),
+                Err(e) => json!({"error": e}),
+            }
+        });
+    }
+
+    pub fn versions(&self, key: &QString, path: &QString) {
+        let p = PathBuf::from(path.to_string());
+        self.answer(key, move || json!(grove_core::versions::versions(&p)));
+    }
+
+    pub fn git_action(&self, key: &QString, dir: &QString, action: &QString, paths: &QString, arg: &QString) {
+        let (d, a, ps, arg) = (dir.to_string(), action.to_string(), paths_of(paths), arg.to_string());
+        let dark = true;
+        self.answer(key, move || crate::gitstatus::action(&d, &a, &ps, &arg, dark));
+    }
+
+    pub fn compare_files(&self, key: &QString, a: &QString, b: &QString, dark: bool) {
+        let (a, b) = (a.to_string(), b.to_string());
+        self.answer(key, move || {
+            let tool = ["meld", "kompare", "kdiff3", "diffuse"].into_iter().find(|t| grove_core::thumbs::which(t).is_some());
+            let o = std::process::Command::new("diff").args(["-u", "-r", &a, &b]).output();
+            match o {
+                Ok(o) => {
+                    let text = String::from_utf8_lossy(&o.stdout).into_owned();
+                    let same = o.status.code() == Some(0);
+                    json!({"same": same, "text": text, "html": if same { String::new() } else { crate::preview::highlight(&text, "x.diff", dark) }, "tool": tool})
+                }
+                Err(_) => json!({"error": "Comparing needs the diff program (diffutils), which isn't installed."}),
+            }
+        });
+    }
+
+    pub fn mount_image(&self, key: &QString, path: &QString) {
+        let p = path.to_string();
+        let qt = self.qt_thread();
+        self.answer(key, move || {
+            let o = std::process::Command::new("udisksctl").args(["loop-setup", "-r", "-f", &p]).output();
+            let dev = match o {
+                Ok(o) if o.status.success() => {
+                    let out = String::from_utf8_lossy(&o.stdout).into_owned();
+                    out.split_whitespace().last().unwrap_or("").trim_end_matches('.').to_string()
+                }
+                Ok(o) => return json!({"error": format!("Couldn't open the disk image: {}", String::from_utf8_lossy(&o.stderr).trim())}),
+                Err(_) => return json!({"error": "Opening disk images needs udisks (udisksctl)."}),
+            };
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            // The image itself, or its first partition.
+            for d in [dev.clone(), format!("{dev}p1")] {
+                if let Ok(o) = std::process::Command::new("udisksctl").args(["mount", "-b", &d]).output() {
+                    if o.status.success() {
+                        let out = String::from_utf8_lossy(&o.stdout).into_owned();
+                        let at = out.split(" at ").nth(1).unwrap_or("").trim().trim_end_matches('.').to_string();
+                        let _ = qt.queue(|mut g| {
+                            let r = *g.places_revision() + 1;
+                            g.as_mut().set_places_revision(r);
+                        });
+                        return json!({"ok": true, "path": at, "device": d});
+                    }
+                }
+            }
+            json!({"error": "The disk image was attached but has nothing grove can open (no readable filesystem)."})
+        });
+    }
+
+    pub fn set_rating(&self, key: &QString, paths: &QString, rating: i32) {
+        let ps = paths_of(paths);
+        self.answer_on("files", key, move || {
+            let mut errors = vec![];
+            for p in &ps {
+                if let Err(e) = tags::set_rating(p, rating.clamp(0, 10) as u8) {
+                    errors.push(e);
+                }
+            }
+            json!({"errors": errors})
+        });
+    }
+
+    pub fn set_folder_icon(&self, key: &QString, dir: &QString, icon: &QString) {
+        let (d, i) = (PathBuf::from(dir.to_string()), icon.to_string());
+        self.answer_on("files", key, move || match crate::mime::set_custom_folder_icon(&d, &i) {
+            Ok(()) => json!({"ok": true}),
+            Err(e) => json!({"error": e}),
+        });
+    }
+
+    pub fn session(&self) -> QString {
+        qs(&startup().session)
+    }
+
+    pub fn save_session(&self, json_s: &QString) {
+        let s = json_s.to_string();
+        lane("settings", move || {
+            let _ = util::write_atomic(&session_path(), s.as_bytes());
         });
     }
 

@@ -13,6 +13,8 @@ GMenu {
     readonly property bool trash: pane.inTrash
     readonly property bool isImage: (target.mime || "").indexOf("image/") === 0
     readonly property bool isArchive: pane.archiveLike(target)
+    readonly property bool isDiskImage: /\.(iso|img|dmg)$/i.test(target.name || "")
+    readonly property bool split: pane.win.currentTab && pane.win.currentTab.split
 
     GMenuItem { text: m.target.isDir ? "Open" : "Open"; iconName: "document-open"; shortcutText: "Return"; enabled: !m.trash; onTriggered: m.pane.openSelected(false) }
     GMenuItem { text: "Open in New Tab"; iconName: "tab-new"; visible: !!m.target.isDir; height: visible ? implicitHeight : 0; shortcutText: "Ctrl+Return"; onTriggered: m.pane.openSelected(true) }
@@ -36,6 +38,7 @@ GMenu {
     }
     GMenuItem { text: "Quick Look"; iconName: "quickview"; shortcutText: "Space"; onTriggered: m.pane.quickLook() }
     GMenuItem { text: "Get Info"; iconName: "documentinfo"; shortcutText: "Alt+Return"; onTriggered: m.pane.win.showInfo(m.sel) }
+    GMenuItem { text: "Show Enclosing Folder"; iconName: "folder-open"; visible: m.pane.searching || m.pane.path.indexOf("recent:") === 0; height: visible ? implicitHeight : 0; onTriggered: m.pane.showEnclosing() }
     GMenuSeparator {}
     GMenuItem { text: "Put Back"; iconName: "edit-undo"; visible: m.trash; height: visible ? implicitHeight : 0; onTriggered: m.pane.putBack() }
     GMenuItem { text: m.one ? "Rename…" : "Rename " + m.sel.length + " Items…"; iconName: "edit-rename"; shortcutText: "F2"; enabled: !m.pane.special; onTriggered: m.pane.rename() }
@@ -43,6 +46,11 @@ GMenu {
     GMenuItem { text: "Make Alias"; iconName: "insert-link"; shortcutText: "Ctrl+Alt+A"; enabled: !m.pane.special; onTriggered: m.pane.makeAlias() }
     GMenuItem { text: m.one ? "Compress “" + m.target.name + "”" : "Compress " + m.sel.length + " Items"; iconName: "archive-insert"; enabled: !m.pane.special; tip: "Make a .zip next to the items"; onTriggered: m.pane.compress("zip") }
     GMenuItem { text: "Extract Here"; iconName: "archive-extract"; visible: m.isArchive; height: visible ? implicitHeight : 0; onTriggered: m.pane.extract() }
+    GMenuItem { text: "Open Disk Image"; iconName: "media-optical"; visible: m.isDiskImage && m.one; height: visible ? implicitHeight : 0; tip: "Attach the image (ISO, IMG) read-only and open it like a disk"; onTriggered: m.pane.win.mountImage(m.target.path) }
+    GMenuItem { text: "Compare"; iconName: "kompare|document-compare|view-split-left-right"; visible: m.sel.length === 2; height: visible ? implicitHeight : 0; tip: "Show the differences between the two items"; onTriggered: m.pane.win.compareFiles(m.sel[0], m.sel[1]) }
+    GMenuItem { text: "Copy to Other Side"; iconName: "edit-copy"; visible: m.split; height: visible ? implicitHeight : 0; shortcutText: "Shift+F5"; onTriggered: m.pane.win.toOtherPane(false) }
+    GMenuItem { text: "Move to Other Side"; iconName: "go-next"; visible: m.split; height: visible ? implicitHeight : 0; shortcutText: "Shift+F6"; onTriggered: m.pane.win.toOtherPane(true) }
+    GMenuItem { text: "Browse Previous Versions…"; iconName: "document-open-recent"; enabled: m.one && !m.pane.special; tip: "Earlier copies from the hourly snapshots; show or restore them"; onTriggered: m.pane.win.showVersions(m.target.path) }
     GMenuSeparator {}
     GMenuItem { text: "Copy"; iconName: "edit-copy"; shortcutText: "Ctrl+C"; onTriggered: m.pane.copy(false) }
     GMenuItem { text: "Cut"; iconName: "edit-cut"; shortcutText: "Ctrl+X"; enabled: !m.pane.special || m.trash; onTriggered: m.pane.copy(true) }
@@ -79,6 +87,27 @@ GMenu {
         }
     }
     GMenuItem { text: "Tags…"; iconName: "tag"; enabled: !m.pane.special; onTriggered: m.pane.win.showInfo(m.sel) }
+    MenuItem {
+        implicitHeight: Theme.menuRow
+        enabled: !m.pane.special
+        background: Item {}
+        contentItem: Row {
+            leftPadding: 24
+            spacing: 2
+            GLabel { text: "Rating  "; color: Theme.fgSecondary; anchors.verticalCenter: parent.verticalCenter }
+            Repeater {
+                model: 5
+                GLabel {
+                    required property int index
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: (m.target.rating || 0) >= (index + 1) * 2 ? "★" : "☆"
+                    color: Theme.accent
+                    font.pixelSize: Theme.title
+                    MouseArea { anchors.fill: parent; onClicked: { m.pane.setRating((m.target.rating || 0) === (parent.index + 1) * 2 ? 0 : (parent.index + 1) * 2); m.close() } }
+                }
+            }
+        }
+    }
     GMenuSeparator {}
     GMenu {
         id: quick
@@ -97,6 +126,18 @@ GMenu {
         GMenuItem { text: "Open as Administrator"; iconName: "dialog-password"; tip: "Opens a grove window with administrator rights (asks for your password)"; onTriggered: m.pane.win.quickAction("open-as-root", m.target.isDir ? [m.target.path] : [m.pane.path], "") }
         GMenuItem { text: "Add to Favourites"; iconName: "bookmark-new"; enabled: !!m.target.isDir; onTriggered: m.pane.grove.addFavourite(m.target.path, -1) }
         GMenuItem { text: "Batch Rename…"; iconName: "edit-rename"; shortcutText: "Shift+F2"; onTriggered: m.pane.win.batchRename(m.sel) }
+    }
+    GMenu {
+        id: gitMenu
+        title: "Git"
+        enabled: m.pane.inGit
+        GMenuItem { text: "Add to Git"; iconName: "vcs-add|list-add"; onTriggered: m.pane.win.gitAction("add", m.pane.path, m.sel, "") }
+        GMenuItem { text: "Commit Selected…"; iconName: "vcs-commit|document-save"; onTriggered: m.pane.win.askCommit(m.pane.path, m.sel) }
+        GMenuItem { text: "Show Changes"; iconName: "vcs-diff|document-preview"; onTriggered: m.pane.win.gitAction("diff", m.pane.path, m.sel, "") }
+        GMenuItem { text: "Show History"; iconName: "vcs-log|view-history"; onTriggered: m.pane.win.gitAction("log", m.pane.path, m.sel, "") }
+        GMenuSeparator {}
+        GMenuItem { text: "Pull"; onTriggered: m.pane.win.gitAction("pull", m.pane.path, [], "") }
+        GMenuItem { text: "Push"; onTriggered: m.pane.win.gitAction("push", m.pane.path, [], "") }
     }
     GMenu {
         id: svc
