@@ -357,7 +357,7 @@ ApplicationWindow {
             StackLayout {
                 id: stack
                 anchors.top: tabBar.bottom
-                anchors.bottom: statusBar.top
+                anchors.bottom: termPanel.visible ? termSplit.top : statusBar.top
                 width: parent.width - (infoPanel.visible ? infoPanel.width : 0)
                 currentIndex: tabBar.currentIndex
                 Repeater {
@@ -431,6 +431,28 @@ ApplicationWindow {
                         }
                     }
                 }
+            }
+
+            // Terminal panel (F4).
+            MouseArea {
+                id: termSplit
+                visible: termPanel.visible
+                anchors.bottom: termPanel.top
+                width: parent.width
+                height: 6
+                cursorShape: Qt.SplitVCursor
+                property real sy: 0
+                property real sh: 0
+                onPressed: (m) => { sy = mapToItem(main, 0, m.y).y; sh = termPanel.height }
+                onPositionChanged: (m) => { if (pressed) termPanel.height = Math.max(80, Math.min(main.height - 200, sh - (mapToItem(main, 0, m.y).y - sy))) }
+            }
+            TerminalPanel {
+                id: termPanel
+                win: bw
+                visible: !!bw.app.settings.terminal_panel
+                anchors.bottom: statusBar.top
+                width: parent.width
+                height: Math.round(main.height * 0.32)
             }
 
             // ---------- status bar ----------
@@ -525,6 +547,7 @@ ApplicationWindow {
         GMenuItem { text: "Filter This Folder"; iconName: "view-filter"; shortcutText: "Ctrl+I"; onTriggered: bw.openFilter() }
         GMenuItem { text: "Show Hidden Files"; checkable: true; checked: !!bw.app.settings.show_hidden; shortcutText: "Ctrl+H"; onTriggered: bw.toggleHidden() }
         GMenuItem { text: "Information Panel"; checkable: true; checked: !!bw.app.settings.info_panel; shortcutText: "F11"; onTriggered: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
+        GMenuItem { text: "Terminal Panel"; checkable: true; checked: !!bw.app.settings.terminal_panel; shortcutText: "F4"; onTriggered: bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel) }
         GMenuItem { text: "Folders Panel"; checkable: true; checked: !!bw.app.settings.folders_panel; shortcutText: "F7"; onTriggered: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
         GMenuItem { text: "Split View"; checkable: true; checked: bw.currentTab && bw.currentTab.split; shortcutText: "F3"; onTriggered: bw.currentTab.toggleSplit() }
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: "Ctrl+Alt+T"; onTriggered: bw.app.grove.openTerminal(bw.activePane.path) }
@@ -662,6 +685,7 @@ ApplicationWindow {
     Key { sequences: ["Ctrl+Alt+T"]; onActivated: bw.app.grove.openTerminal(bw.activePane.path) }
     Key { sequences: ["Ctrl+E"]; onActivated: { const p = bw.activePane.path; for (const l of (sidebar.places.locations || []).concat(sidebar.places.network || [])) if (l.ejectable && (p === l.path || p.indexOf(l.path + "/") === 0)) bw.eject(l.path, l.name) } }
     Key { sequences: ["Ctrl+,"]; onActivated: bw.showSettings() }
+    Key { sequences: ["F4"]; onActivated: { bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel); if (bw.app.settings.terminal_panel) bw.activePane.forceActiveFocus() } }
     Key { sequences: ["F7"]; onActivated: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
     Key { sequences: ["F11", "Ctrl+Shift+P"]; onActivated: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
     Key { sequences: ["Shift+F5"]; onActivated: bw.toOtherPane(false) }

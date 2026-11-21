@@ -23,6 +23,7 @@ mod portal;
 mod preview;
 mod remote;
 mod secrets;
+mod terminal;
 mod watch;
 
 use bridge::ffi;

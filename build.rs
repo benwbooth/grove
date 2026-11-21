@@ -55,7 +55,7 @@ fn main() {
         .qt_module("QuickControls2")
         .qt_module("Pdf")
         .cpp_file("cpp/native.cpp")
-        .files(["src/bridge.rs", "src/model.rs"])
+        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs"])
         .build();
 }
 

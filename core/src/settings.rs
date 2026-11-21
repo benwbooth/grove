@@ -93,6 +93,9 @@ pub struct Settings {
     /// Dolphin's Folders panel (a tree) next to the sidebar.
     #[serde(default)]
     pub folders_panel: bool,
+    /// The terminal panel (F4) at the bottom.
+    #[serde(default)]
+    pub terminal_panel: bool,
     /// Reopen last time's windows and tabs.
     #[serde(default = "t")]
     pub restore_session: bool,

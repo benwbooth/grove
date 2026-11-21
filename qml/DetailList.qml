@@ -5,6 +5,7 @@ import QtQuick.Controls.Basic
 // choosable columns (right-click the header); folders expand in place with
 // their disclosure triangles (Right/Left keys too). Virtualized.
 Item {
+    clip: true
     id: root
     property var pane
     property var fm: pane.model
