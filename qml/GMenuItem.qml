@@ -25,8 +25,16 @@ MenuItem {
     }
     contentItem: Item {
         implicitWidth: lbl.implicitWidth + sc.implicitWidth + 60
+        // On state of a toggle with an icon: a soft accent square behind it.
+        Rectangle {
+            visible: mi.checkable && mi.checked && mi.iconName !== "" && mi.swatch.a === 0
+            x: -1
+            width: 22; height: 22; radius: 5
+            anchors.verticalCenter: parent.verticalCenter
+            color: mi.highlighted ? Qt.rgba(1, 1, 1, 0.25) : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.28)
+        }
         GLabel {
-            visible: mi.checkable && mi.checked
+            visible: mi.checkable && mi.checked && mi.iconName === ""
             x: 4
             anchors.verticalCenter: parent.verticalCenter
             text: "✓"
@@ -42,7 +50,7 @@ MenuItem {
             border.color: Qt.rgba(0, 0, 0, 0.2)
         }
         GIcon {
-            visible: mi.iconName !== "" && !(mi.checkable && mi.checked) && mi.swatch.a === 0
+            visible: mi.iconName !== "" && mi.swatch.a === 0
             name: mi.iconName
             size: 16
             x: 2

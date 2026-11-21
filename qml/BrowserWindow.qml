@@ -712,7 +712,7 @@ ApplicationWindow {
     GMenu {
         id: toolbarMenu
         GMenuItem { text: "Customize Toolbar…"; iconName: "configure"; tip: "Add, remove and rearrange toolbar items"; onTriggered: toolbarSheet.open() }
-        GMenuItem { text: "Restore Default Toolbar"; tip: "Put back grove's standard toolbar"; onTriggered: bw.setSetting("toolbar", []) }
+        GMenuItem { text: "Restore Default Toolbar"; iconName: "edit-undo|document-revert"; tip: "Put back grove's standard toolbar"; onTriggered: bw.setSetting("toolbar", []) }
     }
     ToolbarSheet { id: toolbarSheet; win: bw }
     BurnSheet { id: burnSheet; app: bw.app; win: bw }
@@ -731,13 +731,13 @@ ApplicationWindow {
         GMenuSeparator {}
         GMenuItem { text: "Filter This Folder"; iconName: "view-filter"; shortcutText: Help.shown("Ctrl+I"); onTriggered: bw.openFilter() }
         GMenuItem { text: "Show View Options"; iconName: "configure"; shortcutText: Help.shown("Ctrl+J"); onTriggered: bw.toggleViewOptions() }
-        GMenuItem { text: "Use Stacks"; checkable: true; checked: bw.activePane && bw.activePane.stacks !== ""; shortcutText: Help.shown("Ctrl+Alt+0"); onTriggered: bw.toggleStacks() }
-        GMenuItem { text: "Selection Mode"; checkable: true; checked: bw.activePane && bw.activePane.selectionMode; shortcutText: Help.shown("Ctrl+Shift+S"); tip: "Checkboxes on items: clicks and Space tick them"; onTriggered: bw.toggleSelectionMode() }
-        GMenuItem { text: "Show Hidden Files"; checkable: true; checked: !!bw.app.settings.show_hidden; shortcutText: Help.shown("Ctrl+H"); onTriggered: bw.toggleHidden() }
-        GMenuItem { text: "Information Panel"; checkable: true; checked: !!bw.app.settings.info_panel; shortcutText: Help.shown("F11"); onTriggered: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
-        GMenuItem { text: "Terminal Panel"; checkable: true; checked: !!bw.app.settings.terminal_panel; shortcutText: Help.shown("F4"); onTriggered: bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel) }
-        GMenuItem { text: "Folders Panel"; checkable: true; checked: !!bw.app.settings.folders_panel; shortcutText: Help.shown("F7"); onTriggered: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
-        GMenuItem { text: "Split View"; checkable: true; checked: bw.currentTab && bw.currentTab.split; shortcutText: Help.shown("F3"); onTriggered: bw.currentTab.toggleSplit() }
+        GMenuItem { text: "Use Stacks"; iconName: "view-list-tree|view-grid"; checkable: true; checked: bw.activePane && bw.activePane.stacks !== ""; shortcutText: Help.shown("Ctrl+Alt+0"); onTriggered: bw.toggleStacks() }
+        GMenuItem { text: "Selection Mode"; iconName: "object-select|edit-select"; checkable: true; checked: bw.activePane && bw.activePane.selectionMode; shortcutText: Help.shown("Ctrl+Shift+S"); tip: "Checkboxes on items: clicks and Space tick them"; onTriggered: bw.toggleSelectionMode() }
+        GMenuItem { text: "Show Hidden Files"; iconName: "view-hidden|view-visible"; checkable: true; checked: !!bw.app.settings.show_hidden; shortcutText: Help.shown("Ctrl+H"); onTriggered: bw.toggleHidden() }
+        GMenuItem { text: "Information Panel"; iconName: "dialog-information|help-about"; checkable: true; checked: !!bw.app.settings.info_panel; shortcutText: Help.shown("F11"); onTriggered: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
+        GMenuItem { text: "Terminal Panel"; iconName: "utilities-terminal|terminal"; checkable: true; checked: !!bw.app.settings.terminal_panel; shortcutText: Help.shown("F4"); onTriggered: bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel) }
+        GMenuItem { text: "Folders Panel"; iconName: "view-list-tree|sidebar-tree"; checkable: true; checked: !!bw.app.settings.folders_panel; shortcutText: Help.shown("F7"); onTriggered: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
+        GMenuItem { text: "Split View"; iconName: "view-split-left-right|view-dual"; checkable: true; checked: bw.currentTab && bw.currentTab.split; shortcutText: Help.shown("F3"); onTriggered: bw.currentTab.toggleSplit() }
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: Help.shown("Ctrl+Alt+T"); onTriggered: bw.app.grove.openTerminal(bw.activePane.path) }
         GMenuItem { text: "Connect to Server…"; iconName: "network-connect"; shortcutText: Help.shown("Ctrl+K"); onTriggered: bw.connectServer() }
         GMenuSeparator {}

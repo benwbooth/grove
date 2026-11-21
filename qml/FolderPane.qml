@@ -834,36 +834,36 @@ FocusScope {
         GMenuSeparator {}
         GMenu {
             title: "View as"
-            GMenuItem { text: "Icons"; checkable: true; checked: pane.viewMode === "icons"; shortcutText: Help.shown("Ctrl+1"); onTriggered: pane.setView("icons") }
-            GMenuItem { text: "List"; checkable: true; checked: pane.viewMode === "list"; shortcutText: Help.shown("Ctrl+2"); onTriggered: pane.setView("list") }
-            GMenuItem { text: "Columns"; checkable: true; checked: pane.viewMode === "columns"; shortcutText: Help.shown("Ctrl+3"); onTriggered: pane.setView("columns") }
-            GMenuItem { text: "Gallery"; checkable: true; checked: pane.viewMode === "gallery"; shortcutText: Help.shown("Ctrl+4"); onTriggered: pane.setView("gallery") }
+            GMenuItem { text: "Icons"; iconName: "view-grid|view-list-icons"; checkable: true; checked: pane.viewMode === "icons"; shortcutText: Help.shown("Ctrl+1"); onTriggered: pane.setView("icons") }
+            GMenuItem { text: "List"; iconName: "view-list|view-list-details"; checkable: true; checked: pane.viewMode === "list"; shortcutText: Help.shown("Ctrl+2"); onTriggered: pane.setView("list") }
+            GMenuItem { text: "Columns"; iconName: "view-column|view-file-columns"; checkable: true; checked: pane.viewMode === "columns"; shortcutText: Help.shown("Ctrl+3"); onTriggered: pane.setView("columns") }
+            GMenuItem { text: "Gallery"; iconName: "view-paged|view-preview"; checkable: true; checked: pane.viewMode === "gallery"; shortcutText: Help.shown("Ctrl+4"); onTriggered: pane.setView("gallery") }
         }
         GMenu {
             title: "Sort by"
-            GMenuItem { text: "Name"; checkable: true; checked: fm.sortKey === "name"; onTriggered: pane.sortBy("name") }
-            GMenuItem { text: "Kind"; checkable: true; checked: fm.sortKey === "kind"; onTriggered: pane.sortBy("kind") }
-            GMenuItem { text: "Date Modified"; checkable: true; checked: fm.sortKey === "modified"; onTriggered: pane.sortBy("modified") }
-            GMenuItem { text: "Date Created"; checkable: true; checked: fm.sortKey === "created"; onTriggered: pane.sortBy("created") }
-            GMenuItem { text: "Date Added"; checkable: true; checked: fm.sortKey === "added"; onTriggered: pane.sortBy("added") }
-            GMenuItem { text: "Last Opened"; checkable: true; checked: fm.sortKey === "accessed"; onTriggered: pane.sortBy("accessed") }
-            GMenuItem { text: "Size"; checkable: true; checked: fm.sortKey === "size"; onTriggered: pane.sortBy("size") }
+            GMenuItem { text: "Name"; iconName: "view-sort-ascending-name|view-sort-ascending|view-sort"; checkable: true; checked: fm.sortKey === "name"; onTriggered: pane.sortBy("name") }
+            GMenuItem { text: "Kind"; iconName: "view-categories|folder-documents|view-list-tree"; checkable: true; checked: fm.sortKey === "kind"; onTriggered: pane.sortBy("kind") }
+            GMenuItem { text: "Date Modified"; iconName: "document-edit|x-office-calendar"; checkable: true; checked: fm.sortKey === "modified"; onTriggered: pane.sortBy("modified") }
+            GMenuItem { text: "Date Created"; iconName: "document-new|x-office-calendar"; checkable: true; checked: fm.sortKey === "created"; onTriggered: pane.sortBy("created") }
+            GMenuItem { text: "Date Added"; iconName: "list-add"; checkable: true; checked: fm.sortKey === "added"; onTriggered: pane.sortBy("added") }
+            GMenuItem { text: "Last Opened"; iconName: "document-open-recent"; checkable: true; checked: fm.sortKey === "accessed"; onTriggered: pane.sortBy("accessed") }
+            GMenuItem { text: "Size"; iconName: "drive-harddisk|view-sort"; checkable: true; checked: fm.sortKey === "size"; onTriggered: pane.sortBy("size") }
             GMenuSeparator {}
-            GMenuItem { text: "Descending"; checkable: true; checked: fm.descending; onTriggered: { fm.applySort(fm.sortKey, !fm.descending); pane.rememberView() } }
-            GMenuItem { text: "Folders First"; checkable: true; checked: fm.foldersFirst; onTriggered: pane.win.setSetting("folders_first", !fm.foldersFirst) }
+            GMenuItem { text: "Descending"; iconName: "view-sort-descending|go-down"; checkable: true; checked: fm.descending; onTriggered: { fm.applySort(fm.sortKey, !fm.descending); pane.rememberView() } }
+            GMenuItem { text: "Folders First"; iconName: "folder"; checkable: true; checked: fm.foldersFirst; onTriggered: pane.win.setSetting("folders_first", !fm.foldersFirst) }
         }
         GMenu {
             title: "Group by"
-            GMenuItem { text: "None"; checkable: true; checked: pane.groupBy === ""; onTriggered: pane.setGroupBy("") }
-            GMenuItem { text: "Kind"; checkable: true; checked: pane.groupBy === "kind"; onTriggered: pane.setGroupBy("kind") }
-            GMenuItem { text: "Date Modified"; checkable: true; checked: pane.groupBy === "date"; onTriggered: pane.setGroupBy("date") }
-            GMenuItem { text: "Size"; checkable: true; checked: pane.groupBy === "size"; onTriggered: pane.setGroupBy("size") }
-            GMenuItem { text: "Name"; checkable: true; checked: pane.groupBy === "name"; onTriggered: pane.setGroupBy("name") }
-            GMenuItem { text: "Tags"; checkable: true; checked: pane.groupBy === "tags"; onTriggered: pane.setGroupBy("tags") }
+            GMenuItem { text: "None"; iconName: "edit-clear"; checkable: true; checked: pane.groupBy === ""; onTriggered: pane.setGroupBy("") }
+            GMenuItem { text: "Kind"; iconName: "view-categories|folder-documents|view-list-tree"; checkable: true; checked: pane.groupBy === "kind"; onTriggered: pane.setGroupBy("kind") }
+            GMenuItem { text: "Date Modified"; iconName: "document-edit|x-office-calendar"; checkable: true; checked: pane.groupBy === "date"; onTriggered: pane.setGroupBy("date") }
+            GMenuItem { text: "Size"; iconName: "drive-harddisk|view-sort"; checkable: true; checked: pane.groupBy === "size"; onTriggered: pane.setGroupBy("size") }
+            GMenuItem { text: "Name"; iconName: "view-sort-ascending-name|view-sort-ascending|view-sort"; checkable: true; checked: pane.groupBy === "name"; onTriggered: pane.setGroupBy("name") }
+            GMenuItem { text: "Tags"; iconName: "tag|bookmarks|starred"; checkable: true; checked: pane.groupBy === "tags"; onTriggered: pane.setGroupBy("tags") }
         }
-        GMenuItem { text: "Use Stacks"; checkable: true; checked: pane.stacks !== ""; shortcutText: Help.shown("Ctrl+Alt+0"); tip: "Pile files of one kind into stacks (icon view)"; onTriggered: pane.setStacks(pane.stacks ? "" : "kind") }
+        GMenuItem { text: "Use Stacks"; iconName: "view-list-tree|view-grid"; checkable: true; checked: pane.stacks !== ""; shortcutText: Help.shown("Ctrl+Alt+0"); tip: "Pile files of one kind into stacks (icon view)"; onTriggered: pane.setStacks(pane.stacks ? "" : "kind") }
         GMenuItem { text: "Show View Options"; iconName: "configure"; shortcutText: Help.shown("Ctrl+J"); tip: "Icon size, spacing, text size, labels, background for this folder"; onTriggered: pane.win.toggleViewOptions() }
-        GMenuItem { text: "Show Hidden Files"; checkable: true; checked: fm.showHidden; shortcutText: Help.shown("Ctrl+H"); onTriggered: pane.win.toggleHidden() }
+        GMenuItem { text: "Show Hidden Files"; iconName: "view-hidden|view-visible"; checkable: true; checked: fm.showHidden; shortcutText: Help.shown("Ctrl+H"); onTriggered: pane.win.toggleHidden() }
         GMenuSeparator { visible: pane.inTrash }
         GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; visible: pane.inTrash; height: visible ? implicitHeight : 0; onTriggered: pane.win.emptyTrash() }
     }

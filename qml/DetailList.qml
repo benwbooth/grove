@@ -160,6 +160,7 @@ Item {
             GMenuItem {
                 required property string modelData
                 text: root.allColumns[modelData].label
+                iconName: "view-list-details|view-list"
                 checkable: true
                 checked: root.columns.indexOf(modelData) >= 0
                 onTriggered: {

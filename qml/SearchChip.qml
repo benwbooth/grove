@@ -56,13 +56,14 @@ Item {
     GTip { visible: ma.containsMouse && !menu.visible; text: sc.set ? sc.tip + ". Click × to clear." : sc.tip }
     GMenu {
         id: menu
-        GMenuItem { text: "Any"; checkable: true; checked: !sc.set; onTriggered: sc.picked("") }
+        GMenuItem { text: "Any"; iconName: "edit-clear"; checkable: true; checked: !sc.set; onTriggered: sc.picked("") }
         GMenuSeparator {}
         Instantiator {
             model: sc.choices
             delegate: GMenuItem {
                 required property var modelData
                 text: modelData.t
+                iconName: "view-filter|funnel"
                 checkable: true
                 checked: sc.value === modelData.v
                 onTriggered: sc.picked(modelData.v)

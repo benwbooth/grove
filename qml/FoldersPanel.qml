@@ -22,7 +22,10 @@ Item {
         clip: true
         model: tree
         reuseItems: true
+        interactive: false
         ScrollBar.vertical: GScrollBar {}
+        Kinetic { id: fpKinetic; target: lv; notch: 60 }
+        WheelHandler { acceptedModifiers: Qt.NoModifier; onWheel: (e) => fpKinetic.wheel(e) }
         delegate: Item {
             id: r
             required property int index

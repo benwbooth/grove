@@ -214,6 +214,9 @@ Item {
         anchors.bottomMargin: 8
         contentHeight: col.height
         clip: true
+        interactive: false
+        Kinetic { id: sbKinetic; target: flick; notch: 60 }
+        WheelHandler { acceptedModifiers: Qt.NoModifier; onWheel: (e) => sbKinetic.wheel(e) }
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: GScrollBar {}
         Column {
@@ -411,16 +414,16 @@ Item {
         GMenuItem { text: "Get Info"; iconName: "documentinfo"; enabled: !!placeMenu.target && placeMenu.target.path.indexOf("/") === 0; onTriggered: sb.win.showInfo([placeMenu.target.path]) }
         HideItem {}
         GMenuSeparator {}
-        GMenuItem { text: "Show Hidden Entries"; checkable: true; checked: sb.showHiddenPlaces; enabled: sb.hiddenPlaces.length > 0; onTriggered: sb.showHiddenPlaces = !sb.showHiddenPlaces }
+        GMenuItem { text: "Show Hidden Entries"; iconName: "view-visible|view-reveal"; checkable: true; checked: sb.showHiddenPlaces; enabled: sb.hiddenPlaces.length > 0; onTriggered: sb.showHiddenPlaces = !sb.showHiddenPlaces }
     }
     GMenu {
         id: sectionMenu
-        GMenuItem { text: "Show Hidden Entries"; checkable: true; checked: sb.showHiddenPlaces; enabled: sb.hiddenPlaces.length > 0; tip: "Entries you hid show dimmed, so you can unhide them (right-click › Show)"; onTriggered: sb.showHiddenPlaces = !sb.showHiddenPlaces }
-        GMenuItem { text: "Unhide All"; enabled: sb.hiddenPlaces.length > 0; tip: "Show every entry you hid"; onTriggered: sb.app.grove.setSetting("hidden_places", "[]") }
+        GMenuItem { text: "Show Hidden Entries"; iconName: "view-visible|view-reveal"; checkable: true; checked: sb.showHiddenPlaces; enabled: sb.hiddenPlaces.length > 0; tip: "Entries you hid show dimmed, so you can unhide them (right-click › Show)"; onTriggered: sb.showHiddenPlaces = !sb.showHiddenPlaces }
+        GMenuItem { text: "Unhide All"; iconName: "view-reveal|view-visible"; enabled: sb.hiddenPlaces.length > 0; tip: "Show every entry you hid"; onTriggered: sb.app.grove.setSetting("hidden_places", "[]") }
     }
     GMenu {
         id: trashMenu
-        GMenuItem { text: "Open"; onTriggered: sb.win.go("trash:///") }
+        GMenuItem { text: "Open"; iconName: "document-open|folder-open"; onTriggered: sb.win.go("trash:///") }
         GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; enabled: sb.app.trashCount > 0; onTriggered: sb.win.emptyTrash() }
         HideItem {}
     }

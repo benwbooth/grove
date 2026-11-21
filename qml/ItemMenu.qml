@@ -34,7 +34,7 @@ GMenu {
             onObjectRemoved: (i, o) => openWith.removeItem(o)
         }
         GMenuSeparator {}
-        GMenuItem { text: "Other…"; tip: "Choose any installed app, and optionally make it the default"; onTriggered: m.pane.win.openWithDialog(m.target.path) }
+        GMenuItem { text: "Other…"; iconName: "system-run|application-x-executable"; tip: "Choose any installed app, and optionally make it the default"; onTriggered: m.pane.win.openWithDialog(m.target.path) }
     }
     GMenuItem { text: "Quick Look"; iconName: "quickview"; shortcutText: Help.shown("Space"); onTriggered: m.pane.quickLook() }
     GMenuItem { text: "Get Info"; iconName: "documentinfo"; shortcutText: Help.shown("Alt+Return"); onTriggered: m.pane.win.showInfo(m.sel) }
@@ -119,9 +119,9 @@ GMenu {
         GMenu {
             title: "Convert Image"
             enabled: m.isImage
-            GMenuItem { text: "to PNG"; onTriggered: m.pane.win.quickAction("convert", m.sel, "png") }
-            GMenuItem { text: "to JPEG"; onTriggered: m.pane.win.quickAction("convert", m.sel, "jpg") }
-            GMenuItem { text: "to WebP"; onTriggered: m.pane.win.quickAction("convert", m.sel, "webp") }
+            GMenuItem { text: "to PNG"; iconName: "image-x-generic"; onTriggered: m.pane.win.quickAction("convert", m.sel, "png") }
+            GMenuItem { text: "to JPEG"; iconName: "image-x-generic"; onTriggered: m.pane.win.quickAction("convert", m.sel, "jpg") }
+            GMenuItem { text: "to WebP"; iconName: "image-x-generic"; onTriggered: m.pane.win.quickAction("convert", m.sel, "webp") }
         }
         GMenuItem { text: "Compress as .tar.zst"; iconName: "archive-insert"; onTriggered: m.pane.compress("tar.zst") }
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; enabled: !!m.target.isDir; onTriggered: m.pane.grove.openTerminal(m.target.path) }
@@ -138,8 +138,8 @@ GMenu {
         GMenuItem { text: "Show Changes"; iconName: "vcs-diff|document-preview"; onTriggered: m.pane.win.gitAction("diff", m.pane.path, m.sel, "") }
         GMenuItem { text: "Show History"; iconName: "vcs-log|view-history"; onTriggered: m.pane.win.gitAction("log", m.pane.path, m.sel, "") }
         GMenuSeparator {}
-        GMenuItem { text: "Pull"; onTriggered: m.pane.win.gitAction("pull", m.pane.path, [], "") }
-        GMenuItem { text: "Push"; onTriggered: m.pane.win.gitAction("push", m.pane.path, [], "") }
+        GMenuItem { text: "Pull"; iconName: "vcs-pull|go-down"; onTriggered: m.pane.win.gitAction("pull", m.pane.path, [], "") }
+        GMenuItem { text: "Push"; iconName: "vcs-push|go-up"; onTriggered: m.pane.win.gitAction("push", m.pane.path, [], "") }
     }
     GMenu {
         id: svc

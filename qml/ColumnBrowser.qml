@@ -118,6 +118,8 @@ Item {
                 reuseItems: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: GScrollBar {}
+                // Scrolling is the handler's (with momentum), not the list's own.
+                interactive: false
                 Kinetic { id: colKinetic; target: lv; notch: 66 }
                 WheelHandler { acceptedModifiers: Qt.NoModifier; onWheel: (e) => colKinetic.wheel(e) }
                 delegate: Item {

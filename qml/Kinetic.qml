@@ -39,7 +39,9 @@ QtObject {
     function stop() { velocity = 0; anim.running = false; samples = [] }
 
     // GROVE_WHEEL_DEBUG=1 logs the first wheel events (device, deltas).
-    property int debugLeft: Theme.wheelDebug ? 40 : 0
+    // The first few wheel events always go to the log (journal), so a
+    // misdetected device shows up; GROVE_WHEEL_DEBUG=1 logs more.
+    property int debugLeft: Theme.wheelDebug ? 40 : 4
     function wheel(e) {
         if (!target) return
         const now = Date.now()
