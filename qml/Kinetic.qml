@@ -38,7 +38,6 @@ QtObject {
     }
     function stop() { velocity = 0; anim.running = false; samples = [] }
 
-    // GROVE_WHEEL_DEBUG=1 logs the first wheel events (device, deltas).
     // The first few wheel events always go to the log (journal), so a
     // misdetected device shows up; GROVE_WHEEL_DEBUG=1 logs more.
     property int debugLeft: Theme.wheelDebug ? 40 : 4
@@ -53,53 +52,61 @@ QtObject {
                          "angle", e.angleDelta.x, e.angleDelta.y, "pixel", e.pixelDelta.x, e.pixelDelta.y,
                          "end", e.isEndEvent === true)
         }
-        // A touchpad (or other smooth scroller) follows the fingers; a mouse
-        // wheel moves by notches. Qt on Wayland also gives wheel notches pixel
-        // deltas, so go by the device, then by whole-notch angles.
         const ang0 = horizontal ? (e.angleDelta.x || e.angleDelta.y) : e.angleDelta.y
+        const pix0 = horizontal ? (e.pixelDelta.x || e.pixelDelta.y) : e.pixelDelta.y
+        // A touchpad (or other smooth scroller) follows the fingers; a mouse
+        // wheel moves by notches. Qt on Wayland gives wheel notches pixel
+        // deltas too, so go by the device, then by whole-notch angles.
         const isTouchpad = devType === PointerDevice.TouchPad
             || (devType !== PointerDevice.Mouse && ang0 % 120 !== 0)
-        const px = !isTouchpad ? 0 : ((horizontal ? (e.pixelDelta.x || e.pixelDelta.y) : e.pixelDelta.y) || ang0 / 8)
-        if (isTouchpad && e.isEndEvent === true) { release.stop(); release.triggered(); return }
-        if (px !== 0) {
-            // Touchpad: follow the fingers, remember the speed.
-            anim.running = false
-            moveBy(-px)
-            samples = samples.filter(s => now - s[0] < 80).concat([[now, -px]])
-            release.restart()
+        if (isTouchpad) {
+            const px = pix0 || ang0 / 8
+            if (px !== 0) {
+                // Follow the fingers; remember the speed for the glide.
+                anim.running = false
+                moveBy(-px)
+                samples = samples.filter(s => now - s[0] < 80).concat([[now, -px]])
+            }
+            // Fingers lifted (or the events stop): glide.
+            if (e.isEndEvent === true) { release.stop(); fling() } else release.restart()
             return
         }
-        const ang = horizontal ? (e.angleDelta.x || e.angleDelta.y) : e.angleDelta.y
-        if (ang === 0) return
-        const step = -ang / 120 * notch
+        if (ang0 === 0) return
+        const step = -ang0 / 120 * notch
         if (!enabled) { moveBy(step); return }
-        // Same direction keeps building; a reversal starts over.
+        // Part of the notch moves at once (so a wheel always responds), the
+        // rest glides and slows down; spinning faster builds speed.
+        moveBy(step * 0.35)
         if (velocity !== 0 && Math.sign(velocity) !== Math.sign(step)) velocity = 0
-        // A notch's glide covers about one notch: distance = v * tau, tau = -1/ln(friction).
-        velocity += step / k.tau()
-        const cap = 12000
-        velocity = Math.max(-cap, Math.min(cap, velocity))
+        velocity += step * 0.65 / k.tau()
+        velocity = Math.max(-12000, Math.min(12000, velocity))
+        lastTick = Date.now()
         anim.running = true
     }
     function tau() { return -1 / Math.log(friction) }
 
-    property Timer release: Timer {
-        interval: 50
-        onTriggered: {
-            if (!k.enabled || k.samples.length < 2) { k.samples = []; return }
-            const t0 = k.samples[0][0], t1 = k.samples[k.samples.length - 1][0]
-            const dist = k.samples.reduce((a, s) => a + s[1], 0)
-            const dt = Math.max(16, t1 - t0) / 1000
-            k.samples = []
-            const v = dist / dt
-            if (Math.abs(v) < 120) return
-            k.velocity = Math.max(-12000, Math.min(12000, v))
-            k.anim.running = true
-        }
+    property Timer release: Timer { interval: 50; onTriggered: k.fling() }
+    function fling() {
+        if (!enabled || samples.length < 2) { samples = []; return }
+        const t0 = samples[0][0], t1 = samples[samples.length - 1][0]
+        const dist = samples.reduce((a, s) => a + s[1], 0)
+        const dt = Math.max(16, t1 - t0) / 1000
+        samples = []
+        const v = dist / dt
+        if (Math.abs(v) < 120) return
+        velocity = Math.max(-12000, Math.min(12000, v))
+        lastTick = Date.now()
+        anim.running = true
     }
-    property FrameAnimation anim: FrameAnimation {
+    // A plain timer, not FrameAnimation: it ticks wherever the window lives.
+    property real lastTick: 0
+    property Timer anim: Timer {
+        interval: 8
+        repeat: true
         onTriggered: {
-            const dt = Math.min(frameTime, 0.05)
+            const now = Date.now()
+            const dt = Math.min((now - k.lastTick) / 1000, 0.05)
+            k.lastTick = now
             if (!k.moveBy(k.velocity * dt)) { k.stop(); return }
             k.velocity *= Math.pow(k.friction, dt)
             if (Math.abs(k.velocity) < 12) k.stop()

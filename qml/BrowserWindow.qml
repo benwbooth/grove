@@ -979,6 +979,7 @@ ApplicationWindow {
         else if (cmd === "go") p.navigate(arg)
         else if (cmd === "size") { const [w, h] = arg.split("x").map(Number); bw.width = w; if (h) bw.height = h }
         else if (cmd === "wheel") { const v = p.viewLoaderItem(); if (v && v.testWheel) v.testWheel(Number(arg)) }
+        else if (cmd === "swipe") { const v = p.viewLoaderItem(); if (v && v.testSwipe) v.testSwipe(Number(arg)) }
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")
         else if (cmd === "split") currentTab.toggleSplit()

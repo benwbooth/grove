@@ -13,6 +13,9 @@ ToolTip {
     property bool thumb: false
     property real mtime: 0
     property bool truncated: false
+    // In the app window (a separate popup window came up empty under arbor
+    // and caught the scroll wheel).
+    popupType: Popup.Item
     property bool hovering: false
     readonly property bool rich: !!(pane && pane.app && pane.app.settings.preview_tooltips)
     property var item: null

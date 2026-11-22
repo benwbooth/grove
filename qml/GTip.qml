@@ -5,6 +5,11 @@ import QtQuick.Controls.Basic
 ToolTip {
     id: tip
     delay: Theme.tooltipDelay
+    // Drawn inside the app window: as its own popup window it came up empty
+    // under arbor and sat under the pointer, swallowing the scroll wheel.
+    popupType: Popup.Item
+    // Below the item, like Finder's help tags, so it never covers the pointer.
+    y: parent ? parent.height + 6 : 0
     timeout: 12000
     padding: 0
     topPadding: 0.001
