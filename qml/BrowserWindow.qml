@@ -979,6 +979,7 @@ ApplicationWindow {
         else if (cmd === "go") p.navigate(arg)
         else if (cmd === "size") { const [w, h] = arg.split("x").map(Number); bw.width = w; if (h) bw.height = h }
         else if (cmd === "wheel") { const v = p.viewLoaderItem(); if (v && v.testWheel) v.testWheel(Number(arg)) }
+        else if (cmd === "pxwheel") { const v = p.viewLoaderItem(); if (v && v.testPixelWheel) v.testPixelWheel(Number(arg)) }
         else if (cmd === "swipe") { const v = p.viewLoaderItem(); if (v && v.testSwipe) v.testSwipe(Number(arg)) }
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")
@@ -1012,6 +1013,7 @@ ApplicationWindow {
         else if (cmd === "columns") setSetting("list_columns", arg.split(","))
         else if (cmd === "tip") { setSetting("preview_tooltips", true); p.testTip = Number(arg) }
         else if (cmd === "recordkey") settingsWin.recordSeq(arg)
+        else if (cmd === "realwheel") { const [x, y, a, px] = arg.split(",").map(Number); app.grove.testWheel(x, y, a, px || 0) }
         else if (cmd === "key") { const [k, m] = arg.split(":"); app.grove.testKey(Number(k), Number(m || 0), "") }
         else if (cmd === "settings") { if (arg) settingsWin.page = arg; showSettings() }
         else if (cmd === "help") showHelp(arg || "")

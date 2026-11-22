@@ -954,6 +954,10 @@ impl ffi::Grove {
         crate::portal::answer(&id.to_string(), ok, &uris.to_string(), &choices.to_string());
     }
 
+    pub fn test_wheel(&self, x: f64, y: f64, angle_y: i32, pixel_y: i32) {
+        ffi::grove_test_wheel(x, y, angle_y, pixel_y);
+    }
+
     pub fn test_key(&self, key: i32, modifiers: i32, text: &QString) {
         ffi::grove_test_key(key, modifiers, text);
     }

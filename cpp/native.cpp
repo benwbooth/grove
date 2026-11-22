@@ -1,3 +1,5 @@
+#include <QWheelEvent>
+#include <QPointingDevice>
 #include <QUrlQuery>
 #include <QPainter>
 #include <QColor>
@@ -464,6 +466,19 @@ void grove_test_key(int32_t key, int32_t modifiers, const QString& text)
     QKeyEvent release(QEvent::KeyRelease, key, Qt::KeyboardModifiers(modifiers), text);
     QGuiApplication::sendEvent(w, &press);
     QGuiApplication::sendEvent(w, &release);
+}
+
+// Test hook: a real wheel event at window position (x, y), delivered the
+// way the platform delivers one (so handlers, popups and overlays all see it).
+void grove_test_wheel(double x, double y, int32_t angleY, int32_t pixelY)
+{
+    QWindow* w = QGuiApplication::focusWindow();
+    if (!w && !QGuiApplication::topLevelWindows().isEmpty()) w = QGuiApplication::topLevelWindows().first();
+    if (!w) return;
+    const QPointF pos(x, y);
+    QWheelEvent ev(pos, w->mapToGlobal(pos), QPoint(0, pixelY), QPoint(0, angleY), Qt::NoButton, Qt::NoModifier,
+                   Qt::NoScrollPhase, false, Qt::MouseEventNotSynthesized, QPointingDevice::primaryPointingDevice());
+    QGuiApplication::sendEvent(w, &ev);
 }
 
 static QString g_systemIconTheme;

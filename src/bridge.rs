@@ -28,6 +28,7 @@ pub mod ffi {
         fn grove_image_convert(path: &QString, format: &QString) -> QString;
         fn grove_markup_render(src: &QString, ops: &QString, dest: &QString) -> QString;
         fn grove_test_key(key: i32, modifiers: i32, text: &QString);
+        fn grove_test_wheel(x: f64, y: f64, angle_y: i32, pixel_y: i32);
         fn grove_set_icon_theme(dark: bool, mac: bool);
         fn grove_grab_windows(path: &QString);
     }
@@ -281,6 +282,8 @@ pub mod ffi {
         // --- tests ---
         #[qinvokable]
         fn test_key(self: &Grove, key: i32, modifiers: i32, text: &QString);
+        #[qinvokable]
+        fn test_wheel(self: &Grove, x: f64, y: f64, angle_y: i32, pixel_y: i32);
         #[qinvokable]
         fn write_text(self: &Grove, path: &QString, text: &QString);
         #[qinvokable]

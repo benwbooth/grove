@@ -38,6 +38,7 @@ void grove_rows_changed(QAbstractListModel& model, int32_t first, int32_t last);
 void grove_layout_changing(QAbstractListModel& model, bool done);
 // Breeze or Breeze Dark icons to match grove's light/dark look.
 void grove_set_icon_theme(bool dark, bool mac);
+void grove_test_wheel(double x, double y, int32_t angleY, int32_t pixelY);
 // Test hook: save every visible window (the first to `path`, others to
 // path-1.png, path-2.png...).
 void grove_grab_windows(const QString& path);

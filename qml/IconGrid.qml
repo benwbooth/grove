@@ -417,6 +417,8 @@ Item {
     // Test hook: n wheel notches down (negative: up).
     function testWheel(n) { kinetic.wheel({ pixelDelta: Qt.point(0, 0), angleDelta: Qt.point(0, -120 * n) }) }
     // Touchpad-like events that each claim to end the gesture (must still move).
+    // A wheel event with only a pixel amount (as some Wayland wheels send).
+    function testPixelWheel(n) { kinetic.wheel({ device: { type: PointerDevice.Mouse, name: "test" }, pixelDelta: Qt.point(0, -15 * n), angleDelta: Qt.point(0, 0) }) }
     function testSwipe(n) { for (let i = 0; i < n; i++) kinetic.wheel({ device: { type: PointerDevice.TouchPad, name: "test" }, isEndEvent: true, pixelDelta: Qt.point(0, -40), angleDelta: Qt.point(0, -320) }) }
     Kinetic { id: kinetic; target: root.flick; notch: root.cellH * 0.6; onTargetChanged: stop() }
     WheelHandler {

@@ -71,8 +71,11 @@ QtObject {
             if (e.isEndEvent === true) { release.stop(); fling() } else release.restart()
             return
         }
-        if (ang0 === 0) return
-        const step = -ang0 / 120 * notch
+        // Some wheels arrive with only a pixel amount (no notch angle): use it
+        // (15 px = one notch on Wayland) rather than dropping the event.
+        const angEff = ang0 !== 0 ? ang0 : pix0 * 8
+        if (angEff === 0) return
+        const step = -angEff / 120 * notch
         if (!enabled) { moveBy(step); return }
         // Part of the notch moves at once (so a wheel always responds), the
         // rest glides and slows down; spinning faster builds speed.
