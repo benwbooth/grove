@@ -958,6 +958,10 @@ int grove_run(const QString& url, const QString& importPath)
 
 QString grove_mime_info(const QString& name, const QString& path, bool deep)
 {
+    // A listing thread still running while grove quits: Qt's MIME database
+    // is gone with the application (a crash on quit).
+    if (g_quitting || !QCoreApplication::instance())
+        return QStringLiteral("application/octet-stream\napplication-octet-stream\nunknown\n");
     static thread_local QMimeDatabase db;
     QMimeType t = deep && !path.isEmpty() ? db.mimeTypeForFile(path) : db.mimeTypeForFile(name, QMimeDatabase::MatchExtension);
     if (!t.isValid()) t = db.mimeTypeForName(QStringLiteral("application/octet-stream"));

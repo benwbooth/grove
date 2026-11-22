@@ -22,10 +22,12 @@ Item {
 
     onItemChanged: Qt.callLater(load)
     onActiveChanged: if (!active) player.stop()
+    // The previous file stays on screen until the next one's details are in
+    // (clearing first made every move flash an icon, then a thumbnail).
     function load() {
         player.stop()
-        pv = {}; path = ""; converting = false
-        if (!active || !item || !item.path || item.isDir) return
+        converting = false
+        if (!active || !item || !item.path || item.isDir) { pv = {}; path = ""; return }
         const want = item.path
         if (want.indexOf("archive://") === 0) {
             Async.call(app.grove, k => app.grove.archiveLocal(k, want), r => {
@@ -35,9 +37,9 @@ Item {
         } else if (want.indexOf("/") === 0) show(want, want)
     }
     function show(local, want) {
-        path = local
         Async.call(app.grove, k => app.grove.preview(k, local, Theme.dark), r => {
             if (!fv.item || fv.item.path !== want) return
+            fv.path = local
             fv.pv = r
             if (r.convert) {
                 fv.converting = true
@@ -51,14 +53,11 @@ Item {
     }
 
     // Pictures (and anything without a viewer of its own): the thumbnail.
-    Image {
+    SwapImage {
         id: thumb
         anchors.fill: parent
         visible: !fv.rich || fv.pv.kind === "media" && !fv.pv.video || !!fv.pv.convert
-        fillMode: Image.PreserveAspectFit
-        asynchronous: true
-        sourceSize.width: Math.ceil(Math.min(width, 1024) * Screen.devicePixelRatio)
-        sourceSize.height: Math.ceil(Math.min(height, 1024) * Screen.devicePixelRatio)
+        sourceSize: Qt.size(Math.ceil(Math.min(width, 1024) * Screen.devicePixelRatio), Math.ceil(Math.min(height, 1024) * Screen.devicePixelRatio))
         source: visible && fv.pv.kind !== "image" ? fv.thumbSrc : ""
         anchors.bottomMargin: fv.pv.kind === "media" ? (fv.pv.video ? 40 : 40 + Math.min(56, fv.height * 0.22) + 8) : 0
     }
@@ -78,17 +77,12 @@ Item {
         GLabel { text: "Getting every page ready…"; color: Theme.fgSecondary; font.pixelSize: Theme.small }
     }
 
-    Image {
+    SwapImage {
         id: pic
         anchors.fill: parent
         visible: fv.pv.kind === "image"
         source: visible ? "file://" + encodeURI(fv.pv.src || fv.path).replace(/#/g, "%23") : ""
-        fillMode: Image.PreserveAspectFit
-        asynchronous: true
-        autoTransform: true
-        smooth: true
-        mipmap: true
-        sourceSize.width: Math.ceil(Math.min(width, 2048) * Screen.devicePixelRatio)
+        sourceSize: Qt.size(Math.ceil(Math.min(width, 2048) * Screen.devicePixelRatio), 0)
     }
     PreviewSpinner { image: pic; size: 18; anchors.centerIn: parent }
 

@@ -46,14 +46,16 @@ Item {
     Column {
         id: pcol
         x: 16
-        y: viewer.rich && !p.compact ? 12 : Math.max(12, (pflick.height - height) / 2)
+        y: !p.compact ? 12 : Math.max(12, (pflick.height - height) / 2)
         width: pflick.width - 32
         spacing: 10
         // The file itself, readable in full (text, Markdown, tables, every
         // page, a player, the picture); compact panels keep the thumbnail.
         Item {
             width: parent.width
-            height: viewer.rich && !p.compact ? Math.max(p.big, pflick.height - 230) : p.big
+            // One layout for every file (viewer on top, details under it), so
+            // nothing jumps between files of different kinds.
+            height: !p.compact ? Math.max(p.big, pflick.height - 230) : p.big
             FileViewer {
                 id: viewer
                 anchors.fill: parent
