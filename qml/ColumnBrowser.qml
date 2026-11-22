@@ -17,7 +17,25 @@ Item {
 
     function computeChain() {
         const p = pane.path
+        // Inside an archive: the folders down to the archive, the archive
+        // itself ("archive://…#"), then its folders, each a column.
+        if (p && p.indexOf("archive://") === 0) {
+            const hash = p.indexOf("#")
+            const file = hash >= 0 ? p.substring(10, hash) : p.substring(10)
+            const inner = hash >= 0 ? p.substring(hash + 1) : ""
+            const out = folderChain(file.substring(0, file.lastIndexOf("/")) || "/")
+            out.push("archive://" + file + "#")
+            let acc = ""
+            for (const r of inner.split("/").filter(x => x)) { acc += (acc ? "/" : "") + r; out.push("archive://" + file + "#" + acc) }
+            chain = out
+            syncCols()
+            return
+        }
         if (!p || p.indexOf("/") !== 0) { chain = p ? [p] : []; syncCols(); return }
+        chain = folderChain(p)
+        syncCols()
+    }
+    function folderChain(p) {
         const home = pane.grove.home()
         const base = (p === home || p.indexOf(home + "/") === 0) ? home : "/"
         const out = [base]
@@ -26,8 +44,13 @@ Item {
             let acc = base === "/" ? "" : base
             for (const r of rest) { acc += "/" + r; out.push(acc) }
         }
-        chain = out
-        syncCols()
+        return out
+    }
+    // The row path a column selects for the column after it (an archive's
+    // own listing is selected by the archive file).
+    function rowPathOf(colPath) {
+        if (colPath.indexOf("archive://") === 0 && colPath.endsWith("#")) return colPath.substring(10, colPath.length - 1)
+        return colPath
     }
     // The columns as a list model, changed in place: going deeper appends a
     // column, going up removes the ones on the right, and the columns you
@@ -110,7 +133,8 @@ Item {
         if (e.key === Qt.Key_Down) { pane.step(1, shift); return true }
         if (e.key === Qt.Key_Up) { pane.step(-1, shift); return true }
         if (e.key === Qt.Key_Right) {
-            if (current && current.isDir) pane.navigate(current.path)
+            const d = pane.browsePath(current)
+            if (d) pane.navigate(d)
             return true
         }
         if (e.key === Qt.Key_Left) {
@@ -174,7 +198,7 @@ Item {
 
             FolderModel {
                 id: own
-                onLoaded: if (column.selectedChild) selectPaths(JSON.stringify([column.selectedChild]))
+                onLoaded: if (column.selectedChild) selectPaths(JSON.stringify([root.rowPathOf(column.selectedChild)]))
             }
             readonly property var colModel: isLast ? root.fm : own
             // A column that isn't the last lists its folder itself (the last one
@@ -192,7 +216,7 @@ Item {
                 own.loadPath(folder)
             }
             Component.onCompleted: loadOwn()
-            onSelectedChildChanged: if (!isPreview && selectedChild) own.selectPaths(JSON.stringify([selectedChild]))
+            onSelectedChildChanged: if (!isPreview && selectedChild) own.selectPaths(JSON.stringify([root.rowPathOf(selectedChild)]))
 
             MouseArea {
                 anchors.fill: parent
@@ -223,6 +247,7 @@ Item {
                     required property string name
                     required property string path
                     required property bool isDir
+                    required property bool isArchive
                     required property bool selected
                     required property string iconName
                     required property string tags
@@ -262,7 +287,7 @@ Item {
                         id: chevron
                         anchors.right: parent.right; anchors.rightMargin: 12
                         anchors.verticalCenter: parent.verticalCenter
-                        text: r.isDir ? "›" : ""
+                        text: r.isDir || (r.isArchive && root.pane.archiveLike(r)) ? "›" : ""
                         font.pixelSize: Theme.title
                         color: r.selected && column.isLast && root.pane.active ? Theme.accentText : Theme.fgSecondary
                     }
@@ -273,7 +298,8 @@ Item {
                         onClicked: {
                             root.pane.activated()
                             root.pane.forceActiveFocus()
-                            if (r.isDir) root.pane.navigate(r.path)
+                            const d = root.pane.browsePath(r)
+                            if (d) root.pane.navigate(d)
                             else root.pane.navigate(column.folder, { select: [r.path] })
                         }
                     }
@@ -284,8 +310,8 @@ Item {
                         pane: root.pane
                         row: r.index
                         iconUrl: Theme.iconUrl(r.iconName)
-                        onLeftPressed: (mods) => { if (r.isDir && !(mods & (Qt.ShiftModifier | Qt.ControlModifier))) openTimer.restart() }
-                        Timer { id: openTimer; interval: 1; onTriggered: if (root.fm.selectionCount === 1) root.pane.navigate(r.path) }
+                        onLeftPressed: (mods) => { if (root.pane.browsePath(r) && !(mods & (Qt.ShiftModifier | Qt.ControlModifier))) openTimer.restart() }
+                        Timer { id: openTimer; interval: 1; onTriggered: if (root.fm.selectionCount === 1) root.pane.navigate(root.pane.browsePath(r)) }
                     }
                     FolderDrop { id: drop; anchors.fill: parent; pane: root.pane; path: r.path; enabledFor: r.isDir }
                     // A name cut short shows in full on hover.

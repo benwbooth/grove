@@ -997,6 +997,8 @@ ApplicationWindow {
         else if (cmd === "pxwheel") { const v = p.viewLoaderItem(); if (v && v.testPixelWheel) v.testPixelWheel(Number(arg)) }
         else if (cmd === "swipe") { const v = p.viewLoaderItem(); if (v && v.testSwipe) v.testSwipe(Number(arg)) }
         else if (cmd === "du") bw.showDiskUsage(arg || p.path)
+        else if (cmd === "openrow") { console.warn("grove test item", p.model.get(Number(arg))); p.openRow(Number(arg), false) }
+        else if (cmd === "dumppath") console.warn("grove test path", p.path, p.viewMode)
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")
         else if (cmd === "split") currentTab.toggleSplit()

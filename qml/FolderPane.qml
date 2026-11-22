@@ -150,8 +150,9 @@ FocusScope {
             const h = p.indexOf("#")
             if (h < 0) return p.substring(10, p.lastIndexOf("/")) || "/"
             const inner = p.substring(h + 1)
+            if (!inner) { const f = p.substring(10, h); return f.substring(0, f.lastIndexOf("/")) || "/" }
             const i = inner.lastIndexOf("/")
-            return i < 0 ? p.substring(0, h) : p.substring(0, h + 1) + inner.substring(0, i)
+            return p.substring(0, h + 1) + (i < 0 ? "" : inner.substring(0, i))
         }
         if (p === "/" || p.indexOf("/") !== 0) return ""
         const i = p.lastIndexOf("/")
@@ -159,7 +160,9 @@ FocusScope {
     }
     function goUp() {
         const up = parentOf(path)
-        if (up) navigate(up, { select: [path] })
+        // Leaving an archive selects the archive file.
+        const sel = path.indexOf("archive://") === 0 && path.endsWith("#") ? path.substring(10, path.length - 1) : path
+        if (up) navigate(up, { select: [sel] })
     }
     function reload() { pendingSelect = JSON.parse(fm.selectedPaths()); fm.reload() }
 
@@ -266,8 +269,20 @@ FocusScope {
             return
         }
         if (it.key && inTrash) { win.toast("info", "Items in the Trash can't be opened. Put it back first (right-click › Put Back)."); return }
-        if (archiveLike(it)) { navigate("archive://" + it.path + "#"); return }
+        if (archiveLike(it)) {
+            if (inNewTab) win.newTab(browsePath(it), [])
+            else navigate(browsePath(it))
+            return
+        }
         grove.openPaths(JSON.stringify([it.path]))
+    }
+    // Where an item opens as a folder: a folder's own path, an archive's
+    // archive:// listing (archives browse like folders), else "".
+    function browsePath(it) {
+        if (!it) return ""
+        if (it.isDir) return it.path
+        if (archiveLike(it) && it.path.indexOf("/") === 0) return "archive://" + it.path + "#"
+        return ""
     }
     // Anything bsdtar can open (grove's list: zip, tar.*, 7z, rar, iso, cab,
     // deb/rpm, cbz/cbr, jar/apk...), decided by the model from type and name.
@@ -281,9 +296,10 @@ FocusScope {
         for (const p of sel) {
             const row = fm.rowOf(p)
             const it = itemAt(row)
-            if (it.isDir) {
-                if (sel.length === 1 && !inNewTab) { navigate(it.path); return }
-                win.newTab(it.path, [])
+            const dir = browsePath(it)
+            if (dir) {
+                if (sel.length === 1 && !inNewTab) { navigate(dir); return }
+                win.newTab(dir, [])
             } else files.push(p)
         }
         if (files.length) grove.openPaths(JSON.stringify(files))

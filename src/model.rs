@@ -278,7 +278,7 @@ const ROLES: &[&str] = &[
     "name", "path", "isDir", "isLink", "size", "sizeText", "mtime", "dateText", "kind", "mime", "iconName", "hidden", "selected", "depth",
     "expanded", "tags", "tagColors", "note", "git", "cut", "thumb", "row", "broken", "ext", "created", "createdText",
     "rating", "addedText", "openedText", "permissions", "owner", "group", "fullPath", "section", "dims", "duration",
-    "badge",
+    "badge", "isArchive",
 ];
 
 fn qs(s: &str) -> QString {
@@ -403,6 +403,7 @@ impl qobject::FolderModel {
             "name" => QVariant::from(&qs(&it.e.name)),
             "path" => QVariant::from(&qs(&it.e.path)),
             "isDir" => QVariant::from(&it.e.is_dir),
+            "isArchive" => QVariant::from(&(!it.e.is_dir && crate::archive::is_archive(&it.mime.name, &it.e.name))),
             "isLink" => QVariant::from(&it.e.is_link),
             "broken" => QVariant::from(&it.e.broken),
             "size" => QVariant::from(&(it.e.size as f64)),
