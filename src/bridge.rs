@@ -46,6 +46,7 @@ pub mod ffi {
         fn grove_thumb_kind(path: &str, mimes: &str) -> String;
         fn grove_thumb_make(path: &str, mimes: &str, px: u32, token: u64) -> String;
         fn grove_thumb_cancel(token: u64);
+        fn grove_thumb_cancel_all();
         fn grove_thumb_done(token: u64);
         fn grove_pdf_page(path: &str, page: u32, width: u32, token: u64) -> String;
     }
@@ -352,6 +353,10 @@ fn grove_thumb_make(path: &str, mimes: &str, px: u32, token: u64) -> String {
 
 fn grove_thumb_cancel(token: u64) {
     crate::thumbgen::cancel(token)
+}
+
+fn grove_thumb_cancel_all() {
+    crate::thumbgen::cancel_all()
 }
 
 fn grove_thumb_done(token: u64) {

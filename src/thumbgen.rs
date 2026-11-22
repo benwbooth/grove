@@ -17,9 +17,20 @@ fn tokens() -> &'static Mutex<HashMap<u64, Arc<AtomicBool>>> {
     T.get_or_init(Default::default)
 }
 
-/// The cancel flag of job `token` (made on first use).
+static QUITTING: AtomicBool = AtomicBool::new(false);
+
+/// The cancel flag of job `token` (made on first use; already set once
+/// the app is quitting).
 pub fn flag(token: u64) -> Arc<AtomicBool> {
-    tokens().lock().entry(token).or_default().clone()
+    tokens().lock().entry(token).or_insert_with(|| Arc::new(AtomicBool::new(QUITTING.load(Ordering::Relaxed)))).clone()
+}
+
+/// The app is quitting: stop every job (their tools are killed).
+pub fn cancel_all() {
+    QUITTING.store(true, Ordering::Relaxed);
+    for f in tokens().lock().values() {
+        f.store(true, Ordering::Relaxed);
+    }
 }
 
 pub fn cancel(token: u64) {

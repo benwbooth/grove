@@ -74,6 +74,8 @@ struct Pools {
 Pools& pools() { static Pools* p = new Pools; return *p; }
 
 std::atomic<quint64> g_token { 1 };
+// Set when the app quits: every job stops at its next check.
+std::atomic<bool> g_quitting { false };
 std::atomic<int> g_seq { 0 };
 bool thumbLog() { static const bool on = qEnvironmentVariableIsSet("GROVE_THUMB_LOG"); return on; }
 
@@ -146,10 +148,13 @@ QImage drawPage(const QByteArray& json, int px)
     // A letter-shaped page, drawn big and scaled down (the text reads as
     // text at large sizes and as its shape at small ones).
     const int W = 320, H = 414, margin = 18;
-    QImage page(W, H, QImage::Format_ARGB32_Premultiplied);
+    // Big previews (gallery, Quick Look) draw it at their size, not scaled up.
+    const qreal k = qMax(1.0, px / qreal(H));
+    QImage page(qRound(W * k), qRound(H * k), QImage::Format_ARGB32_Premultiplied);
     page.fill(Qt::white);
     {
         QPainter p(&page);
+        p.scale(k, k);
         p.setRenderHint(QPainter::TextAntialiasing);
         QFont f = mono ? QFontDatabase::systemFont(QFontDatabase::FixedFont) : QFont(QStringLiteral("Sans Serif"));
         f.setPixelSize(mono ? 9 : 10);
@@ -378,7 +383,7 @@ QImage drawModel(const QString& path, int px, const std::atomic<bool>& cancelled
             miny = qMin(miny, float(q.y())); maxy = qMax(maxy, float(q.y()));
         }
         faces << f;
-        if ((i & 0xffff) == 0 && cancelled) return {};
+        if ((i & 0xffff) == 0 && (cancelled || g_quitting)) return {};
     }
     if (faces.isEmpty()) return {};
     std::sort(faces.begin(), faces.end(), [](const Face& x, const Face& y) { return x.z < y.z; });
@@ -396,7 +401,7 @@ QImage drawModel(const QString& path, int px, const std::atomic<bool>& cancelled
         const Face& f = faces[i];
         p.setBrush(QColor::fromRgbF(base.redF() * f.light, base.greenF() * f.light, base.blueF() * f.light));
         p.drawPolygon(f.p, 3);
-        if ((i & 0xffff) == 0 && cancelled) return {};
+        if ((i & 0xffff) == 0 && (cancelled || g_quitting)) return {};
     }
     p.end();
     return img.scaled(px, px, Qt::KeepAspectRatio, Qt::SmoothTransformation);
@@ -451,7 +456,7 @@ protected:
         }
         // Test hook: slow every preview down (to see the spinners).
         static const int testDelay = qEnvironmentVariableIntValue("GROVE_THUMB_DELAY");
-        for (int t = 0; t < testDelay && !m_cancelled; t += 20) QThread::msleep(20);
+        for (int t = 0; t < testDelay && !m_cancelled && !g_quitting; t += 20) QThread::msleep(20);
         make(px, rp);
         if (!m_img.isNull()) return false;
         if (!m_cancelled) grove_thumb_mark_failed(rp);
@@ -731,6 +736,12 @@ int grove_run(const QString& url, const QString& importPath)
     engine->load(QUrl(url));
     if (engine->rootObjects().isEmpty()) return 1;
     const int code = QGuiApplication::exec();
+    // Stop preview work (killing its tools) before tearing down, so no
+    // worker is still drawing while the app goes away.
+    g_quitting = true;
+    grove_thumb_cancel_all();
+    for (QThreadPool* p : { &pools().lookup, &pools().make, &pools().tools, &pools().pages }) p->clear();
+    for (QThreadPool* p : { &pools().lookup, &pools().make, &pools().tools, &pools().pages }) p->waitForDone(3000);
     return code;
 }
 
