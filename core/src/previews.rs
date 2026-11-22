@@ -614,6 +614,25 @@ pub fn kind_of(mimes: &[String], name: &str) -> Kind {
     if m.starts_with("audio/") {
         return Kind::Audio;
     }
+    // Code and config files by name too (inside archives the type comes
+    // from the name alone, and many have no text/* type).
+    const CODE: &[&str] = &[
+        "txt", "text", "log", "md", "markdown", "rst", "adoc", "org", "csv", "tsv", "ini", "cfg", "conf", "config", "properties", "env",
+        "toml", "yaml", "yml", "json", "jsonc", "json5", "xml", "xsd", "xsl", "plist", "html", "htm", "xhtml", "css", "scss", "sass", "less",
+        "js", "mjs", "cjs", "ts", "tsx", "jsx", "vue", "svelte", "c", "h", "cc", "cpp", "cxx", "hpp", "hh", "hxx", "inl", "m", "mm",
+        "rs", "go", "java", "kt", "kts", "scala", "groovy", "gradle", "cs", "fs", "fsx", "vb", "vbs", "bas", "frm", "cls", "swift", "dart",
+        "py", "pyw", "pyi", "rb", "pl", "pm", "php", "lua", "tcl", "r", "jl", "nim", "zig", "d", "v", "sv", "vhd", "vhdl", "hs", "lhs",
+        "ml", "mli", "elm", "ex", "exs", "erl", "hrl", "clj", "cljs", "lisp", "lsp", "scm", "rkt", "el", "vim", "sql", "graphql", "proto",
+        "sh", "bash", "zsh", "fish", "ksh", "csh", "bat", "cmd", "btm", "ps1", "psm1", "psd1", "ahk", "au3", "asm", "s", "inc", "a51",
+        "nix", "cmake", "mk", "mak", "make", "ninja", "meson", "bazel", "bzl", "dockerfile", "qml", "qrc", "pro", "pri", "ui", "glsl",
+        "hlsl", "vert", "frag", "shader", "cg", "diff", "patch", "srt", "ass", "ssa", "vtt", "tex", "sty", "bib", "nfo", "diz", "reg",
+        "inf", "desktop", "service", "gitignore", "gitattributes", "editorconfig", "lock", "cue", "m3u", "pls",
+    ];
+    const CODE_NAMES: &[&str] = &["makefile", "gnumakefile", "dockerfile", "containerfile", "cmakelists.txt", "readme", "license", "copying",
+        "changelog", "authors", "install", "news", "todo", "pkgbuild", "vagrantfile", "gemfile", "rakefile", "procfile", "justfile"];
+    if !m.starts_with("image/") && !m.starts_with("video/") && !m.starts_with("audio/") && (CODE.contains(&ext) || CODE_NAMES.contains(&l.as_str())) {
+        return Kind::Text;
+    }
     if m.starts_with("text/") || has("text/plain")
         || matches!(m, "application/json" | "application/xml" | "application/javascript" | "application/x-shellscript" | "application/toml"
             | "application/x-yaml" | "application/sql" | "application/x-desktop" | "application/x-perl" | "application/x-ruby"
@@ -682,5 +701,8 @@ mod tests {
         assert_eq!(k("text/x-rust", "a.rs"), Kind::Text);
         assert_eq!(k("image/heif", "a.heic"), Kind::Picture);
         assert_eq!(k("application/octet-stream", "a.bin"), Kind::Other);
+        assert_eq!(k("application/octet-stream", "a.asm"), Kind::Text);
+        assert_eq!(k("application/x-bat", "RUN.BAT"), Kind::Text);
+        assert_eq!(k("application/octet-stream", "Makefile"), Kind::Text);
     }
 }

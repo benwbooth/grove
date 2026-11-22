@@ -10,7 +10,16 @@ use syntect::parsing::SyntaxSet;
 
 fn syntaxes() -> &'static SyntaxSet {
     static S: OnceLock<SyntaxSet> = OnceLock::new();
-    S.get_or_init(SyntaxSet::load_defaults_newlines)
+    // bat's set (two-face): ~200 languages, PowerShell, VBScript, TOML,
+    // TypeScript, Nix, CMake, Dockerfile, INI, assembly... besides syntect's.
+    S.get_or_init(|| {
+        let mut b = two_face::syntax::extra_newlines().into_builder();
+        // Languages bat lacks (data/syntaxes, each with its licence).
+        if let Ok(d) = syntect::parsing::SyntaxDefinition::load_from_str(include_str!("../data/syntaxes/PowerShell.sublime-syntax"), true, None) {
+            b.add(d);
+        }
+        b.build()
+    })
 }
 
 fn themes() -> &'static ThemeSet {
@@ -46,9 +55,19 @@ fn read_head(p: &Path, limit: usize) -> Option<(String, bool)> {
 }
 
 fn syntax_for<'a>(ss: &'a SyntaxSet, text: &str, name: &str) -> &'a syntect::parsing::SyntaxReference {
-    let ext = Path::new(name).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
-    ss.find_syntax_by_extension(&ext)
-        .or_else(|| ss.find_syntax_by_token(name))
+    let ext = Path::new(name).extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    // Whole names first (Makefile, CMakeLists.txt, Dockerfile, .bashrc).
+    ss.find_syntax_by_extension(name)
+        .or_else(|| ss.find_syntax_by_extension(&name.to_lowercase()))
+        .or_else(|| ss.find_syntax_by_extension(&ext))
+        .or_else(|| ss.find_syntax_by_token(&ext))
+        // Close relatives for what has no syntax of its own.
+        .or_else(|| match ext.as_str() {
+            "vbs" | "vb" | "bas" | "frm" | "cls" | "vba" => ss.find_syntax_by_name("ASP"),
+            "s" | "inc" | "a51" | "nasm" => ss.find_syntax_by_extension("asm"),
+            "ahk" | "au3" => ss.find_syntax_by_name("Batch File"),
+            _ => None,
+        })
         .or_else(|| text.lines().next().and_then(|l| ss.find_syntax_by_first_line(l)))
         .unwrap_or_else(|| ss.find_syntax_plain_text())
 }
@@ -211,6 +230,18 @@ pub fn office_pdf(path: &str) -> Value {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn finds_many_languages() {
+        let ss = super::syntaxes();
+        let mut bad = vec![];
+        for n in ["s.ps1", "RUN.BAT", "Makefile", "CMakeLists.txt", "a.toml", "x.nix", "v.vbs", "a.ts", "a.lua", "a.asm", "a.s", "c.ini", "Dockerfile", "a.qml", "a.kt", "a.swift", "a.zig", "a.dart", "a.ex", "a.hs", "a.vue", "a.svelte", "a.cs", "a.fs", "a.vb", "a.ahk", "a.reg", "a.proto", "a.graphql", "a.glsl", "a.cue", "a.srt", "a.diff", "a.r", "a.jl", "a.nim", "a.tcl", "a.pas", "a.f90", "a.cob", "a.v", "a.vhd", "a.scss", "a.less"] {
+            let got = &super::syntax_for(ss, "", n).name;
+            if got == "Plain Text" { bad.push(n) }
+        }
+        // Not worth a syntax of their own: cue sheets, subtitles, COBOL.
+        assert_eq!(bad, ["a.cue", "a.srt", "a.cob"], "no syntax for {bad:?}");
+    }
+
     #[test]
     fn highlights_rust() {
         let h = super::highlight("fn main() { let x = 1; }\n", "a.rs", true);

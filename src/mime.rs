@@ -60,6 +60,17 @@ pub fn deep(path: &str) -> MimeRec {
 
 /// A type and its parents ("text/x-rust", "text/plain", ...).
 pub fn with_parents(mime: &str) -> Vec<String> {
+    // Asked per row while views draw: remember each type's answer.
+    thread_local! { static CACHE: std::cell::RefCell<std::collections::HashMap<String, Vec<String>>> = Default::default(); }
+    if let Some(v) = CACHE.with(|c| c.borrow().get(mime).cloned()) {
+        return v;
+    }
+    let v = parents_uncached(mime);
+    CACHE.with(|c| c.borrow_mut().insert(mime.to_string(), v.clone()));
+    v
+}
+
+fn parents_uncached(mime: &str) -> Vec<String> {
     let mut v = vec![mime.to_string()];
     for p in ffi::grove_mime_parents(&QString::from(mime)).to_string().split('\n') {
         if !p.is_empty() && !v.iter().any(|x| x == p) {
@@ -118,7 +129,8 @@ pub fn thumbable(e: &Entry, m: &MimeRec) -> bool {
         return true;
     }
     // Everything grove draws itself or with its tools (thumbgen.rs).
-    if grove_core::previews::kind_of(std::slice::from_ref(&m.name), &e.name) != grove_core::previews::Kind::Other {
+    // With the type's parents: a .bat (application/x-bat) or .ps1 is text.
+    if grove_core::previews::kind_of(&with_parents(&m.name), &e.name) != grove_core::previews::Kind::Other {
         return true;
     }
     let ts = grove_core::thumbs::thumbnailers();
