@@ -40,6 +40,12 @@ contexts:
   words:
     - match: '#.*$'
       scope: comment.line.number-sign.tessh
+    # A backslash takes the next space or special character into the word
+    # (7th\ Heaven, \$5, \*); at the end of a line it carries the line on.
+    - match: '\\$'
+      scope: punctuation.separator.continuation.line.tessh
+    - match: '\\[ \t()\[\]{}"''`;,$#*?&|<>]'
+      scope: constant.character.escape.tessh
     - include: strings
     - match: '\$\?'
       scope: variable.language.tessh
