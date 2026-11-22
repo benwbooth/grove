@@ -17,7 +17,7 @@ use std::time::Duration;
 pub const FLAVORS: [(&str, u32); 4] = [("normal", 128), ("large", 256), ("x-large", 512), ("xx-large", 1024)];
 // Bump the version when grove learns to make more thumbnails, so files
 // that failed before are tried again.
-const FAIL_DIR: &str = "fail/grove-1.1";
+const FAIL_DIR: &str = "fail/grove-1.2";
 
 pub fn root() -> PathBuf {
     util::cache_home().join("thumbnails")
@@ -133,11 +133,25 @@ pub fn lookup(path: &Path, px: u32) -> Option<PathBuf> {
             continue;
         }
         let p = root().join(dir).join(format!("{uri_md5}.png"));
-        if p.exists() && fresh(&p, mtime) {
+        if p.exists() && fresh(&p, mtime) && !needs_redraw(path, &p) {
             return Some(p);
         }
     }
     None
+}
+
+/// Pages grove draws differently now (Markdown rendered, tables as
+/// columns): their older thumbnails (without this mark) are made again.
+const PAGE_MARK: (&str, &str) = ("X-Grove-Page", "2");
+
+fn needs_redraw(path: &Path, thumb: &Path) -> bool {
+    let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let ext = name.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+    if !matches!(ext, "md" | "markdown" | "mdown" | "mkd" | "mkdn" | "csv" | "tsv" | "tab" | "xlsx" | "xlsm" | "xlsb" | "xls" | "ods") {
+        return false;
+    }
+    let Some(all) = read_all(thumb) else { return true };
+    png_text(&all).get(PAGE_MARK.0).map(String::as_str) != Some(PAGE_MARK.1)
 }
 
 /// Thumbnails grove (or anyone) shouldn't make: the cache itself.
@@ -177,6 +191,7 @@ pub fn meta_pairs(path: &Path, mtime: i64, size: u64, mime: &str) -> Vec<(String
         ("Thumb::MTime".to_string(), mtime.to_string()),
         ("Thumb::Size".to_string(), size.to_string()),
         ("Software".to_string(), "grove".to_string()),
+        (PAGE_MARK.0.to_string(), PAGE_MARK.1.to_string()),
     ];
     if !mime.is_empty() {
         v.push(("Thumb::Mimetype".to_string(), mime.to_string()));

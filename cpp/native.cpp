@@ -31,6 +31,11 @@
 #include <QtGui/QKeyEvent>
 #include <QtGui/QPainter>
 #include <QtGui/QPainterPath>
+#include <QtGui/QTextBlock>
+#include <QtGui/QTextCursor>
+#include <QtGui/QTextDocument>
+#include <QtGui/QTextFrame>
+#include <QtGui/QTextTable>
 #include <QtGui/QTransform>
 #include <QtGui/QWindow>
 #include <QtPdf/QPdfDocument>
@@ -39,6 +44,7 @@
 #include <QtQuick/QQuickImageProvider>
 #include <QtQuick/QQuickWindow>
 #include <atomic>
+#include <functional>
 #include <algorithm>
 
 static QString fromRust(const rust::String& s) { return QString::fromUtf8(s.data(), int(s.size())); }
@@ -139,7 +145,149 @@ QImage readScaled(const QString& file, int px)
     return img;
 }
 
-// Text drawn as a sheet of paper: {"mono": bool, "lines": [[[colour, text], ...], ...]}.
+// Markdown as a styled document (QTextDocument's own reader): spacing
+// between blocks, tinted code, accent links, quiet quotes, ruled tables,
+// pictures fitted to `maxWidth`. Used for Quick Look (as HTML) and for
+// thumbnails (drawn on a sheet of paper).
+static void styleMarkdown(QTextDocument& doc, const QString& md, bool dark, const QString& family, qreal px, const QString& baseDir, qreal maxWidth)
+{
+    QFont f(family.isEmpty() ? QStringLiteral("Sans Serif") : family);
+    f.setPixelSize(qMax(1, qRound(px)));
+    doc.setDefaultFont(f);
+    doc.setDocumentMargin(0);
+    if (!baseDir.isEmpty()) doc.setBaseUrl(QUrl::fromLocalFile(baseDir + QLatin1Char('/')));
+    doc.setMarkdown(md, QTextDocument::MarkdownDialectGitHub);
+    const QColor fg = dark ? QColor(0xf5, 0xf5, 0xf7) : QColor(0x1d, 0x1d, 0x1f);
+    const QColor quiet = dark ? QColor(0xa8, 0xa8, 0xae) : QColor(0x6e, 0x6e, 0x73);
+    const QColor link = dark ? QColor(0x0a, 0x84, 0xff) : QColor(0x00, 0x66, 0xcc);
+    const QColor codeBg = dark ? QColor(0x3a, 0x3a, 0x40) : QColor(0xeb, 0xeb, 0xf0);
+    const QColor rule = dark ? QColor(0x48, 0x48, 0x4e) : QColor(0xd2, 0xd2, 0xd7);
+    const QString mono = QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
+    QTextCursor c(&doc);
+    for (QTextBlock b = doc.begin(); b.isValid(); b = b.next()) {
+        QTextBlockFormat bf = b.blockFormat();
+        const int level = bf.headingLevel();
+        const bool code = bf.hasProperty(QTextFormat::BlockCodeFence) || bf.hasProperty(QTextFormat::BlockCodeLanguage) || bf.nonBreakableLines();
+        const int quote = bf.intProperty(QTextFormat::BlockQuoteLevel);
+        if (level > 0) {
+            bf.setTopMargin(px * (level <= 2 ? 1.1 : 0.8));
+            bf.setBottomMargin(px * 0.45);
+        } else if (code) {
+            const bool first = !b.previous().isValid() || !(b.previous().blockFormat().hasProperty(QTextFormat::BlockCodeFence) || b.previous().blockFormat().nonBreakableLines());
+            const bool last = !b.next().isValid() || !(b.next().blockFormat().hasProperty(QTextFormat::BlockCodeFence) || b.next().blockFormat().nonBreakableLines());
+            bf.setBackground(codeBg);
+            bf.setTopMargin(first ? px * 0.4 : 0);
+            bf.setBottomMargin(last ? px * 0.8 : 0);
+            bf.setLeftMargin(0);
+            bf.setIndent(0);
+            bf.setTextIndent(px * 0.7);
+        } else if (!b.textList()) {
+            bf.setBottomMargin(px * 0.7);
+        } else {
+            // List items close together; space after the list.
+            const bool lastItem = !b.next().isValid() || !b.next().textList();
+            bf.setBottomMargin(lastItem ? px * 0.7 : px * 0.2);
+        }
+        if (quote > 0) bf.setLeftMargin(px * 1.4 * quote);
+        c.setPosition(b.position());
+        c.setBlockFormat(bf);
+        // Per run: links, inline code, pictures, heading weight.
+        for (auto it = b.begin(); !it.atEnd(); ++it) {
+            const QTextFragment fr = it.fragment();
+            if (!fr.isValid()) continue;
+            QTextCharFormat cf = fr.charFormat();
+            if (cf.isImageFormat()) {
+                QTextImageFormat im = cf.toImageFormat();
+                QString src = im.name();
+                if (src.startsWith(QLatin1String("file:"))) src = QUrl(src).toLocalFile();
+                else if (!src.contains(QLatin1String("://")) && !baseDir.isEmpty() && !src.startsWith(QLatin1Char('/'))) src = baseDir + QLatin1Char('/') + src;
+                const QSize sz = QImageReader(src).size();
+                if (sz.isValid() && maxWidth > 0 && sz.width() > maxWidth) {
+                    im.setWidth(maxWidth);
+                    im.setHeight(sz.height() * maxWidth / sz.width());
+                }
+                if (sz.isValid()) im.setName(QUrl::fromLocalFile(src).toString());
+                c.setPosition(fr.position());
+                c.setPosition(fr.position() + fr.length(), QTextCursor::KeepAnchor);
+                c.setCharFormat(im);
+                continue;
+            }
+            bool changed = false;
+            if (cf.isAnchor()) { cf.setForeground(link); cf.setFontUnderline(false); changed = true; }
+            else if (quote > 0) { cf.setForeground(quiet); changed = true; }
+            else if (cf.fontFixedPitch() || code) {
+                cf.setFontFamilies({ mono });
+                if (!code) cf.setBackground(codeBg);
+                changed = true;
+            } else if (!cf.foreground().style() || cf.foreground().color() != fg) { cf.setForeground(fg); changed = true; }
+            if (level > 0) { cf.setFontWeight(QFont::Bold); changed = true; }
+            if (code || cf.fontFixedPitch()) { cf.clearProperty(QTextFormat::FontPointSize); cf.setProperty(QTextFormat::FontPixelSize, qRound(px * 0.92)); changed = true; }
+            if (changed) {
+                c.setPosition(fr.position());
+                c.setPosition(fr.position() + fr.length(), QTextCursor::KeepAnchor);
+                c.setCharFormat(cf);
+            }
+        }
+    }
+    // Tables: thin rules, padded cells, a bold header row.
+    std::function<void(QTextFrame*)> walk = [&](QTextFrame* fr) {
+        for (QTextFrame* ch : fr->childFrames()) {
+            if (auto* t = qobject_cast<QTextTable*>(ch)) {
+                QTextTableFormat tf = t->format();
+                tf.setBorder(1);
+                tf.setBorderBrush(rule);
+                tf.setBorderStyle(QTextFrameFormat::BorderStyle_Solid);
+                tf.setBorderCollapse(true);
+                tf.setCellPadding(px * 0.35);
+                tf.setCellSpacing(0);
+                tf.setTopMargin(px * 0.4);
+                tf.setBottomMargin(px * 0.8);
+                t->setFormat(tf);
+                for (int col = 0; col < t->columns(); ++col) {
+                    QTextTableCell cell = t->cellAt(0, col);
+                    // Header text bold (the reader leaves some cells plain).
+                    QTextCursor hc = cell.firstCursorPosition();
+                    hc.setPosition(cell.lastCursorPosition().position(), QTextCursor::KeepAnchor);
+                    QTextCharFormat bold;
+                    bold.setFontWeight(QFont::Bold);
+                    hc.mergeCharFormat(bold);
+                }
+                for (int r = 0; r < t->rows(); ++r)
+                    for (int col = 0; col < t->columns(); ++col) {
+                        const QTextTableCell cell = t->cellAt(r, col);
+                        // The reader can leave an empty paragraph before a
+                        // cell's text (it sat the first header lower).
+                        while (true) {
+                            const QTextBlock first = cell.firstCursorPosition().block();
+                            if (first.length() > 1 || !first.next().isValid() || first.next().position() > cell.lastCursorPosition().position()) break;
+                            QTextCursor d(first);
+                            d.deleteChar();
+                        }
+                        for (QTextFrame::iterator it = cell.begin(); !it.atEnd(); ++it) {
+                            QTextBlock b = it.currentBlock();
+                            if (!b.isValid()) continue;
+                            QTextBlockFormat bf = b.blockFormat();
+                            bf.setBottomMargin(0);
+                            c.setPosition(b.position());
+                            c.setBlockFormat(bf);
+                        }
+                    }
+            }
+            walk(ch);
+        }
+    };
+    walk(doc.rootFrame());
+}
+
+QString markdownHtml(const QString& md, bool dark, const QString& family, double px, const QString& baseDir, double maxWidth)
+{
+    QTextDocument doc;
+    styleMarkdown(doc, md, dark, family, px, baseDir, maxWidth);
+    return doc.toHtml();
+}
+
+// Text drawn as a sheet of paper: {"mono": bool, "lines": [[[colour, text], ...], ...]}
+// or {"markdown": text}.
 QImage drawPage(const QByteArray& json, int px)
 {
     const QJsonObject o = QJsonDocument::fromJson(json).object();
@@ -160,6 +308,14 @@ QImage drawPage(const QByteArray& json, int px)
         f.setPixelSize(mono ? 9 : 10);
         if (mono) f.setStyleHint(QFont::TypeWriter);
         p.setFont(f);
+        if (o.contains(QStringLiteral("markdown"))) {
+            // Rendered Markdown (headings, lists, code, tables), as on paper.
+            QTextDocument doc;
+            styleMarkdown(doc, o.value(QStringLiteral("markdown")).toString(), false, QString(), 10, QString(), W - 2 * margin);
+            doc.setTextWidth(W - 2 * margin);
+            p.translate(margin, margin);
+            doc.drawContents(&p, QRectF(0, 0, W - 2 * margin, H - 2 * margin));
+        } else {
         const QFontMetrics fm(f);
         const int lh = fm.height() + (mono ? 1 : 3);
         int y = margin + fm.ascent();
@@ -175,6 +331,7 @@ QImage drawPage(const QByteArray& json, int px)
                 if (x > W - margin / 2) break;
             }
             y += lh;
+        }
         }
     }
     QImage out = page.scaled(px, px, Qt::KeepAspectRatio, Qt::SmoothTransformation);
@@ -964,6 +1121,11 @@ QString grove_image_convert(const QString& path, const QString& format)
     QImageWriter w(out, format.toLatin1());
     if (!w.write(img)) return QStringLiteral("!Couldn't save: ") + w.errorString();
     return out;
+}
+
+QString grove_markdown_html(const QString& md, bool dark, const QString& family, double px, const QString& baseDir, double maxWidth)
+{
+    return markdownHtml(md, dark, family, px, baseDir, maxWidth);
 }
 
 void grove_rows_changed(QAbstractListModel& model, int32_t first, int32_t last)

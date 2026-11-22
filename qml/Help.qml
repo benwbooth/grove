@@ -38,6 +38,7 @@ QtObject {
         { id: "stacks", group: "View", action: "Use Stacks (icon view)", defaults: ["Ctrl+Alt+0"], fixed: "", note: "Finder: ⌃⌘0. Click a stack to open it in place" },
         { id: "filter", group: "View", action: "Filter this folder", defaults: ["Ctrl+I"], fixed: "", note: "Dolphin's filter bar (Finder uses ⌘I for Get Info: here Alt+Return)" },
         { id: "quicklook", group: "View", action: "Quick Look", defaults: ["Ctrl+Y"], fixed: "", note: "Space always works too. Finder: Space, ⌘Y. Arrow keys move between files while it's open" },
+        { id: "qltablesearch", group: "View", action: "Quick Look on a table (CSV, TSV, spreadsheet): search its rows", defaults: [], fixed: "Ctrl+F", note: "Click a header to sort, drag it to move the column, drag its edge to resize, right-click it to filter or hide; SQL runs queries (table t)" },
         { id: "split", group: "View", action: "Split view", defaults: ["F3"], fixed: "", note: "Dolphin: F3" },
         { id: "terminalpanel", group: "View", action: "Terminal panel", defaults: ["F4"], fixed: "", note: "Dolphin: F4" },
         { id: "infopanel", group: "View", action: "Information panel / preview pane", defaults: ["F11", "Ctrl+Shift+P"], fixed: "", note: "Dolphin: F11  ·  Finder: ⇧⌘P" },

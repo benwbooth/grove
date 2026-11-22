@@ -93,6 +93,8 @@ pub fn make(path: &str, mimes: &[String], px: u32, token: u64) -> String {
         Kind::Epub => image(previews::epub_cover(p, cancel)).or_else(|| system_thumbnailer(p, mimes, px, cancel)),
         Kind::Comic => image(previews::comic_cover(p, cancel)).or_else(|| system_thumbnailer(p, mimes, px, cancel)),
         Kind::Office => image(previews::office_thumbnail(p, cancel))
+            // Spreadsheets: their first rows as a table.
+            .or_else(|| if crate::table::is_table_name(&path.to_lowercase()) { sheet_page(p).map(|j| format!("page:{j}")) } else { None })
             .or_else(|| system_thumbnailer(p, mimes, px, cancel))
             .or_else(|| previews::office_text(p, 6000, cancel).map(|t| format!("page:{}", prose_page(&t))))
             .or_else(|| image(previews::office_picture(p, cancel))),
@@ -135,10 +137,60 @@ pub fn text_page(p: &Path) -> Option<String> {
         return None;
     }
     let text = String::from_utf8_lossy(&buf).into_owned();
-    let shown: String = text.lines().take(48).map(|l| format!("{}\n", l.replace('\t', "    "))).collect();
     let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let lower = name.to_lowercase();
+    // Markdown rendered (the provider lays it out with QTextDocument).
+    if crate::preview::is_markdown_name(&lower) {
+        let md = match text.rfind('\n') {
+            Some(i) if n == 6000 => &text[..i],
+            _ => text.as_str(),
+        };
+        return Some(json!({"markdown": md}).to_string());
+    }
+    // Tables as aligned columns under a dark header.
+    if let Some(delim) = crate::table::delimiter_for(&lower) {
+        if let Some(j) = table_page(&crate::table::parse_delimited(&text, delim, 40)) {
+            return Some(j);
+        }
+    }
+    let shown: String = text.lines().take(48).map(|l| format!("{}\n", l.replace('\t', "    "))).collect();
     let lines = crate::preview::highlight_runs(&shown, &name, 48);
     Some(json!({"mono": true, "lines": lines}).to_string())
+}
+
+/// Rows as aligned columns under a blue header, for a text page.
+pub fn table_page(rows: &[Vec<String>]) -> Option<String> {
+    if rows.is_empty() {
+        return None;
+    }
+    let rows = &rows[..rows.len().min(48)];
+    let cols = rows.iter().map(|r| r.len()).max().unwrap_or(0);
+    let widths: Vec<usize> = (0..cols).map(|c| rows.iter().map(|r| r.get(c).map(|x| x.chars().count()).unwrap_or(0)).max().unwrap_or(0).min(14)).collect();
+    let lines: Vec<serde_json::Value> = rows
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let mut line = String::new();
+            for (c, w) in widths.iter().enumerate() {
+                let cell: String = r.get(c).map(|x| x.replace(['\n', '\r', '\t'], " ")).unwrap_or_default().chars().take(*w).collect();
+                line.push_str(&format!("{cell:<w$}  ", w = *w));
+            }
+            json!([[if i == 0 { "#0a4fa8" } else { "#333333" }, line.trim_end()]])
+        })
+        .collect();
+    Some(json!({"mono": true, "lines": lines}).to_string())
+}
+
+/// A spreadsheet's first sheet as a table page (not for huge files: the
+/// reader takes the whole sheet).
+fn sheet_page(p: &Path) -> Option<String> {
+    if std::fs::metadata(p).ok()?.len() > 20 << 20 {
+        return None;
+    }
+    let s = crate::table::read_sheets(&p.to_string_lossy()).ok()?.into_iter().next()?;
+    let mut rows = vec![s.header];
+    rows.extend(s.rows.into_iter().take(47));
+    table_page(&rows)
 }
 
 /// Plain prose (an office document's text) wrapped into lines.

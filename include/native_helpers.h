@@ -23,6 +23,10 @@ void grove_set_clipboard(const QString& pathsNewline, bool cut);
 QString grove_clipboard();
 // Put plain text on the clipboard (Copy Path).
 void grove_set_clipboard_text(const QString& text);
+// Markdown as styled HTML for a RichText view (Quick Look): grove's
+// colours for `dark`, the body font, pictures resolved against `baseDir`
+// and fitted to `maxWidth`. Safe off the UI thread.
+QString grove_markdown_html(const QString& md, bool dark, const QString& family, double px, const QString& baseDir, double maxWidth);
 // Whether Qt can decode this image file itself.
 bool grove_can_read_image(const QString& path);
 // Rotate an image file in place (degrees: 90, -90, 180) / convert it.

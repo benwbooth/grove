@@ -100,6 +100,9 @@ Window {
                 else if (e.key === Qt.Key_Z && (e.modifiers & Qt.ControlModifier)) { markup.undo(); e.accepted = true }
                 return
             }
+            if (ql.pv.kind === "table" && e.key === Qt.Key_F && (e.modifiers & Qt.ControlModifier)) {
+                dataTable.focusSearch(); e.accepted = true; return
+            }
             if (pdfLoader.item && pdfLoader.item.next && (e.key === Qt.Key_PageDown || e.key === Qt.Key_PageUp)) {
                 if (e.key === Qt.Key_PageDown) pdfLoader.item.next(); else pdfLoader.item.prev()
                 e.accepted = true
@@ -435,81 +438,44 @@ Window {
                     PreviewSpinner { pending: ql.converting; delay: 0; size: 14; backdrop: false; anchors.verticalCenter: parent.verticalCenter }
                     GLabel { text: "Making a preview of the pages with LibreOffice…"; color: Theme.fgSecondary; anchors.verticalCenter: parent.verticalCenter }
                 }
-                KineticWheel { flickable: officeView.contentItem; visible: officeView.visible }
-                ScrollView {
-                    id: officeView
+                DocView {
                     anchors.fill: parent
                     anchors.topMargin: convRow.height
-                    visible: !!ql.pv.text
-                    ScrollBar.vertical: GScrollBar { parent: officeView; x: officeView.width - width; y: officeView.topPadding; height: officeView.availableHeight }
-                    TextEdit {
-                        width: officeView.width - 24
-                        readOnly: true
-                        selectByMouse: true
-                        textFormat: TextEdit.PlainText
-                        wrapMode: TextEdit.Wrap
-                        text: ql.pv.kind === "office" ? (ql.pv.text || "") : ""
-                        font.family: Theme.family
-                        font.pixelSize: Theme.body
-                        renderType: Text.NativeRendering
-                        color: Theme.fg
-                        selectionColor: Theme.accent
-                        padding: 16
-                    }
+                    visible: !!ql.pv.hasText
+                    active: visible && ql.visible && ql.pv.kind === "office"
+                    path: active && ql.item ? ql.item.path : ""
+                    mode: "office"
                 }
                 Image {
                     anchors.fill: parent
                     anchors.topMargin: convRow.height
-                    visible: !ql.pv.text
+                    visible: !ql.pv.hasText
                     fillMode: Image.PreserveAspectFit
                     asynchronous: true
                     sourceSize.width: 1024; sourceSize.height: 1024
-                    source: ql.pv.kind === "office" && !ql.pv.text ? ql.thumbSrc : ""
+                    source: ql.pv.kind === "office" && !ql.pv.hasText ? ql.thumbSrc : ""
                 }
             }
 
-            KineticWheel { flickable: gsv4.contentItem; visible: gsv4.visible }
-            ScrollView {
-                id: gsv4
-                ScrollBar.vertical: GScrollBar { parent: gsv4; x: gsv4.width - width; y: gsv4.topPadding; height: gsv4.availableHeight }
-                ScrollBar.horizontal: GScrollBar { parent: gsv4; x: gsv4.leftPadding; y: gsv4.height - height; width: gsv4.availableWidth }
+            // Code (syntax-coloured) and Markdown (rendered): the whole
+            // file, read in blocks off the UI thread.
+            DocView {
+                id: codeDoc
                 anchors.fill: parent
-                visible: ql.pv.kind === "code"
-                TextEdit {
-                    readOnly: true
-                    selectByMouse: true
-                    textFormat: TextEdit.RichText
-                    text: ql.pv.kind === "code" ? ql.pv.html : ""
-                    font.family: Theme.mono
-                    font.pixelSize: Theme.body * 0.95
-                    renderType: Text.NativeRendering
-                    color: Theme.fg
-                    selectionColor: Theme.accent
-                    padding: 12
-                }
+                visible: ql.pv.kind === "code" || ql.pv.kind === "markdown"
+                active: visible && ql.visible
+                path: visible && ql.item ? ql.item.path : ""
+                mode: ql.pv.kind === "markdown" ? "markdown" : "code"
             }
 
-            KineticWheel { flickable: mdView.contentItem; visible: mdView.visible }
-            ScrollView {
-                ScrollBar.vertical: GScrollBar { parent: mdView; x: mdView.width - width; y: mdView.topPadding; height: mdView.availableHeight }
-                ScrollBar.horizontal: GScrollBar { parent: mdView; x: mdView.leftPadding; y: mdView.height - height; width: mdView.availableWidth }
-                id: mdView
+            // CSV, TSV and spreadsheets: a table to sort, filter and query.
+            DataTable {
+                id: dataTable
                 anchors.fill: parent
-                visible: ql.pv.kind === "markdown"
-                TextEdit {
-                    width: mdView.width - 24
-                    readOnly: true
-                    selectByMouse: true
-                    textFormat: TextEdit.MarkdownText
-                    wrapMode: TextEdit.Wrap
-                    text: ql.pv.kind === "markdown" ? ql.pv.text : ""
-                    font.family: Theme.family
-                    font.pixelSize: Theme.body
-                    renderType: Text.NativeRendering
-                    color: Theme.fg
-                    selectionColor: Theme.accent
-                    padding: 16
-                }
+                visible: ql.pv.kind === "table"
+                active: visible && ql.visible
+                path: visible && ql.item ? ql.item.path : ""
+                app: ql.app
             }
 
             KineticWheel { flickable: kwList364; visible: kwList364.visible }
@@ -562,7 +528,7 @@ Window {
             horizontalAlignment: Text.AlignHCenter
             font.pixelSize: Theme.small
             color: Theme.fgSecondary
-            text: (ql.pv.kindText || "") + (ql.pv.sizeText ? "  ·  " + ql.pv.sizeText : "") + (ql.pv.lines ? "  ·  " + ql.pv.lines + " lines" + (ql.pv.truncated ? " (start shown)" : "") : "") + "     ←/→ next file · Space closes"
+            text: (ql.pv.kindText || "") + (ql.pv.sizeText ? "  ·  " + ql.pv.sizeText : "") + (codeDoc.visible && codeDoc.lines ? "  ·  " + codeDoc.lines.toLocaleString(Qt.locale(), "f", 0) + " lines" : "") + "     ←/→ next file · Space closes"
         }
     }
 }

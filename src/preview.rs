@@ -95,6 +95,51 @@ pub fn highlight_runs(text: &str, name: &str, max_lines: usize) -> Vec<Vec<(Stri
     out
 }
 
+/// Syntax colouring carried across blocks of one file (Quick Look shows
+/// a file as many blocks; the parser state runs on from one to the next).
+pub struct Highlighter {
+    h: syntect::easy::HighlightLines<'static>,
+}
+
+impl Highlighter {
+    pub fn new(text: &str, name: &str, dark: bool) -> Self {
+        let ss = syntaxes();
+        let syntax = syntax_for(ss, text, name);
+        let theme = &themes().themes[if dark { "base16-ocean.dark" } else { "InspiredGitHub" }];
+        Highlighter { h: syntect::easy::HighlightLines::new(syntax, theme) }
+    }
+
+    /// Lines (no trailing newline) as `<pre>` HTML.
+    pub fn html(&mut self, block: &str) -> String {
+        let ss = syntaxes();
+        let mut out = String::with_capacity(block.len() * 3);
+        out.push_str("<pre style=\"margin:0\">");
+        let with_nl = format!("{block}\n");
+        for line in syntect::util::LinesWithEndings::from(&with_nl) {
+            let regions = self.h.highlight_line(line, ss).unwrap_or_default();
+            for (style, piece) in regions {
+                let c = style.foreground;
+                let piece = piece.strip_suffix('\n').unwrap_or(piece);
+                let esc = piece.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+                out.push_str(&format!("<span style=\"color:#{:02x}{:02x}{:02x}\">{}</span>", c.r, c.g, c.b, esc));
+            }
+            if line.ends_with('\n') {
+                out.push('\n');
+            }
+        }
+        if out.ends_with('\n') {
+            out.pop();
+        }
+        out.push_str("</pre>");
+        out
+    }
+}
+
+/// .md / .markdown / .mdown / .mkd (lower-case name).
+pub fn is_markdown_name(lower: &str) -> bool {
+    [".md", ".markdown", ".mdown", ".mkd", ".mkdn"].iter().any(|e| lower.ends_with(e))
+}
+
 pub fn highlight(text: &str, name: &str, dark: bool) -> String {
     let ss = syntaxes();
     let syntax = syntax_for(ss, text, name);
@@ -155,6 +200,12 @@ pub fn preview(path: &str, dark: bool) -> Value {
         v
     };
     use grove_core::previews::{self, Kind};
+    let lower = name.to_lowercase();
+    // Tables (CSV, TSV, spreadsheets): Quick Look's table view reads them
+    // itself (TableData), whole, off the UI thread.
+    if crate::table::is_table_name(&lower) {
+        return with(json!({"kind": "table"}));
+    }
     let never = std::sync::atomic::AtomicBool::new(false);
     match previews::kind_of(&parents, &name) {
         Kind::Picture => {
@@ -181,8 +232,10 @@ pub fn preview(path: &str, dark: bool) -> Value {
         }
         Kind::Font => return with(json!({"kind": "font"})),
         Kind::Office => {
-            let text = previews::office_text(p, 200_000, &never).unwrap_or_default();
-            return with(json!({"kind": "office", "text": text, "canConvert": previews::has_libreoffice()}));
+            // The whole text is read by Quick Look's TextDoc; here only
+            // whether there is any.
+            let has_text = previews::office_text(p, 2000, &never).is_some();
+            return with(json!({"kind": "office", "hasText": has_text, "canConvert": previews::has_libreoffice()}));
         }
         _ => {}
     }
@@ -193,13 +246,15 @@ pub fn preview(path: &str, dark: bool) -> Value {
         return with(json!({"kind": "archive", "entries": shown, "total": total}));
     }
     if is_texty(&m.name, &parents) || meta.len() < TEXT_LIMIT as u64 {
-        if let Some((text, truncated)) = read_head(p, TEXT_LIMIT) {
-            if m.name == "text/markdown" || name.to_lowercase().ends_with(".md") {
-                return with(json!({"kind": "markdown", "text": text, "truncated": truncated}));
+        // Only a look at the start (binary or not): Quick Look's TextDoc
+        // reads, colours and renders the whole file in blocks.
+        let _ = dark;
+        if let Some((text, _)) = read_head(p, 8192) {
+            if m.name == "text/markdown" || m.name == "text/x-markdown" || is_markdown_name(&lower) {
+                return with(json!({"kind": "markdown"}));
             }
             if is_texty(&m.name, &parents) || !text.is_empty() {
-                let lines = text.lines().count();
-                return with(json!({"kind": "code", "html": highlight(&text, &name, dark), "lines": lines, "truncated": truncated || lines > 2000}));
+                return with(json!({"kind": "code"}));
             }
         }
     }
@@ -240,6 +295,16 @@ mod tests {
         }
         // Not worth a syntax of their own: cue sheets, subtitles, COBOL.
         assert_eq!(bad, ["a.cue", "a.srt", "a.cob"], "no syntax for {bad:?}");
+    }
+
+    #[test]
+    fn highlighter_blocks() {
+        let mut h = super::Highlighter::new("fn a() {}\n", "a.rs", false);
+        let a = h.html("fn a() {\n    1 < 2");
+        assert!(a.starts_with("<pre") && a.ends_with("</pre>"));
+        assert!(a.contains("&lt;"));
+        assert_eq!(a.matches('\n').count(), 1);
+        assert!(super::is_markdown_name("readme.markdown"));
     }
 
     #[test]

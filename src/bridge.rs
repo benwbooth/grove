@@ -301,6 +301,10 @@ pub mod ffi {
         fn du_hit(self: &Grove, scan: i32, x: f64, y: f64) -> i32;
         #[qinvokable]
         fn du_rect(self: &Grove, scan: i32, node: i32) -> QString;
+        /// A document without a viewer of its own (DjVu, EPUB, MOBI, XPS,
+        /// PostScript, CBR...) as a cached PDF to page through (async_reply {pdf}).
+        #[qinvokable]
+        fn doc_pdf(self: &Grove, key: &QString, path: &QString);
         /// A file inside an archive, taken out for previewing (async_reply {path}).
         #[qinvokable]
         fn archive_local(self: &Grove, key: &QString, path: &QString);

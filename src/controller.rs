@@ -1022,6 +1022,14 @@ impl ffi::Grove {
         qs(&crate::du::rect(scan, node.max(0) as u32).to_string())
     }
 
+    pub fn doc_pdf(&self, key: &QString, path: &QString) {
+        let p = path.to_string();
+        self.answer(key, move || match crate::docconv::to_pdf(&p) {
+            Ok(pdf) => serde_json::json!({"pdf": pdf.display().to_string()}),
+            Err(e) => serde_json::json!({"error": e}),
+        });
+    }
+
     pub fn archive_local(&self, key: &QString, path: &QString) {
         let p = path.to_string();
         self.answer(key, move || match crate::archive::local_copy(&p, true) {
