@@ -280,6 +280,25 @@ impl ffi::Grove {
         let id = app_id.to_string();
         let qt = self.qt_thread();
         std::thread::spawn(move || {
+            // Files inside archives: their copies taken out to the cache
+            // (an app can't open an archive:// path).
+            let mut local = Vec::with_capacity(paths.len());
+            for p in &paths {
+                let s = p.to_string_lossy();
+                if s.starts_with("archive://") {
+                    match crate::archive::local_copy(&s, true) {
+                        Some(l) => local.push(l),
+                        None => {
+                            let e = format!("Couldn't take “{}” out of the archive.", s.rsplit('/').next().unwrap_or(&s));
+                            let _ = qt.queue(move |g| g.notify(qs("error"), qs(&e)));
+                            return;
+                        }
+                    }
+                } else {
+                    local.push(p.clone());
+                }
+            }
+            let paths = local;
             let r = match apps::by_id(&id) {
                 Some(a) => apps::launch(&a, &paths),
                 None => Err(format!("The app “{id}” isn't installed any more.")),

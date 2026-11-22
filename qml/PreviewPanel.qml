@@ -18,15 +18,19 @@ Item {
     // first blanked the rows and made the layout jump for a frame).
     property var shown: null
     function settle(it, i, a) { shown = it; info = i; arch = a }
+    // Answers can arrive after this panel is gone: they check this first.
+    property var life: ({ alive: true })
+    Component.onDestruction: life.alive = false
     function load() {
+        const life = p.life
         if (!item || !item.path) { settle(null, {}, null); return }
         if (item.path.indexOf("archive://") === 0) {
             // Inside an archive: facts from its local copy (taken out once).
             const ap = item.path
             if (item.isDir) { settle(item, {}, null); return }
             Async.call(pane.grove, k => pane.grove.archiveLocal(k, ap), r => {
-                if (!r.path || !p.item || p.item.path !== ap) return
-                Async.call(pane.grove, k => pane.grove.info(k, r.path), i => { if (p.item && p.item.path === ap && !i.error) p.settle(p.item, Object.assign(i, { path: ap, parent: ap.substring(10, ap.indexOf("#")) }), null) })
+                if (!life.alive || !r.path || !p.item || p.item.path !== ap) return
+                Async.call(pane.grove, k => pane.grove.info(k, r.path), i => { if (life.alive && p.item && p.item.path === ap && !i.error) p.settle(p.item, Object.assign(i, { path: ap, parent: ap.substring(10, ap.indexOf("#")) }), null) })
             })
             return
         }
@@ -34,10 +38,10 @@ Item {
         const path = item.path, it = item
         // Facts first; an archive's sizes (slower) join them when ready.
         Async.call(pane.grove, k => pane.grove.info(k, path), r => {
-            if (!p.item || p.item.path !== path) return
+            if (!life.alive || !p.item || p.item.path !== path) return
             p.settle(it, r, null)
             if (it.isArchive)
-                Async.call(pane.grove, k => pane.grove.archiveSizes(k, path), a => { if (p.item && p.item.path === path && !a.error) p.arch = a })
+                Async.call(pane.grove, k => pane.grove.archiveSizes(k, path), a => { if (life.alive && p.item && p.item.path === path && !a.error) p.arch = a })
         })
     }
     readonly property int big: Math.max(64, Math.min(width - 40, compact ? height - 20 : height * 0.55, 512))

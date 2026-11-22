@@ -127,10 +127,20 @@ Item {
     // column (set on navigation, cleared when you scroll it yourself).
     property real autoGlideUntil: 0
     function autoGlide() { autoGlideUntil = Date.now() + 700 }
+    // The selected file for the preview column, worked out once the
+    // selection has settled (a click passes through "nothing selected",
+    // which tore the preview down and built it again: a flash, and a
+    // playing track stopped). The same file keeps the same object.
     function updateCurrent() {
         autoGlide()
+        Qt.callLater(settleCurrent)
+    }
+    function settleCurrent() {
         const r = fm.currentRow
-        current = r >= 0 && fm.selectionCount === 1 ? pane.itemAt(r) : null
+        const it = r >= 0 && fm.selectionCount === 1 ? pane.itemAt(r) : null
+        if (it && current && it.path === current.path && it.mtime === current.mtime && it.size === current.size) return
+        if (!it && !current) return
+        current = it
         Qt.callLater(() => strip.glideToEnd())
     }
 

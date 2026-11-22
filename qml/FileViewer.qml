@@ -28,27 +28,36 @@ Item {
     onActiveChanged: if (!active) player.stop()
     // The previous file stays on screen until the next one's details are in
     // (clearing first made every move flash an icon, then a thumbnail).
+    property var life: ({ alive: true })
+    Component.onDestruction: life.alive = false
+    // The same file again (a new copy of its details): keep playing.
+    property string loadedKey: ""
     function load() {
+        const life = fv.life
+        const key = active && item && item.path ? item.path + "|" + (item.mtime || 0) + "|" + (item.size || 0) : ""
+        if (key !== "" && key === loadedKey) return
+        loadedKey = key
         player.stop()
         converting = false
         if (!active || !item || !item.path || item.isDir) { pv = {}; path = ""; return }
         const want = item.path
         if (want.indexOf("archive://") === 0) {
             Async.call(app.grove, k => app.grove.archiveLocal(k, want), r => {
-                if (!fv.item || fv.item.path !== want || !r.path) return
+                if (!life.alive || !fv.item || fv.item.path !== want || !r.path) return
                 fv.show(r.path, want)
             })
         } else if (want.indexOf("/") === 0) show(want, want)
     }
     function show(local, want) {
+        const life = fv.life
         Async.call(app.grove, k => app.grove.preview(k, local, Theme.dark), r => {
-            if (!fv.item || fv.item.path !== want) return
+            if (!life.alive || !fv.item || fv.item.path !== want) return
             fv.path = local
             fv.pv = r
             if (r.convert) {
                 fv.converting = true
                 Async.call(app.grove, k => app.grove.docPdf(k, local), d => {
-                    if (!fv.item || fv.item.path !== want) return
+                    if (!life.alive || !fv.item || fv.item.path !== want) return
                     fv.converting = false
                     if (d.kind === "pdf" && d.paged) fv.pv = Object.assign({}, d, { kindText: r.kindText })
                 })

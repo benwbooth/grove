@@ -465,8 +465,12 @@ pub fn spawn_detached(argv: &[String], cwd: Option<&Path>) -> Result<(), String>
     let (cmd, args) = argv.split_first().ok_or("Nothing to run.")?;
     let mut c = std::process::Command::new(cmd);
     c.args(args).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
-    if let Some(d) = cwd {
+    // A folder that isn't there (a path inside an archive) made the start
+    // fail as "not installed": run from the home folder instead.
+    if let Some(d) = cwd.filter(|d| d.is_dir()) {
         c.current_dir(d);
+    } else if let Some(h) = std::env::var_os("HOME") {
+        c.current_dir(h);
     }
     unsafe {
         c.pre_exec(|| {
