@@ -987,6 +987,14 @@ impl ffi::Grove {
         qs(&crate::du::rect(scan, node.max(0) as u32).to_string())
     }
 
+    pub fn archive_local(&self, key: &QString, path: &QString) {
+        let p = path.to_string();
+        self.answer(key, move || match crate::archive::local_copy(&p, true) {
+            Some(l) => serde_json::json!({"path": l.display().to_string()}),
+            None => serde_json::json!({"error": "Couldn't take it out of the archive."}),
+        });
+    }
+
     pub fn archive_sizes(&self, key: &QString, archive: &QString) {
         let a = archive.to_string();
         self.answer(key, move || crate::archive::sizes_json(&a));

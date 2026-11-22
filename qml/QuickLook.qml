@@ -62,6 +62,15 @@ Window {
         pv = { kind: "loading" }
         player.stop()
         const p = it.path
+        // A file inside an archive: preview its local copy (taken out once).
+        if (p.indexOf("archive://") === 0 && p.indexOf("#") > 0 && !it.isDir) {
+            Async.call(app.grove, k => app.grove.archiveLocal(k, p), r => {
+                if (!ql.item || ql.item.path !== p) return
+                if (r.error) { ql.pv = { kind: "other" }; return }
+                ql.showItem(Object.assign({}, it, { path: r.path, fromArchive: p }))
+            })
+            return
+        }
         if (p.indexOf("/") !== 0) { pv = { kind: "other" }; return }
         Async.call(app.grove, k => app.grove.preview(k, p, Theme.dark), r => {
             if (!ql.item || ql.item.path !== p) return

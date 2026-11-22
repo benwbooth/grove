@@ -323,9 +323,45 @@ pub fn compress_job(qt: CxxQtThread<ffi::Grove>, id: i32, paths: Vec<PathBuf>, f
     });
 }
 
-/// Extract one member to grove's cache (to open or preview it).
+fn member_dir(archive: &str) -> PathBuf {
+    grove_core::util::cache_home().join("grove/archives").join(grove_core::thumbs::md5_hex(archive))
+}
+
+/// A member already taken out (and not older than its archive).
+fn cached_member(archive: &str, inner: &str) -> Option<PathBuf> {
+    let out = member_dir(archive).join(inner);
+    let m = std::fs::metadata(&out).ok()?;
+    let a = std::fs::metadata(archive).ok()?;
+    (m.is_file() && m.modified().ok()? >= a.modified().ok()?).then_some(out)
+}
+
+/// The local copy of "archive://A#inner" for previews: already taken out,
+/// or (with `extract`) taken out now. None for anything else.
+pub fn local_copy(path: &str, extract: bool) -> Option<PathBuf> {
+    let rest = path.strip_prefix("archive://")?;
+    let (a, inner) = rest.split_once('#')?;
+    if inner.is_empty() {
+        return None;
+    }
+    if let Some(p) = cached_member(a, inner) {
+        return Some(p);
+    }
+    if !extract {
+        return None;
+    }
+    extract_member(a, inner).ok()
+}
+
+/// Extract one member to grove's cache (to open or preview it); reused
+/// while the archive doesn't change. One extraction at a time (previews
+/// of many members at once would otherwise race on the same files).
 pub fn extract_member(archive: &str, inner: &str) -> Result<PathBuf, String> {
-    let dir = grove_core::util::cache_home().join("grove/archives").join(grove_core::thumbs::md5_hex(archive));
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(p) = cached_member(archive, inner) {
+        return Ok(p);
+    }
+    let dir = member_dir(archive);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if single_of(archive).is_some() {
         let out = dir.join(inner);

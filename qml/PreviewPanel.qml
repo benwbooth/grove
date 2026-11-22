@@ -16,7 +16,18 @@ Item {
     function load() {
         info = {}
         arch = null
-        if (!item || !item.path || item.path.indexOf("/") !== 0) return
+        if (!item || !item.path) return
+        if (item.path.indexOf("archive://") === 0) {
+            // Inside an archive: facts from its local copy (taken out once).
+            const ap = item.path
+            if (item.isDir) return
+            Async.call(pane.grove, k => pane.grove.archiveLocal(k, ap), r => {
+                if (!r.path || !p.item || p.item.path !== ap) return
+                Async.call(pane.grove, k => pane.grove.info(k, r.path), i => { if (p.item && p.item.path === ap && !i.error) p.info = Object.assign(i, { path: ap, parent: ap.substring(10, ap.indexOf("#")) }) })
+            })
+            return
+        }
+        if (item.path.indexOf("/") !== 0) return
         const path = item.path
         Async.call(pane.grove, k => pane.grove.info(k, path), r => { if (p.item && p.item.path === path) p.info = r })
         if (item.isArchive)

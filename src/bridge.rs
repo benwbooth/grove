@@ -49,6 +49,7 @@ pub mod ffi {
         fn grove_thumb_cancel_all();
         fn grove_thumb_done(token: u64);
         fn grove_pdf_page(path: &str, page: u32, width: u32, token: u64) -> String;
+        fn grove_archive_local(path: &str, extract: bool) -> String;
         fn grove_du_treemap(scan: i32, node: u32, w: u32, h: u32, apparent: bool) -> Vec<u8>;
     }
 
@@ -288,6 +289,9 @@ pub mod ffi {
         fn du_hit(self: &Grove, scan: i32, x: f64, y: f64) -> i32;
         #[qinvokable]
         fn du_rect(self: &Grove, scan: i32, node: i32) -> QString;
+        /// A file inside an archive, taken out for previewing (async_reply {path}).
+        #[qinvokable]
+        fn archive_local(self: &Grove, key: &QString, path: &QString);
         /// Compressed and uncompressed sizes of an archive (async_reply).
         #[qinvokable]
         fn archive_sizes(self: &Grove, key: &QString, archive: &QString);
@@ -393,6 +397,10 @@ fn grove_thumb_cancel_all() {
 
 fn grove_thumb_done(token: u64) {
     crate::thumbgen::done(token)
+}
+
+fn grove_archive_local(path: &str, extract: bool) -> String {
+    crate::archive::local_copy(path, extract).map(|p| p.display().to_string()).unwrap_or_default()
 }
 
 fn grove_du_treemap(scan: i32, node: u32, w: u32, h: u32, apparent: bool) -> Vec<u8> {

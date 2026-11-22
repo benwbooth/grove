@@ -440,6 +440,21 @@ protected:
     {
         const int px = qMax(16, qMax(m_req.width(), m_req.height()));
         const rust::String rp = toRust(m_path);
+        if (m_stage == 0 && m_path.startsWith(QLatin1String("archive://"))) {
+            // A file inside an archive: preview its local copy, taken out
+            // (once, then reused) on a tools thread.
+            const QString local = fromRust(grove_archive_local(rp, false));
+            if (local.isEmpty()) { m_stage = 2; startOn(pools().tools); return true; }
+            m_path = local;
+            return work();
+        }
+        if (m_stage == 2) {
+            const QString local = fromRust(grove_archive_local(rp, true));
+            if (local.isEmpty() || m_cancelled) return false;
+            m_path = local;
+            m_stage = 0;
+            return work();
+        }
         if (m_stage == 0) {
             // The fast part: an up-to-date thumbnail in the cache.
             const QString cached = fromRust(grove_thumb_lookup(rp, uint32_t(px)));
