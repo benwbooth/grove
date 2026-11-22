@@ -72,6 +72,11 @@ fn syntax_for<'a>(ss: &'a SyntaxSet, text: &str, name: &str) -> &'a syntect::par
         .unwrap_or_else(|| ss.find_syntax_plain_text())
 }
 
+/// Whether the name (or the first line, like a shebang) picks a language.
+pub fn known_by_name(name: &str, text: &str) -> bool {
+    syntax_for(syntaxes(), text, name).name != "Plain Text"
+}
+
 /// The first `max_lines` lines as coloured runs (light theme), for text
 /// thumbnails: [[["#rrggbb", "text"], ...], ...].
 pub fn highlight_runs(text: &str, name: &str, max_lines: usize) -> Vec<Vec<(String, String)>> {
@@ -259,7 +264,17 @@ pub fn preview(path: &str, dark: bool) -> Value {
                 return with(json!({"kind": "markdown"}));
             }
             if is_texty(&m.name, &parents) || !text.is_empty() {
-                return with(json!({"kind": "code"}));
+                // A language worked out from the content says so in the footer.
+                let mut v = with(json!({"kind": "code"}));
+                if !known_by_name(&name, &text) {
+                    if let Some(ext) = crate::langguess::guess_ext(path, &text) {
+                        let lang = syntax_for(syntaxes(), "", &format!("x.{ext}")).name.clone();
+                        if lang != "Plain Text" {
+                            v["kindText"] = json!(format!("{lang} (recognised from its contents)"));
+                        }
+                    }
+                }
+                return v;
             }
         }
     }

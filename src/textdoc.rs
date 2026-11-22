@@ -221,6 +221,8 @@ impl qobject::TextDoc {
                         let name = std::path::Path::new(&p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                         let text = if text.contains('\t') { text.replace('\t', "    ") } else { text };
                         let cols = text.lines().map(|l| l.chars().count()).max().unwrap_or(0);
+                        // No language from the name: guessed from the content (rules, then Magika).
+                        let name = crate::langguess::name_for(&p, &text, &name);
                         let mut hl = crate::preview::Highlighter::new(&text, &name, dark);
                         let mut batch = vec![];
                         let mut first = true;

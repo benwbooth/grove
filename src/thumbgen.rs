@@ -154,6 +154,7 @@ pub fn text_page(p: &Path) -> Option<String> {
         }
     }
     let shown: String = text.lines().take(48).map(|l| format!("{}\n", l.replace('\t', "    "))).collect();
+    let name = crate::langguess::name_for(&p.to_string_lossy(), &text, &name);
     let lines = crate::preview::highlight_runs(&shown, &name, 48);
     Some(json!({"mono": true, "lines": lines}).to_string())
 }
