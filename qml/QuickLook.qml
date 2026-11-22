@@ -522,10 +522,18 @@ Window {
                 }
             }
 
+            // Binary files: the whole file in hex.
+            HexView {
+                anchors.fill: parent
+                visible: ql.pv.kind === "other" && !!ql.item && !ql.item.isDir
+                active: visible && ql.visible
+                path: visible ? ql.item.path : ""
+            }
+
             Column {
                 anchors.centerIn: parent
                 spacing: 12
-                visible: ql.pv.kind === "folder" || ql.pv.kind === "other" || ql.pv.kind === "error"
+                visible: ql.pv.kind === "folder" || ql.pv.kind === "error" || (ql.pv.kind === "other" && !!ql.item && ql.item.isDir)
                 GIcon { anchors.horizontalCenter: parent.horizontalCenter; size: 160; name: ql.item ? ql.item.icon : "" }
                 GLabel { anchors.horizontalCenter: parent.horizontalCenter; text: ql.item ? ql.item.name : ""; font.pixelSize: Theme.large; font.bold: true }
                 GLabel {

@@ -69,7 +69,7 @@ fn main() {
         // The menus in the desktop's global menu bar (moc runs on the header).
         .cpp_file("include/global_menu.h")
         .cpp_file("cpp/global_menu.cpp")
-        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs"]);
+        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs", "src/hexdoc.rs"]);
     // Only adds include dirs and a define for our own code.
     let builder = unsafe {
         builder.cc_builder(|cc| {

@@ -17,6 +17,7 @@ mod controller;
 mod dbus;
 mod docconv;
 mod du;
+mod hexdoc;
 mod langguess;
 mod gitstatus;
 mod info;

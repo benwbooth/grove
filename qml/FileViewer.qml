@@ -17,7 +17,7 @@ Item {
     property string path: ""          // local path being shown
     property bool converting: false
     // Whether there's more to show than a thumbnail.
-    readonly property bool rich: ["code", "markdown", "office", "table", "pdf", "media", "image"].indexOf(pv.kind) >= 0 || !!pv.convert
+    readonly property bool rich: ["code", "markdown", "office", "table", "pdf", "media", "image", "other"].indexOf(pv.kind) >= 0 || !!pv.convert
     readonly property string thumbSrc: item && item.thumb && path ? "image://thumb/" + encodeURIComponent(path) + "?m=" + (item.mtime || 0) : ""
 
     onItemChanged: Qt.callLater(load)
@@ -98,6 +98,12 @@ Item {
         active: visible && fv.active
         path: visible ? fv.path : ""
         mode: fv.pv.kind === "markdown" ? "markdown" : fv.pv.kind === "office" ? "office" : "code"
+    }
+    HexView {
+        anchors.fill: parent
+        visible: fv.pv.kind === "other"
+        active: visible && fv.active
+        path: visible ? fv.path : ""
     }
     DataTable {
         anchors.fill: parent
