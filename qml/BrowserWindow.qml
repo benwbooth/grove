@@ -770,138 +770,143 @@ ApplicationWindow {
         const split = !!(currentTab && currentTab.split)
         const st = app.settings
         const k = menuKey
-        const sortItem = (id, text) => ({ id: "sort." + id, text: text, checkable: true, checked: sortKey === id, enabled: ok })
-        const groupItem = (id, text) => ({ id: "group." + id, text: text, checkable: true, checked: group === id, enabled: ok })
-        const tagItem = (n, i) => ({ id: "tag." + n, text: n, shortcut: k("tag" + n.toLowerCase()), enabled: sel > 0 && !special })
-        const openWith = menuApps.map((a, i) => ({ id: "openwith." + i, text: a.name + (a.isDefault ? "  (default)" : "") }))
+        // Icons as in the view's Sort By / Group By context menu.
+        const keyIcon = { name: "view-sort-ascending-name", kind: "folder-documents", modified: "document-edit", date: "document-edit",
+                          created: "x-office-calendar", added: "list-add", accessed: "document-open-recent", size: "drive-harddisk",
+                          tags: "tag", "": "edit-clear" }
+        const sortItem = (id, text) => ({ id: "sort." + id, icon: keyIcon[id], text: text, checkable: true, checked: sortKey === id, enabled: ok })
+        const groupItem = (id, text) => ({ id: "group." + id, icon: keyIcon[id], text: text, checkable: true, checked: group === id, enabled: ok })
+        const tagItem = (n, i) => ({ id: "tag." + n, icon: "tag", text: n, shortcut: k("tag" + n.toLowerCase()), enabled: sel > 0 && !special })
+        // The app's own icon (a theme name; a file path can't be shown by name).
+        const openWith = menuApps.map((a, i) => ({ id: "openwith." + i, icon: a.icon && a.icon.indexOf("/") < 0 ? a.icon : "system-run", text: a.name + (a.isDefault ? "  (default)" : "") }))
         if (openWith.length) openWith.push({ separator: true })
-        openWith.push({ id: "openwith.other", text: "Other…", enabled: !!t && !t.isDir && !trash })
+        openWith.push({ id: "openwith.other", icon: "application-x-executable", text: "Other…", enabled: !!t && !t.isDir && !trash })
         return [
-            { title: "Grove", items: [
-                { id: "about", text: "About Grove" },
+            { title: "Grove", icon: "system-file-manager", items: [
+                { id: "about", icon: "help-about", text: "About Grove" },
                 { separator: true },
-                { id: "settings", text: "Settings…", shortcut: k("settings") },
-                { id: "customizetoolbar", text: "Customize Toolbar…" },
+                { id: "settings", icon: "configure", text: "Settings…", shortcut: k("settings") },
+                { id: "customizetoolbar", icon: "configure-toolbars", text: "Customize Toolbar…" },
                 { separator: true },
-                { id: "emptytrash", text: "Empty Trash…", enabled: app.trashCount > 0 },
+                { id: "emptytrash", icon: "trash-empty", text: "Empty Trash…", enabled: app.trashCount > 0 },
                 { separator: true },
-                { id: "quit", text: "Quit Grove" }
+                { id: "quit", icon: "application-exit", text: "Quit Grove" }
             ] },
-            { title: "File", items: [
-                { id: "newwindow", text: "New Window", shortcut: k("newwindow") },
-                { id: "newtab", text: "New Tab", shortcut: k("newtab") },
-                { id: "newfolder", text: "New Folder", shortcut: k("newfolder"), enabled: ok && !special },
-                { id: "newfile", text: "New File", shortcut: k("newfile"), enabled: ok && !special },
+            { title: "File", icon: "folder", items: [
+                { id: "newwindow", icon: "window-new", text: "New Window", shortcut: k("newwindow") },
+                { id: "newtab", icon: "tab-new", text: "New Tab", shortcut: k("newtab") },
+                { id: "newfolder", icon: "folder-new", text: "New Folder", shortcut: k("newfolder"), enabled: ok && !special },
+                { id: "newfile", icon: "document-new", text: "New File", shortcut: k("newfile"), enabled: ok && !special },
                 { separator: true },
-                { id: "open", text: "Open", shortcut: k("open"), enabled: sel > 0 && !trash },
-                { id: "opentab", text: "Open in New Tab", shortcut: "Ctrl+Return", enabled: !!t && !!t.isDir && !trash },
-                { id: "openwith", text: "Open With", enabled: !!t && !t.isDir && !trash, items: openWith },
-                { id: "quicklook", text: "Quick Look", shortcut: k("quicklook"), enabled: ok && p.model.currentRow >= 0 },
-                { id: "getinfo", text: "Get Info", shortcut: k("getinfo"), enabled: ok },
+                { id: "open", icon: "document-open", text: "Open", shortcut: k("open"), enabled: sel > 0 && !trash },
+                { id: "opentab", icon: "tab-new-background", text: "Open in New Tab", shortcut: "Ctrl+Return", enabled: !!t && !!t.isDir && !trash },
+                { id: "openwith", icon: "preferences-desktop-filetype-association", text: "Open With", enabled: !!t && !t.isDir && !trash, items: openWith },
+                { id: "quicklook", icon: "quickview", text: "Quick Look", shortcut: k("quicklook"), enabled: ok && p.model.currentRow >= 0 },
+                { id: "getinfo", icon: "documentinfo", text: "Get Info", shortcut: k("getinfo"), enabled: ok },
                 { separator: true },
-                { id: "rename", text: sel > 1 ? "Rename " + sel + " Items…" : "Rename…", shortcut: k("rename"), enabled: sel > 0 && !special },
-                { id: "duplicate", text: "Duplicate", shortcut: k("duplicate"), enabled: sel > 0 && !special },
-                { id: "alias", text: "Make Alias", shortcut: k("alias"), enabled: sel > 0 && !special },
-                { id: "compress", text: sel > 1 ? "Compress " + sel + " Items" : t ? "Compress “" + t.name + "”" : "Compress", enabled: sel > 0 && !special },
-                { id: "extract", text: "Extract Here", enabled: !!t && p.archiveLike(t) && !special },
-                { id: "extractto", text: "Extract To…", enabled: !!t && p.archiveLike(t) && !special },
-                { id: "burn", text: "Burn to Disc…", enabled: ok && (sel > 0 || !special) },
-                { id: "share", text: "Share with Nearby Device…", enabled: sel > 0 && !special && !(t && t.isDir) },
+                { id: "rename", icon: "edit-rename", text: sel > 1 ? "Rename " + sel + " Items…" : "Rename…", shortcut: k("rename"), enabled: sel > 0 && !special },
+                { id: "duplicate", icon: "edit-copy", text: "Duplicate", shortcut: k("duplicate"), enabled: sel > 0 && !special },
+                { id: "alias", icon: "insert-link", text: "Make Alias", shortcut: k("alias"), enabled: sel > 0 && !special },
+                { id: "compress", icon: "archive-insert", text: sel > 1 ? "Compress " + sel + " Items" : t ? "Compress “" + t.name + "”" : "Compress", enabled: sel > 0 && !special },
+                { id: "extract", icon: "archive-extract", text: "Extract Here", enabled: !!t && p.archiveLike(t) && !special },
+                { id: "extractto", icon: "folder-open", text: "Extract To…", enabled: !!t && p.archiveLike(t) && !special },
+                { id: "burn", icon: "tools-media-optical-burn", text: "Burn to Disc…", enabled: ok && (sel > 0 || !special) },
+                { id: "share", icon: "document-share", text: "Share with Nearby Device…", enabled: sel > 0 && !special && !(t && t.isDir) },
                 { separator: true },
-                { id: "putback", text: "Put Back", enabled: trash && sel > 0 },
-                { id: "movetotrash", text: trash ? "Delete Immediately…" : "Move to Trash", shortcut: k("movetotrash"), enabled: sel > 0 && (!special || trash) },
-                { id: "delete", text: "Delete Permanently…", shortcut: k("delete"), enabled: sel > 0 && !special },
+                { id: "putback", icon: "edit-undo", text: "Put Back", enabled: trash && sel > 0 },
+                { id: "movetotrash", icon: "user-trash", text: trash ? "Delete Immediately…" : "Move to Trash", shortcut: k("movetotrash"), enabled: sel > 0 && (!special || trash) },
+                { id: "delete", icon: "edit-delete", text: "Delete Permanently…", shortcut: k("delete"), enabled: sel > 0 && !special },
                 { separator: true },
-                { id: "eject", text: "Eject", shortcut: k("eject"), enabled: ok },
-                { id: "closetab", text: "Close Tab", shortcut: tabs.count > 1 ? k("closetab") : "", enabled: tabs.count > 1 },
-                { id: "closewindow", text: "Close Window", shortcut: tabs.count > 1 ? "" : k("closetab") }
+                { id: "eject", icon: "media-eject", text: "Eject", shortcut: k("eject"), enabled: ok },
+                { id: "closetab", icon: "tab-close", text: "Close Tab", shortcut: tabs.count > 1 ? k("closetab") : "", enabled: tabs.count > 1 },
+                { id: "closewindow", icon: "window-close", text: "Close Window", shortcut: tabs.count > 1 ? "" : k("closetab") }
             ] },
-            { title: "Edit", items: [
-                { id: "undo", text: app.grove.undoLabel ? "Undo " + app.grove.undoLabel : "Undo", shortcut: k("undo"), enabled: app.grove.undoLabel !== "" },
-                { id: "redo", text: app.grove.redoLabel ? "Redo " + app.grove.redoLabel : "Redo", shortcut: k("redo"), enabled: app.grove.redoLabel !== "" },
+            { title: "Edit", icon: "document-edit", items: [
+                { id: "undo", icon: "edit-undo", text: app.grove.undoLabel ? "Undo " + app.grove.undoLabel : "Undo", shortcut: k("undo"), enabled: app.grove.undoLabel !== "" },
+                { id: "redo", icon: "edit-redo", text: app.grove.redoLabel ? "Redo " + app.grove.redoLabel : "Redo", shortcut: k("redo"), enabled: app.grove.redoLabel !== "" },
                 { separator: true },
-                { id: "cut", text: "Cut", shortcut: k("cut"), enabled: sel > 0 && (!special || trash) },
-                { id: "copy", text: "Copy", shortcut: k("copy"), enabled: sel > 0 },
-                { id: "paste", text: "Paste", shortcut: k("paste"), enabled: ok && !special },
-                { id: "movehere", text: "Move Here", shortcut: k("movehere"), enabled: ok && !special },
-                { id: "copypath", text: "Copy Path", shortcut: k("copypath"), enabled: ok },
-                { id: "copyother", text: "Copy to Other Side", shortcut: k("copyother"), enabled: split && sel > 0 },
-                { id: "moveother", text: "Move to Other Side", shortcut: k("moveother"), enabled: split && sel > 0 },
+                { id: "cut", icon: "edit-cut", text: "Cut", shortcut: k("cut"), enabled: sel > 0 && (!special || trash) },
+                { id: "copy", icon: "edit-copy", text: "Copy", shortcut: k("copy"), enabled: sel > 0 },
+                { id: "paste", icon: "edit-paste", text: "Paste", shortcut: k("paste"), enabled: ok && !special },
+                { id: "movehere", icon: "transform-move", text: "Move Here", shortcut: k("movehere"), enabled: ok && !special },
+                { id: "copypath", icon: "edit-copy-path", text: "Copy Path", shortcut: k("copypath"), enabled: ok },
+                { id: "copyother", icon: "go-next", text: "Copy to Other Side", shortcut: k("copyother"), enabled: split && sel > 0 },
+                { id: "moveother", icon: "go-next-view", text: "Move to Other Side", shortcut: k("moveother"), enabled: split && sel > 0 },
                 { separator: true },
-                { id: "selectall", text: "Select All", shortcut: k("selectall"), enabled: ok },
-                { id: "invert", text: "Invert Selection", shortcut: k("invert"), enabled: ok },
-                { id: "selectionmode", text: "Selection Mode", shortcut: k("selectionmode"), checkable: true, checked: ok && p.selectionMode, enabled: ok },
+                { id: "selectall", icon: "edit-select-all", text: "Select All", shortcut: k("selectall"), enabled: ok },
+                { id: "invert", icon: "edit-select-invert", text: "Invert Selection", shortcut: k("invert"), enabled: ok },
+                { id: "selectionmode", icon: "checkbox", text: "Selection Mode", shortcut: k("selectionmode"), checkable: true, checked: ok && p.selectionMode, enabled: ok },
                 { separator: true },
-                { id: "batchrename", text: "Batch Rename…", shortcut: k("batchrename"), enabled: sel > 0 && !special },
-                { id: "tags", text: "Tags", enabled: sel > 0 && !special, items: ["Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Gray"].map(tagItem) },
+                { id: "batchrename", icon: "edit-rename", text: "Batch Rename…", shortcut: k("batchrename"), enabled: sel > 0 && !special },
+                { id: "tags", icon: "tag", text: "Tags", enabled: sel > 0 && !special, items: ["Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Gray"].map(tagItem) },
                 { separator: true },
-                { id: "search", text: "Find…", shortcut: k("search"), enabled: ok },
-                { id: "filter", text: "Filter This Folder", shortcut: k("filter"), enabled: ok }
+                { id: "search", icon: "edit-find", text: "Find…", shortcut: k("search"), enabled: ok },
+                { id: "filter", icon: "view-filter", text: "Filter This Folder", shortcut: k("filter"), enabled: ok }
             ] },
-            { title: "View", items: [
-                { id: "viewicons", text: "As Icons", shortcut: k("viewicons"), checkable: true, checked: view === "icons", enabled: ok },
-                { id: "viewlist", text: "As List", shortcut: k("viewlist"), checkable: true, checked: view === "list", enabled: ok },
-                { id: "viewcolumns", text: "As Columns", shortcut: k("viewcolumns"), checkable: true, checked: view === "columns", enabled: ok },
-                { id: "viewgallery", text: "As Gallery", shortcut: k("viewgallery"), checkable: true, checked: view === "gallery", enabled: ok },
+            { title: "View", icon: "view-visible", items: [
+                { id: "viewicons", icon: "view-list-icons", text: "As Icons", shortcut: k("viewicons"), checkable: true, checked: view === "icons", enabled: ok },
+                { id: "viewlist", icon: "view-list-details", text: "As List", shortcut: k("viewlist"), checkable: true, checked: view === "list", enabled: ok },
+                { id: "viewcolumns", icon: "view-file-columns", text: "As Columns", shortcut: k("viewcolumns"), checkable: true, checked: view === "columns", enabled: ok },
+                { id: "viewgallery", icon: "view-preview", text: "As Gallery", shortcut: k("viewgallery"), checkable: true, checked: view === "gallery", enabled: ok },
                 { separator: true },
-                { id: "stacks", text: "Use Stacks", shortcut: k("stacks"), checkable: true, checked: ok && p.stacks !== "", enabled: ok },
-                { id: "sortby", text: "Sort By", enabled: ok, items: [
+                { id: "stacks", icon: "view-list-tree", text: "Use Stacks", shortcut: k("stacks"), checkable: true, checked: ok && p.stacks !== "", enabled: ok },
+                { id: "sortby", icon: "view-sort", text: "Sort By", enabled: ok, items: [
                     sortItem("name", "Name"), sortItem("kind", "Kind"), sortItem("modified", "Date Modified"),
                     sortItem("created", "Date Created"), sortItem("added", "Date Added"), sortItem("accessed", "Last Opened"),
                     sortItem("size", "Size"),
                     { separator: true },
-                    { id: "sort.descending", text: "Descending", checkable: true, checked: ok && p.model.descending, enabled: ok },
-                    { id: "sort.foldersfirst", text: "Folders First", checkable: true, checked: ok && p.model.foldersFirst, enabled: ok }
+                    { id: "sort.descending", icon: "view-sort-descending", text: "Descending", checkable: true, checked: ok && p.model.descending, enabled: ok },
+                    { id: "sort.foldersfirst", icon: "folder", text: "Folders First", checkable: true, checked: ok && p.model.foldersFirst, enabled: ok }
                 ] },
-                { id: "groupby", text: "Group By", enabled: ok, items: [
+                { id: "groupby", icon: "view-group", text: "Group By", enabled: ok, items: [
                     groupItem("", "None"), groupItem("kind", "Kind"), groupItem("date", "Date Modified"),
                     groupItem("size", "Size"), groupItem("name", "Name"), groupItem("tags", "Tags")
                 ] },
                 { separator: true },
-                { id: "sidebar", text: "Sidebar", shortcut: k("sidebar"), checkable: true, checked: sidebarShown },
-                { id: "folderspanel", text: "Folders Panel", shortcut: k("folderspanel"), checkable: true, checked: !!st.folders_panel },
-                { id: "infopanel", text: "Information Panel", shortcut: k("infopanel"), checkable: true, checked: !!st.info_panel },
-                { id: "terminalpanel", text: "Terminal Panel", shortcut: k("terminalpanel"), checkable: true, checked: !!st.terminal_panel },
-                { id: "split", text: "Split View", shortcut: k("split"), checkable: true, checked: split, enabled: !!currentTab },
-                { id: "statusbar", text: "Status Bar", checkable: true, checked: st.show_status_bar !== false },
+                { id: "sidebar", icon: "sidebar-expand-left", text: "Sidebar", shortcut: k("sidebar"), checkable: true, checked: sidebarShown },
+                { id: "folderspanel", icon: "view-list-tree", text: "Folders Panel", shortcut: k("folderspanel"), checkable: true, checked: !!st.folders_panel },
+                { id: "infopanel", icon: "dialog-information", text: "Information Panel", shortcut: k("infopanel"), checkable: true, checked: !!st.info_panel },
+                { id: "terminalpanel", icon: "utilities-terminal", text: "Terminal Panel", shortcut: k("terminalpanel"), checkable: true, checked: !!st.terminal_panel },
+                { id: "split", icon: "view-split-left-right", text: "Split View", shortcut: k("split"), checkable: true, checked: split, enabled: !!currentTab },
+                { id: "statusbar", icon: "kt-show-statusbar", text: "Status Bar", checkable: true, checked: st.show_status_bar !== false },
                 { separator: true },
-                { id: "hidden", text: "Show Hidden Files", shortcut: k("hidden"), checkable: true, checked: !!st.show_hidden },
-                { id: "zoomin", text: "Bigger Icons", shortcut: k("zoomin"), enabled: ok },
-                { id: "zoomout", text: "Smaller Icons", shortcut: k("zoomout"), enabled: ok },
-                { id: "viewoptions", text: "Show View Options", shortcut: k("viewoptions"), enabled: ok },
+                { id: "hidden", icon: "view-hidden", text: "Show Hidden Files", shortcut: k("hidden"), checkable: true, checked: !!st.show_hidden },
+                { id: "zoomin", icon: "zoom-in", text: "Bigger Icons", shortcut: k("zoomin"), enabled: ok },
+                { id: "zoomout", icon: "zoom-out", text: "Smaller Icons", shortcut: k("zoomout"), enabled: ok },
+                { id: "viewoptions", icon: "configure", text: "Show View Options", shortcut: k("viewoptions"), enabled: ok },
                 { separator: true },
-                { id: "reload", text: "Reload", shortcut: k("reload"), enabled: ok }
+                { id: "reload", icon: "view-refresh", text: "Reload", shortcut: k("reload"), enabled: ok }
             ] },
-            { title: "Go", items: [
-                { id: "back", text: "Back", shortcut: k("back"), enabled: ok && p.backStack.length > 0 },
-                { id: "forward", text: "Forward", shortcut: k("forward"), enabled: ok && p.fwdStack.length > 0 },
-                { id: "up", text: "Enclosing Folder", shortcut: k("up"), enabled: ok && p.parentOf(p.path) !== "" },
+            { title: "Go", icon: "go-jump", items: [
+                { id: "back", icon: "go-previous", text: "Back", shortcut: k("back"), enabled: ok && p.backStack.length > 0 },
+                { id: "forward", icon: "go-next", text: "Forward", shortcut: k("forward"), enabled: ok && p.fwdStack.length > 0 },
+                { id: "up", icon: "go-up", text: "Enclosing Folder", shortcut: k("up"), enabled: ok && p.parentOf(p.path) !== "" },
                 { separator: true },
-                { id: "recents", text: "Recents", shortcut: k("recents") },
-                { id: "documents", text: "Documents", shortcut: k("documents") },
-                { id: "desktop", text: "Desktop", shortcut: k("desktop") },
-                { id: "downloads", text: "Downloads", shortcut: k("downloads") },
-                { id: "home", text: "Home", shortcut: k("home") },
-                { id: "computer", text: "Computer", shortcut: k("computer") },
-                { id: "trash", text: "Trash", shortcut: k("trash") },
+                { id: "recents", icon: "document-open-recent", text: "Recents", shortcut: k("recents") },
+                { id: "documents", icon: "folder-documents", text: "Documents", shortcut: k("documents") },
+                { id: "desktop", icon: "user-desktop", text: "Desktop", shortcut: k("desktop") },
+                { id: "downloads", icon: "folder-download", text: "Downloads", shortcut: k("downloads") },
+                { id: "home", icon: "user-home", text: "Home", shortcut: k("home") },
+                { id: "computer", icon: "computer", text: "Computer", shortcut: k("computer") },
+                { id: "trash", icon: "user-trash", text: "Trash", shortcut: k("trash") },
                 { separator: true },
-                { id: "gotofolder", text: "Go to Folder…", shortcut: k("gotofolder") },
-                { id: "connect", text: "Connect to Server…", shortcut: k("connect") },
-                { id: "cloud", text: "Add Cloud Drive…" },
+                { id: "gotofolder", icon: "go-jump", text: "Go to Folder…", shortcut: k("gotofolder") },
+                { id: "connect", icon: "network-connect", text: "Connect to Server…", shortcut: k("connect") },
+                { id: "cloud", icon: "folder-cloud", text: "Add Cloud Drive…" },
                 { separator: true },
-                { id: "terminal", text: "Open in Terminal", shortcut: k("terminal"), enabled: ok },
-                { id: "diskusage", text: "Disk Usage…", shortcut: k("diskusage") }
+                { id: "terminal", icon: "utilities-terminal", text: "Open in Terminal", shortcut: k("terminal"), enabled: ok },
+                { id: "diskusage", icon: "filelight", text: "Disk Usage…", shortcut: k("diskusage") }
             ] },
-            { title: "Window", items: [
-                { id: "minimize", text: "Minimize" },
-                { id: "zoom", text: "Zoom" },
+            { title: "Window", icon: "window-duplicate", items: [
+                { id: "minimize", icon: "window-minimize", text: "Minimize" },
+                { id: "zoom", icon: "window-maximize", text: "Zoom" },
                 { separator: true },
-                { id: "prevtab", text: "Show Previous Tab", shortcut: k("prevtab"), enabled: tabs.count > 1 },
-                { id: "nexttab", text: "Show Next Tab", shortcut: k("nexttab"), enabled: tabs.count > 1 },
-                { id: "tearoff", text: "Move Tab to New Window", enabled: tabs.count > 1 }
+                { id: "prevtab", icon: "go-previous-view", text: "Show Previous Tab", shortcut: k("prevtab"), enabled: tabs.count > 1 },
+                { id: "nexttab", icon: "go-next-view", text: "Show Next Tab", shortcut: k("nexttab"), enabled: tabs.count > 1 },
+                { id: "tearoff", icon: "tab-detach", text: "Move Tab to New Window", enabled: tabs.count > 1 }
             ] },
-            { title: "Help", items: [
-                { id: "help", text: "Grove Help and Keyboard Shortcuts", shortcut: k("help") }
+            { title: "Help", icon: "help-browser", items: [
+                { id: "help", icon: "help-contents", text: "Grove Help and Keyboard Shortcuts", shortcut: k("help") }
             ] }
         ]
     }
@@ -1020,70 +1025,13 @@ ApplicationWindow {
         id: appMenu
         model: bw.menuModel
         onTriggered: id => bw.menuAction(id)
+        accent: Theme.accent
+        dark: Theme.dark
+        // In the window: a separate popup window gets a different scale
+        // from arbor at 4/3 and loses pixels.
+        popupType: Popup.Item
         property real closedAt: 0
         onClosed: closedAt = Date.now()
-        topPadding: Theme.menuPad + 0.001
-        bottomPadding: Theme.menuPad
-        leftPadding: Theme.menuPad + 0.001
-        rightPadding: Theme.menuPad
-        popupType: Popup.Item
-        implicitWidth: Math.max(Math.round(200 * Theme.pt), contentItem.implicitWidth + leftPadding + rightPadding)
-        itemDelegate: Component { GMenuItem {} }
-        delegate: GMenuItem {}
-        background: GlassPanel { implicitWidth: Math.round(200 * Theme.pt); tint: Theme.glassMenu; radius: Theme.glassRadius }
-        // AppMenu (shared between apps) makes plain submenus and separators:
-        // give them grove's glass look before they show.
-        onAboutToShow: bw.styleMenu(appMenu, true)
-    }
-    Component { id: menuGlass; GlassPanel { implicitWidth: Math.round(200 * Theme.pt); tint: Theme.glassMenu; radius: Theme.glassRadius } }
-    Component { id: menuRule; Rectangle { implicitHeight: 1; color: Theme.separator } }
-    Component { id: menuRowBg; Rectangle { property var mi; radius: Math.round(8 * Theme.pt); color: mi && mi.highlighted && mi.enabled ? Theme.accent : "transparent" } }
-    Component {
-        id: menuRowText
-        Item {
-            property var mi
-            implicitWidth: rowLabel.implicitWidth + 60
-            GLabel {
-                id: rowLabel
-                x: 24
-                anchors.verticalCenter: parent.verticalCenter
-                text: parent.mi ? parent.mi.text : ""
-                color: parent.mi && !parent.mi.enabled ? Theme.fgDisabled : parent.mi && parent.mi.highlighted ? Theme.accentText : Theme.fg
-            }
-        }
-    }
-    Component { id: menuArrow; GLabel { property var mi; text: "›"; font.pixelSize: Theme.title; color: mi && mi.highlighted ? Theme.accentText : Theme.fgSecondary } }
-    function styleMenu(m, top) {
-        if (!top) {
-            m.popupType = Popup.Item
-            m.topPadding = Theme.menuPad + 0.001; m.bottomPadding = Theme.menuPad
-            m.leftPadding = Theme.menuPad + 0.001; m.rightPadding = Theme.menuPad
-            m.overlap = 3
-            let w = Math.round(250 * Theme.pt)
-            for (let i = 0; i < m.count; i++) { const it = m.itemAt(i); if (it) w = Math.max(w, it.implicitWidth + m.leftPadding + m.rightPadding) }
-            m.implicitWidth = w
-            m.background = menuGlass.createObject(m)
-        }
-        for (let i = 0; i < m.count; i++) {
-            const it = m.itemAt(i)
-            if (!it) continue
-            // (Each object is new: AppMenu rebuilds its menus as it opens.)
-            if (it.text === undefined) {
-                it.topPadding = 4; it.bottomPadding = 4; it.leftPadding = 10; it.rightPadding = 10
-                it.contentItem = menuRule.createObject(it)
-            } else if (it.subMenu && it.shortcutText === undefined) {
-                // A plain MenuItem holding a submenu (Sort By, Open With...).
-                it.implicitHeight = Theme.menuRow
-                it.indicator = null
-                it.background = menuRowBg.createObject(it, { mi: it })
-                it.contentItem = menuRowText.createObject(it, { mi: it })
-                const ar = menuArrow.createObject(it, { mi: it })
-                ar.x = Qt.binding(() => it.width - ar.width - 8)
-                ar.y = Qt.binding(() => (it.height - ar.height) / 2)
-                it.arrow = ar
-            }
-            if (it.subMenu) styleMenu(it.subMenu, false)
-        }
     }
     function toggleAppMenu(button) {
         if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close()
