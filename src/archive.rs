@@ -119,7 +119,59 @@ fn nth_field_start(line: &str, n: usize) -> Option<usize> {
     None
 }
 
+/// Listing, remembered while the archive file is unchanged (browsing a big
+/// archive lists it once, not on every folder inside it).
 pub fn list(path: &str) -> Result<Vec<ArchEntry>, String> {
+    type Cache = std::collections::HashMap<String, (u64, i64, std::sync::Arc<Vec<ArchEntry>>)>;
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<Cache>> = std::sync::OnceLock::new();
+    let key = std::fs::metadata(path).map(|m| (m.len(), std::os::unix::fs::MetadataExt::mtime(&m))).unwrap_or((0, 0));
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some((l, t, v)) = cache.lock().unwrap().get(path) {
+        if (*l, *t) == key {
+            return Ok(v.as_ref().clone());
+        }
+    }
+    let v = list_uncached(path)?;
+    let mut c = cache.lock().unwrap();
+    if c.len() > 24 {
+        c.clear();
+    }
+    c.insert(path.to_string(), (key.0, key.1, std::sync::Arc::new(v.clone())));
+    Ok(v)
+}
+
+/// Archives inside archives: the deepest container holding `inner` (each
+/// nested archive copied once to grove's cache, keyed by its outer file,
+/// as Kog does), the consumed prefix ("docs/inner.tar.gz/"), and the rest
+/// of the path inside that container. Up to 4 levels.
+pub fn resolve(archive: &str, inner: &str) -> Result<(String, String, String), String> {
+    let mut container = archive.to_string();
+    let mut prefix = String::new();
+    let mut rest = inner.trim_matches('/').to_string();
+    for _ in 0..4 {
+        if rest.is_empty() {
+            break;
+        }
+        let entries = list(&container)?;
+        let parts: Vec<&str> = rest.split('/').collect();
+        let mut hit = None;
+        for len in (1..=parts.len()).rev() {
+            let cand = parts[..len].join("/");
+            let name = parts[len - 1];
+            if entries.iter().any(|e| !e.is_dir && e.path == cand) && is_archive("", name) {
+                hit = Some((cand, parts[len..].join("/")));
+                break;
+            }
+        }
+        let Some((link, remainder)) = hit else { break };
+        container = extract_member(&container, &link)?.display().to_string();
+        prefix = format!("{prefix}{link}/");
+        rest = remainder;
+    }
+    Ok((container, prefix, rest))
+}
+
+fn list_uncached(path: &str) -> Result<Vec<ArchEntry>, String> {
     if let Some(inner) = single_of(path) {
         let size = single_uncompressed(path).unwrap_or(0);
         return Ok(vec![ArchEntry { path: inner, size, is_dir: false, mtime_text: String::new() }]);
@@ -349,7 +401,13 @@ pub fn local_copy(path: &str, extract: bool) -> Option<PathBuf> {
     if !extract {
         return None;
     }
-    extract_member(a, inner).ok()
+    // Through any archives on the way (nested archives).
+    let (container, _, leaf) = resolve(a, inner).ok()?;
+    if leaf.is_empty() {
+        // The path names a nested archive itself: its cached copy.
+        return Some(PathBuf::from(container));
+    }
+    extract_member(&container, &leaf).ok()
 }
 
 /// Extract one member to grove's cache (to open or preview it); reused

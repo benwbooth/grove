@@ -259,6 +259,18 @@ pub mod ffi {
         fn forget_server(self: &Grove, key: &QString, name: &QString);
         #[qinvokable]
         fn discover_network(self: &Grove, key: &QString);
+        /// Add Cloud Drive (rclone): kinds of drives, drives set up, one
+        /// step of rclone's question flow, delete, cancel a waiting step.
+        #[qinvokable]
+        fn rclone_providers(self: &Grove, key: &QString);
+        #[qinvokable]
+        fn rclone_drives(self: &Grove, key: &QString);
+        #[qinvokable]
+        fn rclone_step(self: &Grove, key: &QString, json: &QString);
+        #[qinvokable]
+        fn rclone_delete(self: &Grove, key: &QString, name: &QString);
+        #[qinvokable]
+        fn rclone_cancel(self: &Grove);
         #[qinvokable]
         fn archive_list(self: &Grove, key: &QString, archive: &QString);
         /// Disk Usage (KDirStat-like): start a scan, poll it, read its tree

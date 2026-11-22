@@ -304,3 +304,145 @@ pub fn discover() -> Value {
     }
     json!({"hosts": hosts, "remotes": rclone_remotes(), "avahi": which("avahi-browse")})
 }
+
+// ---------------------------------------------------------------- rclone setup
+//
+// The Add Cloud Drive wizard drives rclone's own question flow
+// (`rclone config create NAME TYPE --all --non-interactive`, then
+// `config update NAME --continue --state S --result R`): every backend's
+// options and its sign-in steps (OAuth opens the browser) come from rclone
+// itself, so any kind of drive rclone knows can be set up.
+
+/// Backends people pick most, shown first (rclone names).
+const POPULAR: &[&str] = &[
+    "drive", "onedrive", "dropbox", "iclouddrive", "protondrive", "box", "pcloud", "mega", "s3", "b2", "sftp", "webdav", "smb", "ftp",
+    "gphotos", "koofr", "yandex", "seafile", "jottacloud", "internetarchive",
+];
+
+/// Every kind of drive rclone can set up: [{name, description, popular}].
+pub fn rclone_providers() -> Value {
+    if !which("rclone") {
+        return json!({"error": "Cloud drives need rclone, which isn't installed."});
+    }
+    let o = match Command::new("rclone").args(["config", "providers"]).output() {
+        Ok(o) if o.status.success() => o,
+        _ => return json!({"error": "rclone couldn't list the kinds of drives."}),
+    };
+    let all: Vec<Value> = serde_json::from_slice(&o.stdout).unwrap_or_default();
+    let mut v: Vec<Value> = all
+        .iter()
+        .filter(|p| p["Hide"].as_bool() != Some(true))
+        .map(|p| {
+            let name = p["Name"].as_str().unwrap_or("").to_string();
+            let rank = POPULAR.iter().position(|x| *x == name).unwrap_or(999);
+            json!({"name": name, "description": p["Description"].as_str().unwrap_or(""), "popular": rank < 999, "rank": rank})
+        })
+        .collect();
+    v.sort_by(|a, b| a["rank"].as_u64().cmp(&b["rank"].as_u64()).then(a["description"].as_str().unwrap_or("").to_lowercase().cmp(&b["description"].as_str().unwrap_or("").to_lowercase())));
+    json!({"providers": v})
+}
+
+/// Drives already set up: [{name, type}] (secrets left out).
+pub fn rclone_drives() -> Value {
+    let o = Command::new("rclone").args(["config", "dump"]).output();
+    let dump: Value = o.ok().and_then(|o| serde_json::from_slice(&o.stdout).ok()).unwrap_or(json!({}));
+    let mut v: Vec<Value> = dump.as_object().map(|m| m.iter().map(|(k, x)| json!({"name": k, "type": x["type"]})).collect()).unwrap_or_default();
+    v.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+    json!({"drives": v})
+}
+
+pub fn rclone_delete(name: &str) -> Value {
+    match Command::new("rclone").args(["config", "delete", name]).output() {
+        Ok(o) if o.status.success() => json!({"ok": true}),
+        Ok(o) => json!({"error": String::from_utf8_lossy(&o.stderr).trim().to_string()}),
+        Err(e) => json!({"error": e.to_string()}),
+    }
+}
+
+static RCLONE_CHILD: std::sync::Mutex<Option<u32>> = std::sync::Mutex::new(None);
+
+/// Stop a step that's waiting (a browser sign-in the user abandoned).
+pub fn rclone_cancel() {
+    if let Some(pid) = RCLONE_CHILD.lock().unwrap().take() {
+        unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+    }
+}
+
+fn rclone_json(args: &[String]) -> Result<Value, String> {
+    let child = Command::new("rclone").args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
+    *RCLONE_CHILD.lock().unwrap() = Some(child.id());
+    let o = child.wait_with_output().map_err(|e| e.to_string());
+    *RCLONE_CHILD.lock().unwrap() = None;
+    let o = o?;
+    let out = String::from_utf8_lossy(&o.stdout);
+    match serde_json::from_str::<Value>(out.trim()) {
+        Ok(v) => Ok(v),
+        Err(_) if o.status.success() => Ok(json!({"State": ""})),
+        Err(_) => {
+            let err = String::from_utf8_lossy(&o.stderr);
+            let line = err.lines().filter(|l| !l.contains("NOTICE")).last().unwrap_or("rclone stopped").trim();
+            Err(line.split(": ").skip(1).collect::<Vec<_>>().join(": ").trim().to_string().chars().take(400).collect::<String>().if_empty(line))
+        }
+    }
+}
+
+trait IfEmpty {
+    fn if_empty(self, other: &str) -> String;
+}
+impl IfEmpty for String {
+    fn if_empty(self, other: &str) -> String {
+        if self.is_empty() { other.to_string() } else { self }
+    }
+}
+
+/// One step of the setup. JSON in: {name, type, state, result, password
+/// (the answer is a password: obscure it), defaults (answer every
+/// optional question with its default until something needs the user)}.
+/// Out: {state, option} for the next question, {done: true}, or {error}.
+pub fn rclone_step(j: &str) -> Value {
+    let v: Value = serde_json::from_str(j).unwrap_or(json!({}));
+    let name = v["name"].as_str().unwrap_or("").trim().to_string();
+    let typ = v["type"].as_str().unwrap_or("").to_string();
+    let mut state = v["state"].as_str().unwrap_or("").to_string();
+    let mut result = v["result"].as_str().unwrap_or("").to_string();
+    let defaults = v["defaults"].as_bool().unwrap_or(false);
+    if name.is_empty() || name.contains(':') || name.contains('/') {
+        return json!({"error": "Give the drive a name without “:” or “/”."});
+    }
+    if v["password"].as_bool() == Some(true) && !result.is_empty() {
+        match rclone_obscure(&result) {
+            Ok(o) => result = o,
+            Err(e) => return json!({"error": e}),
+        }
+    }
+    let mut first = state.is_empty() && v["started"].as_bool() != Some(true);
+    for _ in 0..400 {
+        let args: Vec<String> = if first {
+            if rclone_drives()["drives"].as_array().is_some_and(|d| d.iter().any(|x| x["name"] == name)) {
+                return json!({"error": format!("There's already a drive called “{name}”. Pick another name.")});
+            }
+            vec!["config".into(), "create".into(), name.clone(), typ.clone(), "--all".into(), "--non-interactive".into()]
+        } else {
+            vec!["config".into(), "update".into(), name.clone(), "--continue".into(), "--state".into(), state.clone(), "--result".into(), result.clone(), "--all".into(), "--non-interactive".into()]
+        };
+        first = false;
+        let r = match rclone_json(&args) {
+            Ok(r) => r,
+            Err(e) => return json!({"error": e}),
+        };
+        let next = r["State"].as_str().unwrap_or("").to_string();
+        if next.is_empty() {
+            return json!({"done": true, "name": name, "error": r["Error"]});
+        }
+        let opt = &r["Option"];
+        // Skipping ahead: optional questions of the option list (not the
+        // drive's own steps, like signing in) take their defaults.
+        if defaults && next.starts_with("*all") && opt["Required"].as_bool() != Some(true) && r["Error"].as_str().unwrap_or("").is_empty() {
+            state = next;
+            result = opt["DefaultStr"].as_str().unwrap_or("").to_string();
+            continue;
+        }
+        return json!({"state": next, "option": opt, "error": r["Error"], "advanced": next.starts_with("*all-set") && next.ends_with(",true")});
+    }
+    json!({"error": "rclone kept asking questions; stopped."})
+}

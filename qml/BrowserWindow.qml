@@ -18,7 +18,7 @@ ApplicationWindow {
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
     property var currentTab: tabRepeater.count > 0 ? tabRepeater.itemAt(tabBar.currentIndex) : null
     property var activePane: currentTab ? currentTab.activePane : null
-    property bool modalOpen: burnSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || saveSheet.opened || openWithSheet.opened
+    property bool modalOpen: burnSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened
 
     width: 1180
     height: 720
@@ -193,6 +193,7 @@ ApplicationWindow {
     }
     function batchRename(paths) { renameSheet.start(paths) }
     function connectServer() { connectSheet.start() }
+    function addCloudDrive() { connectSheet.close(); cloudSheet.start() }
     function connectSaved(s) {
         toast("info", "Connecting to “" + s.name + "”…")
         Async.call(app.grove, k => app.grove.connectServer(k, JSON.stringify({ name: s.name, kind: s.kind, host: s.host, user: s.user, path: s.path, remember: true })), r => {
@@ -753,6 +754,7 @@ ApplicationWindow {
         GMenuItem { text: "Split View"; iconName: "view-split-left-right|view-dual"; checkable: true; checked: bw.currentTab && bw.currentTab.split; shortcutText: Help.shown("F3"); onTriggered: bw.currentTab.toggleSplit() }
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: Help.shown("Ctrl+Alt+T"); onTriggered: bw.app.grove.openTerminal(bw.activePane.path) }
         GMenuItem { text: "Connect to Server…"; iconName: "network-connect"; shortcutText: Help.shown("Ctrl+K"); onTriggered: bw.connectServer() }
+        GMenuItem { text: "Add Cloud Drive…"; iconName: "folder-cloud|network-server"; tip: "Set up Google Drive, OneDrive, Dropbox, iCloud, S3… step by step (rclone)"; onTriggered: bw.addCloudDrive() }
         GMenuItem { text: "Disk Usage…"; iconName: "filelight|baobab|drive-harddisk"; tip: "See what takes the room in this folder: a tree with percentages and a treemap of every file"; shortcutText: Help.shown("Ctrl+Shift+U"); onTriggered: bw.showDiskUsage() }
         GMenuSeparator {}
         GMenuItem { text: "Burn to Disc…"; iconName: "media-optical-burn|media-optical"; tip: "Burn the selection (or this folder) to a CD, DVD or Blu-ray, or save a disc image"; onTriggered: bw.burnSelection() }
@@ -810,6 +812,7 @@ ApplicationWindow {
         ]
     }
     ConnectServer { id: connectSheet; app: bw.app; win: bw }
+    CloudDriveSheet { id: cloudSheet; app: bw.app; win: bw }
     // Finder's Go to Folder (when the path bar isn't in the toolbar).
     Sheet {
         id: goSheet
@@ -997,6 +1000,11 @@ ApplicationWindow {
         else if (cmd === "pxwheel") { const v = p.viewLoaderItem(); if (v && v.testPixelWheel) v.testPixelWheel(Number(arg)) }
         else if (cmd === "swipe") { const v = p.viewLoaderItem(); if (v && v.testSwipe) v.testSwipe(Number(arg)) }
         else if (cmd === "du") bw.showDiskUsage(arg || p.path)
+        else if (cmd === "cloud") bw.addCloudDrive()
+        else if (cmd === "cloudpick") { const f = cloudSheet.providers.find(x => x.name === arg); if (f) cloudSheet.pick(f) }
+        else if (cmd === "cloudnext") cloudSheet.page === "name" ? cloudSheet.begin() : cloudSheet.send(arg || "")
+        else if (cmd === "cloudquit") cloudSheet.abandon()
+        else if (cmd === "clouddefaults") cloudSheet.send(cloudSheet.answer, { defaults: true })
         else if (cmd === "openrow") { console.warn("grove test item", p.model.get(Number(arg))); p.openRow(Number(arg), false) }
         else if (cmd === "dumpx") { const v = p.viewLoaderItem(); console.warn("grove test x", arg || "", v && v.stripX !== undefined ? v.stripX.toFixed(1) : "?") }
         else if (cmd === "dumppath") console.warn("grove test path", p.path, p.viewMode)

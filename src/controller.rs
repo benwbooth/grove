@@ -240,8 +240,7 @@ impl ffi::Grove {
                 // A file inside an archive: take it out first.
                 let p = match p.to_string_lossy().strip_prefix("archive://") {
                     Some(rest) => {
-                        let (a, inner) = rest.split_once('#').unwrap_or((rest, ""));
-                        match crate::archive::extract_member(a, inner) {
+                        match crate::archive::local_copy(&format!("archive://{rest}"), true).ok_or_else(|| "Couldn't take it out of the archive.".to_string()) {
                             Ok(x) => x,
                             Err(e) => {
                                 let _ = qt.queue(move |g| g.notify(qs("error"), qs(&e)));
@@ -942,6 +941,42 @@ impl ffi::Grove {
 
     pub fn discover_network(&self, key: &QString) {
         self.answer(key, crate::remote::discover);
+    }
+
+    pub fn rclone_providers(&self, key: &QString) {
+        self.answer(key, crate::remote::rclone_providers);
+    }
+    pub fn rclone_drives(&self, key: &QString) {
+        self.answer(key, crate::remote::rclone_drives);
+    }
+    pub fn rclone_step(&self, key: &QString, json_s: &QString) {
+        let j = json_s.to_string();
+        let qt = self.qt_thread();
+        self.answer(key, move || {
+            let r = crate::remote::rclone_step(&j);
+            if r["done"].as_bool() == Some(true) {
+                let _ = qt.queue(|mut g| {
+                    let r = *g.places_revision() + 1;
+                    g.as_mut().set_places_revision(r);
+                });
+            }
+            r
+        });
+    }
+    pub fn rclone_delete(&self, key: &QString, name: &QString) {
+        let n = name.to_string();
+        let qt = self.qt_thread();
+        self.answer(key, move || {
+            let r = crate::remote::rclone_delete(&n);
+            let _ = qt.queue(|mut g| {
+                let r = *g.places_revision() + 1;
+                g.as_mut().set_places_revision(r);
+            });
+            r
+        });
+    }
+    pub fn rclone_cancel(&self) {
+        crate::remote::rclone_cancel()
     }
 
     pub fn du_start(&self, path: &QString) -> i32 {

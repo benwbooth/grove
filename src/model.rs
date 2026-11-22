@@ -1397,7 +1397,10 @@ pub fn special_list(p: &str) -> Vec<RawItem> {
             .collect()
     } else if let Some(rest) = p.strip_prefix("archive://") {
         let (archive, inner) = rest.split_once('#').unwrap_or((rest, ""));
-        let entries = crate::archive::list(archive).unwrap_or_default();
+        // Nested archives open like folders too: list the innermost one.
+        let (container, prefix, inner) = crate::archive::resolve(archive, inner).unwrap_or((archive.to_string(), String::new(), inner.to_string()));
+        let inner = inner.as_str();
+        let entries = crate::archive::list(&container).unwrap_or_default();
         let meta = std::fs::metadata(archive).ok();
         let mtime = meta.as_ref().map(|m| std::os::unix::fs::MetadataExt::mtime(m)).unwrap_or(0);
         crate::archive::children(&entries, inner)
@@ -1407,7 +1410,7 @@ pub fn special_list(p: &str) -> Vec<RawItem> {
                 let e = Entry {
                     hidden: name.starts_with('.'),
                     name,
-                    path: format!("archive://{archive}#{}", a.path),
+                    path: format!("archive://{archive}#{prefix}{}", a.path),
                     is_dir: a.is_dir,
                     is_link: false,
                     size: a.size,

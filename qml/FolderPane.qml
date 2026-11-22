@@ -282,6 +282,8 @@ FocusScope {
         if (!it) return ""
         if (it.isDir) return it.path
         if (archiveLike(it) && it.path.indexOf("/") === 0) return "archive://" + it.path + "#"
+        // An archive inside an archive: its own path lists it (nested).
+        if (archiveLike(it) && it.path.indexOf("archive://") === 0) return it.path
         return ""
     }
     // Anything bsdtar can open (grove's list: zip, tar.*, 7z, rar, iso, cab,

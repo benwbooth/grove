@@ -21,7 +21,10 @@ Sheet {
         else { host.text = ""; user.text = ""; folder.text = ""; password.text = ""; nameField.text = "" }
         open()
         Async.call(app.grove, k => app.grove.discoverNetwork(k), r => cs.found = r)
+        loadDrives()
     }
+    property var drives: []
+    function loadDrives() { Async.call(app.grove, k => app.grove.rcloneDrives(k), r => cs.drives = r.drives || []) }
     function connect() {
         busy = true; error = ""
         const j = { kind: kind, host: host.text.trim(), user: user.text.trim(), path: folder.text.trim(), password: password.text,
@@ -56,7 +59,7 @@ Sheet {
             sftp: "SFTP: files on another computer over SSH. If your SSH key works, leave the password empty.",
             smb: "A shared folder on a Windows PC or a NAS. The share name goes in Folder (for example “Public” or “Public/Photos”).",
             webdav: "A WebDAV address, such as https://cloud.example.com/remote.php/dav/files/you/",
-            rclone: "Cloud drives you've set up in rclone (run `rclone config` once in a terminal to add Google Drive, Dropbox, OneDrive…).",
+            rclone: "Cloud drives: Google Drive, OneDrive, Dropbox, iCloud, S3 and 70 more, through rclone. Add one with the button below; pick it here to open it.",
             mtp: "Plug in the phone with USB, unlock it, and choose “File transfer” on its notification."
         })[cs.kind]
     }
@@ -90,6 +93,25 @@ Sheet {
         GField { id: port; width: 90; visible: cs.kind === "sftp" || cs.kind === "smb"; placeholderText: cs.kind === "sftp" ? "22" : "445" }
         GLabel { text: "Name"; width: 80; horizontalAlignment: Text.AlignRight; height: Theme.controlHeight }
         GField { id: nameField; width: parent.width - 90; placeholderText: "how it's called in the sidebar (optional)" }
+    }
+    // Cloud: add a drive (guided), or remove one.
+    Column {
+        width: parent.width
+        spacing: 6
+        visible: cs.kind === "rclone"
+        PushButton { text: "Add Cloud Drive…"; tip: "Set up a new drive step by step: pick the service, sign in, done"; onClicked: cs.win.addCloudDrive() }
+        Repeater {
+            model: cs.kind === "rclone" ? cs.drives : []
+            Row {
+                required property var modelData
+                spacing: 8
+                GIcon { size: 16; name: "folder-cloud|network-server"; anchors.verticalCenter: parent.verticalCenter }
+                GLabel { text: modelData.name; anchors.verticalCenter: parent.verticalCenter }
+                GLabel { text: modelData.type; color: Theme.fgTertiary; font.pixelSize: Theme.small; anchors.verticalCenter: parent.verticalCenter }
+                GButton { iconName: "edit-delete|user-trash"; tip: "Remove “" + parent.modelData.name + "” from rclone (your files in the cloud stay)"
+                    onClicked: Async.call(cs.app.grove, k => cs.app.grove.rcloneDelete(k, parent.modelData.name), r => { if (r.error) cs.error = r.error; cs.loadDrives(); Async.call(cs.app.grove, k => cs.app.grove.discoverNetwork(k), d => cs.found = d) }) }
+            }
+        }
     }
     Row {
         spacing: 16
