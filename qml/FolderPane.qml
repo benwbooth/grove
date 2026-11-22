@@ -506,6 +506,15 @@ FocusScope {
     }
     function compress(fmt) { const sel = selectedPaths(); if (sel.length) grove.compress(JSON.stringify(sel), fmt || "zip") }
     function extract() { for (const p of selectedPaths()) grove.extract(p, "") }
+    // Extract into a folder you pick (a subfolder named after the archive
+    // when it holds more than one item, as Extract Here does).
+    function extractTo() {
+        const sel = selectedPaths().filter(x => x.indexOf("/") === 0)
+        if (!sel.length) return
+        win.chooseFiles("Extract To", { directory: true, currentFolder: path, acceptLabel: "Extract Here" }, ps => {
+            if (ps && ps.length) for (const p of sel) grove.extract(p, ps[0])
+        })
+    }
 
     // Type-to-select.
     Timer { id: typeReset; interval: 900; onTriggered: pane.typeAhead = "" }

@@ -804,6 +804,7 @@ ApplicationWindow {
                 { id: "alias", text: "Make Alias", shortcut: k("alias"), enabled: sel > 0 && !special },
                 { id: "compress", text: sel > 1 ? "Compress " + sel + " Items" : t ? "Compress “" + t.name + "”" : "Compress", enabled: sel > 0 && !special },
                 { id: "extract", text: "Extract Here", enabled: !!t && p.archiveLike(t) && !special },
+                { id: "extractto", text: "Extract To…", enabled: !!t && p.archiveLike(t) && !special },
                 { id: "burn", text: "Burn to Disc…", enabled: ok && (sel > 0 || !special) },
                 { id: "share", text: "Share with Nearby Device…", enabled: sel > 0 && !special && !(t && t.isDir) },
                 { separator: true },
@@ -975,6 +976,7 @@ ApplicationWindow {
             case "alias": p.makeAlias(); break
             case "compress": p.compress("zip"); break
             case "extract": p.extract(); break
+            case "extractto": p.extractTo(); break
             case "burn": burnSelection(); break
             case "share": share(p.selectedPaths()); break
             case "putback": p.putBack(); break

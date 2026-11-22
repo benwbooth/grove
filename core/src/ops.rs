@@ -198,7 +198,7 @@ pub fn split_name(name: &str, is_dir: bool) -> (String, String) {
     if is_dir {
         return (name.to_string(), String::new());
     }
-    for multi in [".tar.gz", ".tar.xz", ".tar.zst", ".tar.bz2"] {
+    for multi in [".tar.gz", ".tar.xz", ".tar.zst", ".tar.zstd", ".tar.bz2", ".tar.bz", ".tar.lz", ".tar.lzma", ".tar.lz4", ".tar.z"] {
         if name.len() > multi.len() && name.to_ascii_lowercase().ends_with(multi) {
             let i = name.len() - multi.len();
             return (name[..i].to_string(), name[i..].to_string());

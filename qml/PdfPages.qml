@@ -43,6 +43,8 @@ Item {
         anchors.bottomMargin: bar.height + 6
         clip: true
         model: pp.pages
+        // Its own wheel scrolling off: the PanWheel glides (momentum).
+        interactive: false
         spacing: 14
         cacheBuffer: height
         topMargin: 12

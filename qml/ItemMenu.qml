@@ -46,7 +46,10 @@ GMenu {
     GMenuItem { text: "Duplicate"; iconName: "edit-copy"; shortcutText: Help.shown("Ctrl+D"); enabled: !m.pane.special; onTriggered: m.pane.duplicate() }
     GMenuItem { text: "Make Alias"; iconName: "insert-link"; shortcutText: Help.shown("Ctrl+Alt+A"); enabled: !m.pane.special; onTriggered: m.pane.makeAlias() }
     GMenuItem { text: m.one ? "Compress “" + m.target.name + "”" : "Compress " + m.sel.length + " Items"; iconName: "archive-insert"; enabled: !m.pane.special; tip: "Make a .zip next to the items"; onTriggered: m.pane.compress("zip") }
-    GMenuItem { text: "Extract Here"; iconName: "archive-extract"; visible: m.isArchive; height: visible ? implicitHeight : 0; onTriggered: m.pane.extract() }
+    GMenuItem { text: "Extract Here"; iconName: "archive-extract"; visible: m.isArchive; height: visible ? implicitHeight : 0
+        tip: "Into a folder named after the archive if it holds more than one item; else right here"; onTriggered: m.pane.extract() }
+    GMenuItem { text: "Extract To…"; iconName: "archive-extract|folder-open"; visible: m.isArchive; height: visible ? implicitHeight : 0
+        tip: "Pick where to extract it (a folder named after the archive is made there if it holds more than one item)"; onTriggered: m.pane.extractTo() }
     GMenuItem { text: "Open Disk Image"; iconName: "media-optical"; visible: m.isDiskImage && m.one; height: visible ? implicitHeight : 0; tip: "Attach the image (ISO, IMG) read-only and open it like a disk"; onTriggered: m.pane.win.mountImage(m.target.path) }
     GMenuItem { text: "Compare"; iconName: "kompare|document-compare|view-split-left-right"; visible: m.sel.length === 2; height: visible ? implicitHeight : 0; tip: "Show the differences between the two items"; onTriggered: m.pane.win.compareFiles(m.sel[0], m.sel[1]) }
     GMenuItem { text: "Copy to Other Side"; iconName: "edit-copy"; visible: m.split; height: visible ? implicitHeight : 0; shortcutText: Help.shown("Shift+F5"); onTriggered: m.pane.win.toOtherPane(false) }
