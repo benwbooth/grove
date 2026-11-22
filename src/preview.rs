@@ -207,6 +207,11 @@ pub fn preview(path: &str, dark: bool) -> Value {
         return with(json!({"kind": "table"}));
     }
     let never = std::sync::atomic::AtomicBool::new(false);
+    // Books, DjVu, XPS, PostScript, comics: the cover (or icon) at once,
+    // then every page once it's been made into a PDF (Quick Look asks).
+    if crate::docconv::kind(&name).is_some() {
+        return with(json!({"kind": "thumb", "convert": true}));
+    }
     match previews::kind_of(&parents, &name) {
         Kind::Picture => {
             if crate::bridge::ffi::grove_can_read_image(&crate::bridge::ffi::QString::from(path)) {

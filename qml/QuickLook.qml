@@ -77,6 +77,17 @@ Window {
             ql.pv = r
             // Office documents: their text at once, then the real pages
             // once LibreOffice has made a PDF (seconds; cached after).
+            // DjVu, EPUB/MOBI/FB2, XPS, PostScript, comics: every page,
+            // once made into a PDF (cached after the first time).
+            if (r.convert) {
+                ql.converting = true
+                Async.call(app.grove, k => app.grove.docPdf(k, p), d => {
+                    if (!ql.item || ql.item.path !== p) return
+                    ql.converting = false
+                    if (d.kind === "pdf" && d.paged) ql.pv = Object.assign({}, d, { kindText: r.kindText, sizeText: r.sizeText })
+                    else if (d.error) ql.win.toast("error", d.error)
+                })
+            }
             if (r.kind === "office" && r.canConvert) {
                 ql.converting = true
                 Async.call(app.grove, k => app.grove.officePdf(k, p), d => {
@@ -395,6 +406,14 @@ Window {
                     source: ql.pv.kind === "thumb" ? ql.thumbSrc : ""
                 }
                 PreviewSpinner { image: bigThumb; size: 24; anchors.centerIn: parent }
+                Row {
+                    visible: ql.converting && !!ql.pv.convert
+                    anchors.bottom: parent.bottom
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+                    PreviewSpinner { pending: parent.visible; delay: 0; size: 14; backdrop: false; anchors.verticalCenter: parent.verticalCenter }
+                    GLabel { text: "Getting every page ready…"; color: Theme.fgSecondary; anchors.verticalCenter: parent.verticalCenter }
+                }
                 GLabel {
                     visible: !!ql.pv.pages
                     anchors.bottom: parent.bottom

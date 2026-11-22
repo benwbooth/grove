@@ -71,8 +71,7 @@ pub fn to_pdf(path: &str) -> Result<PathBuf, String> {
         Conv::ComicRepack => {
             let cbz = out.with_extension("cbz");
             let r = Command::new("bsdtar")
-                .arg("-a")
-                .arg("-cf")
+                .args(["--format", "zip", "-s", ",^\\./,,", "-cf"])
                 .arg(&cbz)
                 .arg(format!("@{}", p.display()))
                 .output()

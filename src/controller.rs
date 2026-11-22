@@ -1025,7 +1025,7 @@ impl ffi::Grove {
     pub fn doc_pdf(&self, key: &QString, path: &QString) {
         let p = path.to_string();
         self.answer(key, move || match crate::docconv::to_pdf(&p) {
-            Ok(pdf) => serde_json::json!({"pdf": pdf.display().to_string()}),
+            Ok(pdf) => crate::preview::pdf_json(&pdf, &std::sync::atomic::AtomicBool::new(false)),
             Err(e) => serde_json::json!({"error": e}),
         });
     }
