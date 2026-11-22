@@ -83,6 +83,7 @@
               install -Dm644 icons/grove.svg $out/share/icons/hicolor/scalable/apps/grove.svg
               install -Dm644 data/grove.desktop $out/share/applications/grove.desktop
               install -Dm644 data/grove-portal.desktop $out/share/applications/grove-portal.desktop
+              install -Dm644 data/grove-player.desktop $out/share/applications/grove-player.desktop
               install -Dm644 data/grove.portal $out/share/xdg-desktop-portal/portals/grove.portal
               install -Dm644 data/mime/grove-tessh.xml $out/share/mime/packages/grove-tessh.xml
               mkdir -p $out/share/dbus-1/services

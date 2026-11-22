@@ -49,6 +49,8 @@ fn main() {
         match args[i].as_str() {
             "--new-window" | "-n" => new_window = true,
             "--select" | "-s" => action = "items",
+            // Grove Player: play the files in a QuickTime-style window.
+            "--play" | "-p" => action = "play",
             "--service" => std::env::set_var("GROVE_SERVICE", "1"),
             "--portal" => std::env::set_var("GROVE_PORTAL", "1"),
             "--screenshot" => {
@@ -60,7 +62,7 @@ fn main() {
                 i += 1;
             }
             "--help" | "-h" => {
-                println!("grove [--new-window] [--select] [PATH|URI ...]\n\nA Finder-style file manager. Press F1 in a window for help and shortcuts.");
+                println!("grove [--new-window] [--select] [--play] [PATH|URI ...]\n\nA Finder-style file manager. Press F1 in a window for help and shortcuts.\n--play opens the files in Grove Player.");
                 return;
             }
             "--version" => {

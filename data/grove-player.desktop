@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Grove Player
+GenericName=Video Player
+Comment=Play videos and music in a simple, good-looking window
+Exec=grove --play %U
+Icon=grove
+Terminal=false
+Categories=Qt;AudioVideo;Video;Player;
+MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;video/x-ms-wmv;video/x-flv;video/mpeg;video/mp2t;video/ogg;video/x-ogm+ogg;video/3gpp;video/3gpp2;video/x-m4v;video/vnd.avi;video/x-theora+ogg;video/dv;video/x-mng;video/vnd.rn-realvideo;
+Keywords=video;movie;player;quicktime;media;
+StartupWMClass=grove

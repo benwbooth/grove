@@ -47,8 +47,20 @@ Item {
         return w
     }
 
+    Component { id: playerComp; PlayerWindow {} }
+    // Grove Player windows (one per file).
+    function play(paths) {
+        for (const p of paths) {
+            const w = playerComp.createObject(null, { app: app, path: p })
+            w.show(); w.raise(); w.requestActivate()
+        }
+        if (screenshot !== "") playShot.start()
+    }
+    // Tests: grove --play FILE --screenshot out.png grabs the player and quits.
+    Timer { id: playShot; interval: Number(grove.env("GROVE_PLAY_SHOT_MS") || 3500); onTriggered: { grove.grabWindows(app.screenshot); Qt.quit() } }
     function handleOpen(req) {
         const paths = req.paths || []
+        if (req.action === "play") { play(paths); return }
         if (req.action === "properties") {
             for (const p of paths) {
                 const w = activeWindow || openWindow([grove.home()])
