@@ -841,10 +841,27 @@ impl qobject::FolderModel {
         let qt = self.qt_thread();
         let root = PathBuf::from(root.to_string());
         std::thread::spawn(move || {
-            let qt2 = qt.clone();
-            grove_core::search::run(&root, &q, cancel, move |batch| {
-                let items: Vec<RawItem> = batch.into_iter().map(raw_from_entry).collect();
-                let _ = qt2.queue(move |m| m.add_batch(gen, items, false, None));
+            // Two searches at once, results merged: the desktop search's
+            // index (contents and names, instant in indexed folders) and
+            // grove's own walk (every folder, names and plain text).
+            let seen = std::sync::Mutex::new(std::collections::HashSet::<String>::new());
+            let send = |batch: Vec<grove_core::listing::Entry>| {
+                let fresh: Vec<RawItem> = {
+                    let mut s = seen.lock().unwrap();
+                    batch.into_iter().filter(|e| s.insert(e.path.clone())).map(raw_from_entry).collect()
+                };
+                if !fresh.is_empty() {
+                    let _ = qt.queue(move |m| m.add_batch(gen, fresh, false, None));
+                }
+            };
+            std::thread::scope(|sc| {
+                sc.spawn(|| {
+                    let found = grove_core::search::indexed(&root, &q, &cancel);
+                    if !cancel.load(Ordering::Relaxed) {
+                        send(found);
+                    }
+                });
+                grove_core::search::run(&root, &q, cancel.clone(), &send);
             });
             let _ = qt.queue(move |m| m.add_batch(gen, vec![], true, None));
         });

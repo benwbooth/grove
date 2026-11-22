@@ -203,6 +203,67 @@ pub fn run(root: &Path, q: &Query, cancel: Arc<AtomicBool>, out: impl Fn(Vec<Ent
     found.load(Ordering::Relaxed)
 }
 
+fn on_path(cmd: &str) -> bool {
+    std::env::var_os("PATH").is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(cmd).is_file()))
+}
+
+/// The desktop search's index (hearth-search: Recoll, the same search as
+/// the menu bar's), limited to `root`: finds files by their contents and
+/// names in indexed folders without walking them. Empty when hearth-search
+/// isn't installed, the folder isn't indexed, or the query is a glob or
+/// regex the index can't answer. Grove's own filters (kind, date, tag) apply.
+pub fn indexed(root: &Path, q: &Query, cancel: &AtomicBool) -> Vec<Entry> {
+    let name = q.name.trim();
+    if q.regex || name.contains('*') || name.contains('?') {
+        return vec![];
+    }
+    let text = format!("{} {}", name, q.content.trim()).trim().to_string();
+    if text.is_empty() || !on_path("hearth-search") {
+        return vec![];
+    }
+    let mut req = serde_json::json!({"q": text, "dir": root.display().to_string(), "limit": 400});
+    match q.kind.as_str() {
+        "folder" | "image" | "video" | "audio" | "document" => req["kind"] = q.kind.clone().into(),
+        _ => {}
+    }
+    let Ok(out) = std::process::Command::new("hearth-search")
+        .arg("--once")
+        .arg(req.to_string())
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+    else {
+        return vec![];
+    };
+    if cancel.load(Ordering::Relaxed) {
+        return vec![];
+    }
+    let items: Vec<serde_json::Value> = serde_json::from_slice(&out.stdout).unwrap_or_default();
+    let since = if q.days > 0 { crate::util::now_secs() - q.days as i64 * 86400 } else { i64::MIN };
+    let mut v = Vec::new();
+    for it in items {
+        let Some(p) = it["path"].as_str() else { continue };
+        let p = Path::new(p);
+        let Ok(rel) = p.strip_prefix(root) else { continue };
+        if rel.as_os_str().is_empty() || (!q.include_hidden && rel.components().any(|c| c.as_os_str().to_string_lossy().starts_with('.'))) {
+            continue;
+        }
+        let Ok(mut e) = Entry::from_path(p) else { continue };
+        if e.mtime < since || !kind_matches(&q.kind, &e) {
+            continue;
+        }
+        if !q.tag.is_empty() && !crate::tags::get(p).iter().any(|t| t == &q.tag) {
+            continue;
+        }
+        e.note = match it["snippet"].as_str() {
+            Some(sn) if !sn.is_empty() => sn.chars().take(160).collect(),
+            _ => rel.parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default(),
+        };
+        v.push(e);
+    }
+    v
+}
+
 fn smart_path() -> PathBuf {
     crate::util::grove_config().join("smart-folders.json")
 }
