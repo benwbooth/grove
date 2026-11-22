@@ -380,7 +380,7 @@ Item {
         }
     }
 
-    PanWheel { anchors.fill: list; flickable: list; notch: Theme.rowHeight * 3 }
+    PanWheel { anchors.top: header.bottom; anchors.bottom: parent.bottom; width: parent.width; flickable: list; notch: Theme.rowHeight * 3 }
 
     ListView {
         id: list
@@ -394,8 +394,8 @@ Item {
         flickableDirection: Flickable.HorizontalAndVerticalFlick
         contentWidth: Math.max(width, dt.totalWidth)
         reuseItems: true
-        ScrollBar.vertical: GScrollBar { parent: list; x: list.width - width; height: list.height }
-        ScrollBar.horizontal: GScrollBar { parent: list; y: list.height - height; width: list.width }
+        ScrollBar.vertical: GScrollBar {}
+        ScrollBar.horizontal: GScrollBar {}
         delegate: Rectangle {
             id: rowItem
             required property string cells

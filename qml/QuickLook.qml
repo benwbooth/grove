@@ -15,6 +15,10 @@ Window {
     property var pane
     property var item: null
     property var pv: ({})
+    // A binary file was asked to show as hex or as text (reset per file).
+    property bool hexAsked: false
+    property bool textAsked: false
+    onPvChanged: { hexAsked = false; textAsked = false }
     // Editing: "" (viewing), "markup" (pictures), "trim" (video and audio).
     property string editing: ""
     // An office document's pages are being made (LibreOffice).
@@ -503,7 +507,7 @@ Window {
             DocView {
                 id: codeDoc
                 anchors.fill: parent
-                visible: ql.pv.kind === "code" || ql.pv.kind === "markdown"
+                visible: ql.pv.kind === "code" || ql.pv.kind === "markdown" || (ql.pv.kind === "other" && ql.textAsked)
                 active: visible && ql.visible
                 path: visible && ql.item ? ql.item.path : ""
                 mode: ql.pv.kind === "markdown" ? "markdown" : "code"
@@ -527,7 +531,7 @@ Window {
                 clip: true
                 model: ql.pv.kind === "archive" ? ql.pv.entries : []
                 ScrollBar.vertical: GScrollBar {}
-                header: GLabel { text: ql.pv.total + " items in this archive" + (ql.pv.total > 500 ? " (first 500 shown)" : ""); color: Theme.fgSecondary; padding: 8 }
+                header: GLabel { text: ql.pv.total + (ql.pv.torrent ? (ql.pv.total === 1 ? " file in this torrent" : " files in this torrent") + (ql.pv.note ? " · tracker " + ql.pv.note : "") : " items in this archive" + (ql.pv.total > 500 ? " (first 500 shown)" : "")); color: Theme.fgSecondary; padding: 8; elide: Text.ElideRight; width: parent ? parent.width : implicitWidth }
                 delegate: Item {
                     required property var modelData
                     width: ListView.view.width
@@ -541,7 +545,7 @@ Window {
             // Binary files: the whole file in hex.
             HexView {
                 anchors.fill: parent
-                visible: ql.pv.kind === "other" && !!ql.item && !ql.item.isDir
+                visible: ql.pv.kind === "other" && !!ql.item && !ql.item.isDir && ql.hexAsked
                 active: visible && ql.visible
                 path: visible ? ql.item.path : ""
             }
@@ -549,7 +553,7 @@ Window {
             Column {
                 anchors.centerIn: parent
                 spacing: 12
-                visible: ql.pv.kind === "folder" || ql.pv.kind === "error" || (ql.pv.kind === "other" && !!ql.item && ql.item.isDir)
+                visible: ql.pv.kind === "folder" || ql.pv.kind === "error" || (ql.pv.kind === "other" && !!ql.item && (ql.item.isDir || (!ql.hexAsked && !ql.textAsked)))
                 GIcon { anchors.horizontalCenter: parent.horizontalCenter; size: 160; name: ql.item ? ql.item.icon : "" }
                 GLabel { anchors.horizontalCenter: parent.horizontalCenter; text: ql.item ? ql.item.name : ""; font.pixelSize: Theme.large; font.bold: true }
                 GLabel {
@@ -567,6 +571,13 @@ Window {
                     horizontalAlignment: Text.AlignHCenter
                 }
                 GLabel { anchors.horizontalCenter: parent.horizontalCenter; visible: !!ql.pv.note; text: ql.pv.note || ""; color: Theme.fgSecondary; width: Math.min(implicitWidth, body.width - 40); wrapMode: Text.Wrap }
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+                    visible: ql.pv.kind === "other" && !!ql.item && !ql.item.isDir
+                    PushButton { text: "View as Text"; tip: "Read it as text (logs and data files grove didn't recognise)"; onClicked: ql.textAsked = true }
+                    PushButton { text: "View as Hex"; tip: "Show the file's bytes in hex"; onClicked: ql.hexAsked = true }
+                }
             }
         }
         GLabel {

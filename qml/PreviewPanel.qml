@@ -13,25 +13,32 @@ Item {
     property var arch: null
     onItemChanged: load()
     Component.onCompleted: load()
+    // The item whose details are on screen: the old one's stay until the new
+    // one's arrive, then name, kind, dates and sizes change together (clearing
+    // first blanked the rows and made the layout jump for a frame).
+    property var shown: null
+    function settle(it, i, a) { shown = it; info = i; arch = a }
     function load() {
-        info = {}
-        arch = null
-        if (!item || !item.path) return
+        if (!item || !item.path) { settle(null, {}, null); return }
         if (item.path.indexOf("archive://") === 0) {
             // Inside an archive: facts from its local copy (taken out once).
             const ap = item.path
-            if (item.isDir) return
+            if (item.isDir) { settle(item, {}, null); return }
             Async.call(pane.grove, k => pane.grove.archiveLocal(k, ap), r => {
                 if (!r.path || !p.item || p.item.path !== ap) return
-                Async.call(pane.grove, k => pane.grove.info(k, r.path), i => { if (p.item && p.item.path === ap && !i.error) p.info = Object.assign(i, { path: ap, parent: ap.substring(10, ap.indexOf("#")) }) })
+                Async.call(pane.grove, k => pane.grove.info(k, r.path), i => { if (p.item && p.item.path === ap && !i.error) p.settle(p.item, Object.assign(i, { path: ap, parent: ap.substring(10, ap.indexOf("#")) }), null) })
             })
             return
         }
-        if (item.path.indexOf("/") !== 0) return
-        const path = item.path
-        Async.call(pane.grove, k => pane.grove.info(k, path), r => { if (p.item && p.item.path === path) p.info = r })
-        if (item.isArchive)
-            Async.call(pane.grove, k => pane.grove.archiveSizes(k, path), r => { if (p.item && p.item.path === path && !r.error) p.arch = r })
+        if (item.path.indexOf("/") !== 0) { settle(item, {}, null); return }
+        const path = item.path, it = item
+        // Facts first; an archive's sizes (slower) join them when ready.
+        Async.call(pane.grove, k => pane.grove.info(k, path), r => {
+            if (!p.item || p.item.path !== path) return
+            p.settle(it, r, null)
+            if (it.isArchive)
+                Async.call(pane.grove, k => pane.grove.archiveSizes(k, path), a => { if (p.item && p.item.path === path && !a.error) p.arch = a })
+        })
     }
     readonly property int big: Math.max(64, Math.min(width - 40, compact ? height - 20 : height * 0.55, 512))
 
@@ -86,7 +93,7 @@ Item {
             visible: !p.compact
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: p.item ? p.item.name : ""
+            text: p.shown ? p.shown.name : ""
             font.bold: true
             font.pixelSize: Theme.title
             wrapMode: Text.WrapAnywhere
@@ -96,7 +103,7 @@ Item {
             visible: !p.compact
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: (p.info.kind || (p.item ? p.item.kind : "")) + (p.info.sizeText && !p.info.isDir ? " — " + p.info.sizeText : "")
+            text: (p.info.kind || (p.shown ? p.shown.kind : "")) + (p.info.sizeText && !p.info.isDir ? " — " + p.info.sizeText : "")
             color: Theme.fgSecondary
         }
         Grid {

@@ -256,6 +256,14 @@ pub fn preview(path: &str, dark: bool) -> Value {
         }
         _ => {}
     }
+    // A .torrent: the files it would download (it's bencoded binary).
+    if lower.ends_with(".torrent") || m.name == "application/x-bittorrent" {
+        if let Some(v) = torrent_json(p) {
+            let mut out = with(v.clone());
+            out["kindText"] = v["kindText"].clone();
+            return out;
+        }
+    }
     if crate::archive::is_archive(&m.name, &name) {
         let entries = crate::archive::list(path).unwrap_or_default();
         let total = entries.len();
@@ -292,11 +300,139 @@ pub fn preview(path: &str, dark: bool) -> Value {
             return with(json!({"kind": "media", "video": w > 0, "seconds": secs}));
         }
     }
-    with(json!({"kind": "other"}))
+    // Binary data of a type grove can't name: the hex view. A known type
+    // (a Flatpak bundle, a disk image...) gets its card, hex on request.
+    let unknown = matches!(m.name.as_str(), "application/octet-stream" | "application/x-zerosize" | "") || m.comment.is_empty();
+    with(json!({"kind": "other", "hexFirst": unknown}))
 }
 
 /// A PDF for Quick Look's page view: page count and sizes (or, without
 /// pdftoppm/pdfinfo, QtPdf's own view).
+// ---------- .torrent (bencode) ----------
+
+enum Ben {
+    Int(i64),
+    Bytes(Vec<u8>),
+    List(Vec<Ben>),
+    Dict(Vec<(Vec<u8>, Ben)>),
+}
+
+impl Ben {
+    fn get(&self, k: &str) -> Option<&Ben> {
+        match self {
+            Ben::Dict(d) => d.iter().find(|(key, _)| key == k.as_bytes()).map(|(_, v)| v),
+            _ => None,
+        }
+    }
+    fn text(&self) -> Option<String> {
+        match self {
+            Ben::Bytes(b) => Some(String::from_utf8_lossy(b).into_owned()),
+            _ => None,
+        }
+    }
+    fn int(&self) -> Option<i64> {
+        match self {
+            Ben::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+}
+
+fn ben_parse(b: &[u8], i: &mut usize, depth: usize) -> Option<Ben> {
+    if depth > 64 {
+        return None;
+    }
+    match *b.get(*i)? {
+        b'i' => {
+            let end = *i + b[*i..].iter().position(|&c| c == b'e')?;
+            let n = std::str::from_utf8(&b[*i + 1..end]).ok()?.parse().ok()?;
+            *i = end + 1;
+            Some(Ben::Int(n))
+        }
+        b'l' => {
+            *i += 1;
+            let mut v = vec![];
+            while *b.get(*i)? != b'e' {
+                v.push(ben_parse(b, i, depth + 1)?);
+            }
+            *i += 1;
+            Some(Ben::List(v))
+        }
+        b'd' => {
+            *i += 1;
+            let mut v = vec![];
+            while *b.get(*i)? != b'e' {
+                let Ben::Bytes(k) = ben_parse(b, i, depth + 1)? else { return None };
+                let val = ben_parse(b, i, depth + 1)?;
+                v.push((k, val));
+            }
+            *i += 1;
+            Some(Ben::Dict(v))
+        }
+        b'0'..=b'9' => {
+            let colon = *i + b[*i..].iter().position(|&c| c == b':')?;
+            let n: usize = std::str::from_utf8(&b[*i..colon]).ok()?.parse().ok()?;
+            let start = colon + 1;
+            let end = start.checked_add(n)?;
+            let bytes = b.get(start..end)?.to_vec();
+            *i = end;
+            Some(Ben::Bytes(bytes))
+        }
+        _ => None,
+    }
+}
+
+/// A torrent's files (as an archive-style listing) and its facts.
+fn torrent_json(p: &Path) -> Option<Value> {
+    let data = std::fs::read(p).ok()?;
+    if data.len() > 64 << 20 {
+        return None;
+    }
+    let mut i = 0;
+    let root = ben_parse(&data, &mut i, 0)?;
+    let info = root.get("info")?;
+    let name = info.get("name.utf-8").or_else(|| info.get("name")).and_then(Ben::text).unwrap_or_default();
+    let mut entries = vec![];
+    let mut seen_dirs = std::collections::HashSet::new();
+    let mut total: i64 = 0;
+    match info.get("files") {
+        Some(Ben::List(files)) => {
+            for f in files {
+                let size = f.get("length").and_then(Ben::int).unwrap_or(0);
+                total += size;
+                let parts: Vec<String> = match f.get("path.utf-8").or_else(|| f.get("path")) {
+                    Some(Ben::List(ps)) => ps.iter().filter_map(Ben::text).collect(),
+                    _ => vec![],
+                };
+                // Its folders listed once, before what's in them.
+                let mut acc = name.clone();
+                for d in parts.iter().take(parts.len().saturating_sub(1)) {
+                    acc = format!("{acc}/{d}");
+                    if seen_dirs.insert(acc.clone()) {
+                        entries.push(json!({"path": acc.clone(), "size": 0, "dir": true}));
+                    }
+                }
+                entries.push(json!({"path": format!("{name}/{}", parts.join("/")), "size": size, "dir": false}));
+            }
+        }
+        _ => {
+            total = info.get("length").and_then(Ben::int).unwrap_or(0);
+            entries.push(json!({"path": name.clone(), "size": total, "dir": false}));
+        }
+    }
+    let n = entries.iter().filter(|e| e["dir"] == false).count();
+    if info.get("files").is_some() {
+        entries.insert(0, json!({"path": name.clone(), "size": 0, "dir": true}));
+    }
+    let shown: Vec<Value> = entries.into_iter().take(2000).collect();
+    let trackers = root.get("announce").and_then(Ben::text).unwrap_or_default();
+    Some(json!({
+        "kind": "archive", "torrent": true, "entries": shown, "total": n,
+        "kindText": format!("BitTorrent file — {} {}, {} to download", n, if n == 1 { "file" } else { "files" }, grove_core::util::human_size(total.max(0) as u64)),
+        "note": trackers,
+    }))
+}
+
 pub fn pdf_json(p: &Path, cancel: &std::sync::atomic::AtomicBool) -> Value {
     use grove_core::previews;
     if previews::can_draw_pdf() {

@@ -62,7 +62,9 @@ Item {
         }
     }
 
-    PanWheel { anchors.fill: list; flickable: list; notch: hv.lineH * 4 }
+    // (Anchored like the list, not to it: an item anchored to a ListView
+    // made deleting the view crash in QQuickItemView's destructor.)
+    PanWheel { anchors.fill: parent; anchors.topMargin: bar.height; flickable: list; notch: hv.lineH * 4 }
     ListView {
         id: list
         anchors { top: bar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
@@ -73,8 +75,8 @@ Item {
         contentWidth: Math.max(width, hv.textW)
         flickableDirection: Flickable.HorizontalAndVerticalFlick
         boundsBehavior: Flickable.StopAtBounds
-        ScrollBar.vertical: GScrollBar { parent: list; x: list.width - width; height: list.height }
-        ScrollBar.horizontal: GScrollBar { parent: list; y: list.height - height; width: list.width }
+        ScrollBar.vertical: GScrollBar {}
+        ScrollBar.horizontal: GScrollBar {}
         delegate: TextEdit {
             id: rowItem
             required property int index

@@ -215,7 +215,13 @@ Item {
                 id: own
                 onLoaded: if (column.selectedChild) selectPaths(JSON.stringify([root.rowPathOf(column.selectedChild)]))
             }
-            readonly property var colModel: isLast ? root.fm : own
+            // The last column shows the pane's model, but only once it has
+            // this folder loaded: until then its own (already filled) copy,
+            // so clicking an item in an earlier column doesn't empty the
+            // column and draw everything again.
+            readonly property bool fmReady: root.fm.path === folder && !root.fm.loading
+            readonly property bool ownReady: ownLoaded && own.path === folder && !own.loading
+            readonly property var colModel: isLast && (fmReady || !ownReady) ? root.fm : own
             // A column that isn't the last lists its folder itself (the last one
             // shows the pane's model); one that stops being last loads then.
             property bool ownLoaded: false
@@ -333,7 +339,9 @@ Item {
                     ItemMouse {
                         anchors.fill: parent
                         visible: column.isLast
-                        enabled: column.isLast && !r.renaming
+                        // (Not while the column still shows its own copy: rows
+                        // would be the pane model's.)
+                        enabled: column.isLast && !r.renaming && column.colModel === root.fm
                         pane: root.pane
                         row: r.index
                         iconUrl: Theme.iconUrl(r.iconName)

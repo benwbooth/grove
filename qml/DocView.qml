@@ -46,7 +46,7 @@ Item {
     FontMetrics { id: fm; font.family: Theme.mono; font.pixelSize: Theme.body * 0.95 * prefs.textZoom }
 
     // Momentum both ways (unwrapped text pans sideways too).
-    PanWheel { id: wheel; anchors.fill: list; flickable: list; sideways: !dv.wrap }
+    PanWheel { id: wheel; anchors.fill: parent; anchors.topMargin: opts.height; flickable: list; sideways: !dv.wrap }
 
     ListView {
         id: list
@@ -62,8 +62,8 @@ Item {
         cacheBuffer: 800
         header: Item { height: 12; width: 1 }
         footer: Item { height: 16; width: 1 }
-        ScrollBar.vertical: GScrollBar { parent: list; x: list.width - width; height: list.height }
-        ScrollBar.horizontal: GScrollBar { parent: list; y: list.height - height; width: list.width }
+        ScrollBar.vertical: GScrollBar {}
+        ScrollBar.horizontal: GScrollBar {}
         delegate: TextEdit {
             id: block
             required property var model

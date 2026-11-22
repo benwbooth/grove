@@ -16,8 +16,12 @@ Item {
     property var pv: ({})
     property string path: ""          // local path being shown
     property bool converting: false
+    // Binary files: a card; their bytes or text only on request.
+    property bool hexAsked: false
+    property bool textAsked: false
+    onPvChanged: { hexAsked = false; textAsked = false }
     // Whether there's more to show than a thumbnail.
-    readonly property bool rich: ["code", "markdown", "office", "table", "pdf", "media", "image", "other"].indexOf(pv.kind) >= 0 || !!pv.convert
+    readonly property bool rich: ["code", "markdown", "office", "table", "pdf", "media", "image"].indexOf(pv.kind) >= 0 || hexAsked || textAsked || !!pv.convert
     readonly property string thumbSrc: item && item.thumb && path ? "image://thumb/" + encodeURIComponent(path) + "?m=" + (item.mtime || 0) : ""
 
     onItemChanged: Qt.callLater(load)
@@ -88,14 +92,23 @@ Item {
 
     DocView {
         anchors.fill: parent
-        visible: fv.pv.kind === "code" || fv.pv.kind === "markdown" || (fv.pv.kind === "office" && !!fv.pv.hasText)
+        visible: fv.pv.kind === "code" || fv.pv.kind === "markdown" || (fv.pv.kind === "office" && !!fv.pv.hasText) || (fv.pv.kind === "other" && fv.textAsked)
         active: visible && fv.active
         path: visible ? fv.path : ""
         mode: fv.pv.kind === "markdown" ? "markdown" : fv.pv.kind === "office" ? "office" : "code"
     }
+    Row {
+        visible: fv.pv.kind === "other" && !fv.hexAsked && !fv.textAsked && !!fv.item && !fv.item.isDir
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: 6
+        z: 2
+        PushButton { text: "View as Text"; tip: "Read it as text (logs and data files grove didn't recognise)"; onClicked: fv.textAsked = true }
+        PushButton { text: "View as Hex"; tip: "Show the file's bytes in hex"; onClicked: fv.hexAsked = true }
+    }
     HexView {
         anchors.fill: parent
-        visible: fv.pv.kind === "other"
+        visible: fv.pv.kind === "other" && fv.hexAsked
         active: visible && fv.active
         path: visible ? fv.path : ""
     }
