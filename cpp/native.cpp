@@ -853,6 +853,14 @@ public:
             pm = icon.pixmap(QSize(32, 32), 1.0).toImage();
             if (!pm.isNull() && pm.width() > s)
                 pm = pm.scaled(s, s, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        } else if (!fileIcon && s < 64) {
+            // Line-art glyphs (menus, toolbars): drawn at twice the size and
+            // shrunk here with proper filtering to the exact pixels shown, so
+            // hairline strokes at a fractional scale come out even instead of
+            // patchy (rows went missing at 4/3).
+            pm = icon.pixmap(QSize(s * 2, s * 2), 1.0).toImage();
+            if (!pm.isNull() && pm.width() > s)
+                pm = pm.scaled(s, s, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         } else {
             pm = icon.pixmap(QSize(s, s), 1.0).toImage();
         }
