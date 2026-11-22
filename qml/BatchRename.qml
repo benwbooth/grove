@@ -88,6 +88,7 @@ Sheet {
         height: Math.min(240, Math.max(60, preview.contentHeight + 8))
         radius: 8
         color: Theme.field
+        KineticWheel { flickable: preview }
         ListView {
             id: preview
             anchors.fill: parent

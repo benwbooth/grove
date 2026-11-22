@@ -1013,6 +1013,8 @@ ApplicationWindow {
         else if (cmd === "columns") setSetting("list_columns", arg.split(","))
         else if (cmd === "tip") { setSetting("preview_tooltips", true); p.testTip = Number(arg) }
         else if (cmd === "recordkey") settingsWin.recordSeq(arg)
+        else if (cmd === "pad") { const v = arg.split(",").map(Number); app.grove.testTouchpad(v[0], v[1], v[2], v[3], v[4], v[5]) }
+        else if (cmd === "realwheelx") { const [x, y, a] = arg.split(",").map(Number); app.grove.testWheelX(x, y, a) }
         else if (cmd === "realwheel") { const [x, y, a, px] = arg.split(",").map(Number); app.grove.testWheel(x, y, a, px || 0) }
         else if (cmd === "key") { const [k, m] = arg.split(":"); app.grove.testKey(Number(k), Number(m || 0), "") }
         else if (cmd === "settings") { if (arg) settingsWin.page = arg; showSettings() }

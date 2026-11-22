@@ -26,6 +26,7 @@ Window {
             PushButton { visible: tv.tool !== ""; text: "Open in " + tv.tool; onClicked: if (tv.toolAction) tv.toolAction() }
             PushButton { text: "Copy"; tip: "Copy all of the text"; onClicked: { area.selectAll(); area.copy(); area.deselect() } }
         }
+        KineticWheel { flickable: gsv3.contentItem; visible: gsv3.visible }
         ScrollView {
             id: gsv3
             ScrollBar.vertical: GScrollBar { parent: gsv3; x: gsv3.width - width; y: gsv3.topPadding; height: gsv3.availableHeight }

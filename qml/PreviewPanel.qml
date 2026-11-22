@@ -19,9 +19,19 @@ Item {
     }
     readonly property int big: Math.max(64, Math.min(width - 40, compact ? height - 20 : height * 0.55, 512))
 
+    // Scrolls (with momentum) when the details don't fit; centred when they do.
+    KineticWheel { flickable: pflick }
+    Flickable {
+    id: pflick
+    anchors.fill: parent
+    clip: true
+    contentWidth: width
+    contentHeight: Math.max(height, pcol.height + 24)
     Column {
-        anchors.centerIn: parent
-        width: parent.width - 32
+        id: pcol
+        x: 16
+        y: Math.max(12, (pflick.height - height) / 2)
+        width: pflick.width - 32
         spacing: 10
         Item {
             width: parent.width
@@ -81,5 +91,6 @@ Item {
             tip: "Open the Get Info window (Alt+Return)"
             onClicked: p.pane.win.showInfo([p.item.path])
         }
+    }
     }
 }

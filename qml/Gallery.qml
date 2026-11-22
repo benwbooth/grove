@@ -124,6 +124,11 @@ Item {
             GTip { visible: false; text: t.name }
         }
         Kinetic { id: kinetic; target: strip; horizontal: true; notch: 120 }
-        WheelHandler { onWheel: (e) => kinetic.wheel(e) }
+        // The filmstrip only scrolls sideways: an up/down wheel moves it too.
+        WheelHandler {
+            acceptedDevices: PointerDevice.AllDevices
+            onWheel: (e) => kinetic.wheel({ device: e.device, isEndEvent: e.isEndEvent, modifiers: e.modifiers,
+                angleDelta: Qt.point(e.angleDelta.x || e.angleDelta.y, 0), pixelDelta: Qt.point(e.pixelDelta.x || e.pixelDelta.y, 0) })
+        }
     }
 }

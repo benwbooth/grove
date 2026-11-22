@@ -38,6 +38,9 @@ FocusScope {
     property string labelPos: "bottom"   // bottom, right
     property string background: ""       // "", "color:#rrggbb", "picture:/path"
     property bool itemInfo: false
+    // Finder's "Always open in … view": this folder opens in its saved view;
+    // otherwise browsing keeps the view you're in.
+    property bool alwaysOpenIn: false
     property var previews: null          // per folder: null follows Settings
     readonly property bool previewsOn: previews === null || previews === undefined ? (!app || app.settings.show_thumbnails !== false) : !!previews
     property string stacks: ""           // "", kind, date (icon view)
@@ -112,15 +115,15 @@ FocusScope {
             fwdStack = []
         }
         rememberView()
+        const hadPath = path !== ""
         path = p
         filterOpen = false
         fm.applyFilter("")
         renamingRow = -1
-        // Column view stays column view while you browse in it (as in
-        // Finder); a folder's saved view applies when you arrive any other way.
-        const keepColumns = viewMode === "columns"
-        applyRememberedView(p)
-        if (keepColumns) viewMode = "columns"
+        // As in Finder, browsing keeps the view you're in; a folder set to
+        // "Always open in … view" switches to its own. The first folder of a
+        // new window or tab opens in its saved view.
+        applyRememberedView(p, !!opts.firstLoad || !hadPath)
         fm.applyShowHidden(app ? !!app.settings.show_hidden : false)
         fm.applyFoldersFirst(app ? app.settings.folders_first !== false : true)
         pendingSelect = opts.select || []
@@ -168,7 +171,7 @@ FocusScope {
     function viewState() {
         const v = { view: viewMode, sort: fm.sortKey, descending: fm.descending, icon_size: iconSize, group: groupBy,
                     grid_spacing: gridSpacing, text_size: textSize, label_pos: labelPos === "bottom" ? "" : labelPos,
-                    background: background, item_info: itemInfo, stacks: stacks }
+                    background: background, item_info: itemInfo, stacks: stacks, always: alwaysOpenIn }
         if (previews !== null && previews !== undefined) v.previews = previews
         return v
     }
@@ -179,17 +182,19 @@ FocusScope {
         win.setSetting("view_defaults", v)
         win.toast("info", "Folders without their own view options now use these")
     }
-    function applyRememberedView(p) {
+    function applyRememberedView(p, opening) {
         let v = {}
         try { v = JSON.parse(grove.folderView(p)) } catch (e) {}
-        applyViewState(v)
+        applyViewState(v, opening)
     }
-    function applyViewState(v) {
+    function applyViewState(v, opening) {
         const s = app ? app.settings : {}
         const d = (s.view_defaults && typeof s.view_defaults === "object") ? s.view_defaults : {}
         const has = (k) => v.view !== undefined && v[k] !== undefined
         const pick = (k, dflt) => has(k) ? v[k] : (d[k] !== undefined ? d[k] : dflt)
-        viewMode = v.view || (pane.searching ? "list" : (s.default_view || "icons"))
+        alwaysOpenIn = !!v.always
+        if (opening === undefined || opening || alwaysOpenIn)
+            viewMode = v.view || (pane.searching ? "list" : (s.default_view || "icons"))
         iconSize = v.icon_size || d.icon_size || s.icon_size || 64
         groupBy = pick("group", "")
         gridSpacing = pick("grid_spacing", 0)

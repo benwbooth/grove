@@ -24,6 +24,7 @@ Sheet {
     GField { id: filter; width: parent.width; iconName: "edit-find"; placeholderText: "Find an app"; clearable: true }
     Rectangle {
         width: parent.width; height: 260; radius: 8; color: Theme.field
+        KineticWheel { flickable: list }
         ListView {
             id: list
             anchors.fill: parent; anchors.margins: 4

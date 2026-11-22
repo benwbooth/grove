@@ -52,13 +52,15 @@ QtObject {
                          "angle", e.angleDelta.x, e.angleDelta.y, "pixel", e.pixelDelta.x, e.pixelDelta.y,
                          "end", e.isEndEvent === true)
         }
-        const ang0 = horizontal ? (e.angleDelta.x || e.angleDelta.y) : e.angleDelta.y
-        const pix0 = horizontal ? (e.pixelDelta.x || e.pixelDelta.y) : e.pixelDelta.y
+        const ang0 = horizontal ? e.angleDelta.x : e.angleDelta.y
+        const pix0 = horizontal ? e.pixelDelta.x : e.pixelDelta.y
         // A touchpad (or other smooth scroller) follows the fingers; a mouse
-        // wheel moves by notches. Qt on Wayland gives wheel notches pixel
-        // deltas too, so go by the device, then by whole-notch angles.
-        const isTouchpad = devType === PointerDevice.TouchPad
-            || (devType !== PointerDevice.Mouse && ang0 % 120 !== 0)
+        // wheel moves by notches. Qt on Wayland gives every wheel event the same generic mouse device,
+        // but fills the pixel amount only for touchpads and other smooth
+        // scrolling (never for wheel notches), so that's what tells them apart.
+        const isTouchpad = devType === PointerDevice.TouchPad || pix0 !== 0
+        // Fingers lifted (Qt's end-of-gesture event, no amount): glide now.
+        if (e.isEndEvent === true && pix0 === 0 && ang0 === 0) { release.stop(); fling(); return }
         if (isTouchpad) {
             const px = pix0 || ang0 / 8
             if (px !== 0) {

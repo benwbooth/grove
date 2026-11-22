@@ -99,6 +99,7 @@ Window {
         GLabel { text: parent.v; width: parent.width - 98; wrapMode: Text.WrapAnywhere; elide: Text.ElideNone; font.pixelSize: Theme.small }
     }
 
+    KineticWheel { flickable: gsv2.contentItem; visible: gsv2.visible }
     ScrollView {
         id: gsv2
         ScrollBar.vertical: GScrollBar { parent: gsv2; x: gsv2.width - width; y: gsv2.topPadding; height: gsv2.availableHeight }

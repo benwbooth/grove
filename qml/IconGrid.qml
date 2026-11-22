@@ -421,12 +421,12 @@ Item {
     function testPixelWheel(n) { kinetic.wheel({ device: { type: PointerDevice.Mouse, name: "test" }, pixelDelta: Qt.point(0, -15 * n), angleDelta: Qt.point(0, 0) }) }
     function testSwipe(n) { for (let i = 0; i < n; i++) kinetic.wheel({ device: { type: PointerDevice.TouchPad, name: "test" }, isEndEvent: true, pixelDelta: Qt.point(0, -40), angleDelta: Qt.point(0, -320) }) }
     Kinetic { id: kinetic; target: root.flick; notch: root.cellH * 0.6; onTargetChanged: stop() }
-    WheelHandler {
+    WheelHandler { acceptedDevices: PointerDevice.AllDevices;
         acceptedModifiers: Qt.NoModifier
         onWheel: (e) => kinetic.wheel(e)
     }
     PointHandler { acceptedButtons: Qt.AllButtons; onActiveChanged: if (active) kinetic.stop() }
-    WheelHandler {
+    WheelHandler { acceptedDevices: PointerDevice.AllDevices;
         acceptedModifiers: Qt.ControlModifier
         onWheel: (e) => root.pane.zoom(e.angleDelta.y > 0 ? 1 : -1)
     }

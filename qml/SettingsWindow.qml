@@ -92,6 +92,7 @@ Window {
         GButton { text: "General"; capsule: true; flat: false; checked: sw.page === "general"; tip: "Appearance, files, search, terminal"; onClicked: sw.page = "general" }
         GButton { text: "Keyboard"; capsule: true; flat: false; checked: sw.page === "keyboard"; tip: "Every action and its shortcut: click one to change it"; onClicked: sw.page = "keyboard" }
     }
+    KineticWheel { flickable: gsv1.contentItem; visible: gsv1.visible }
     ScrollView {
         id: gsv1
         ScrollBar.vertical: GScrollBar { parent: gsv1; x: gsv1.width - width; y: gsv1.topPadding; height: gsv1.availableHeight }

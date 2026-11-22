@@ -7,7 +7,7 @@ import Grove
 Item {
     id: fp
     Kinetic { id: fpKinetic; target: lv; notch: 60 }
-    WheelHandler { acceptedModifiers: Qt.NoModifier; onWheel: (e) => fpKinetic.wheel(e) }
+    WheelHandler { acceptedDevices: PointerDevice.AllDevices; acceptedModifiers: Qt.NoModifier; onWheel: (e) => fpKinetic.wheel(e) }
     property var win
     property string currentPath: win.activePane ? win.activePane.path : ""
     FolderModel {

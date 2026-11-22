@@ -38,6 +38,7 @@ Window {
                 PushButton { id: changeBtn; text: "Change Shortcuts…"; tip: "Settings › Keyboard: give any action your own shortcut"; onClicked: hw.changeShortcuts() }
             }
         }
+        KineticWheel { flickable: list }
         ListView {
             id: list
             anchors.top: head.bottom

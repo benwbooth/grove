@@ -41,7 +41,7 @@ Item {
     GlassPanel { anchors.fill: parent; tint: Theme.sidebar }
     // Wheel on the sidebar itself (its list's own scrolling is off).
     Kinetic { id: sbKinetic; target: flick; notch: 60 }
-    WheelHandler { acceptedModifiers: Qt.NoModifier; onWheel: (e) => sbKinetic.wheel(e) }
+    WheelHandler { acceptedDevices: PointerDevice.AllDevices; acceptedModifiers: Qt.NoModifier; onWheel: (e) => sbKinetic.wheel(e) }
 
     // Drag the window by the sidebar's top strip.
     MouseArea {

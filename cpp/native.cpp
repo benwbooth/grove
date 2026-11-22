@@ -481,6 +481,35 @@ void grove_test_wheel(double x, double y, int32_t angleY, int32_t pixelY)
     QGuiApplication::sendEvent(w, &ev);
 }
 
+void grove_test_wheel_x(double x, double y, int32_t angleX)
+{
+    QWindow* w = QGuiApplication::focusWindow();
+    if (!w && !QGuiApplication::topLevelWindows().isEmpty()) w = QGuiApplication::topLevelWindows().first();
+    if (!w) return;
+    const QPointF pos(x, y);
+    QWheelEvent ev(pos, w->mapToGlobal(pos), QPoint(), QPoint(angleX, 0), Qt::NoButton, Qt::NoModifier,
+                   Qt::NoScrollPhase, false, Qt::MouseEventNotSynthesized, QPointingDevice::primaryPointingDevice());
+    QGuiApplication::sendEvent(w, &ev);
+}
+
+// Test hook: one trackpad scroll event exactly as Qt on Wayland makes it
+// (a touchpad device, pixel and angle amounts, system-synthesized source).
+void grove_test_touchpad(double x, double y, int32_t ax, int32_t ay, int32_t px, int32_t py)
+{
+    static QPointingDevice* pad = nullptr;
+    if (!pad) {
+        pad = new QPointingDevice(QStringLiteral("touchpad"), 990, QInputDevice::DeviceType::TouchPad,
+                                  QPointingDevice::PointerType::Finger, QInputDevice::Capability::Position, 5, 0);
+    }
+    QWindow* w = QGuiApplication::focusWindow();
+    if (!w && !QGuiApplication::topLevelWindows().isEmpty()) w = QGuiApplication::topLevelWindows().first();
+    if (!w) return;
+    const QPointF pos(x, y);
+    QWheelEvent ev(pos, w->mapToGlobal(pos), QPoint(px, py), QPoint(ax, ay), Qt::NoButton, Qt::NoModifier,
+                   Qt::NoScrollPhase, false, Qt::MouseEventSynthesizedBySystem, pad);
+    QGuiApplication::sendEvent(w, &ev);
+}
+
 static QString g_systemIconTheme;
 
 static bool iconThemeInstalled(const QString& name)

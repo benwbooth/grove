@@ -68,6 +68,12 @@ Popup {
             }
         }
         Caption { text: vo.icons ? "Icon view options for this folder" : "These options are for icon view (Ctrl+1)"; width: parent.width; wrapMode: Text.Wrap; elide: Text.ElideNone }
+        GCheck {
+            text: "Always open in " + (vo.pane ? ({ icons: "icon", list: "list", columns: "column", gallery: "gallery" })[vo.pane.viewMode] || "this" : "this") + " view"
+            checked: vo.pane && vo.pane.alwaysOpenIn
+            tip: "This folder always opens in this view. Otherwise folders keep the view you're browsing in, as in Finder."
+            onToggled: vo.pane.setViewOption("alwaysOpenIn", checked)
+        }
         Line {}
 
         // --- sort / group ---

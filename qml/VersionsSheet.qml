@@ -30,6 +30,7 @@ Sheet {
         height: Math.min(320, Math.max(40, lv.contentHeight + 8))
         radius: 8
         color: Theme.field
+        KineticWheel { flickable: lv }
         ListView {
             id: lv
             anchors.fill: parent

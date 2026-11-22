@@ -9,13 +9,15 @@ Item {
     id: root
     property var pane
     property var fm: pane.model
-    readonly property real colW: Math.round(230 * Theme.pt)
+    // Default column width: Alt-dragging a divider sets it for every column
+    // (and remembers it); a plain drag resizes just that column, as in Finder.
+    property real colW: pane.app && pane.app.settings.column_width > 0 ? pane.app.settings.column_width : Math.round(230 * Theme.pt)
     property var chain: []
     property var current: null      // selected item in the last column
 
     function computeChain() {
         const p = pane.path
-        if (!p || p.indexOf("/") !== 0) { chain = [p]; return }
+        if (!p || p.indexOf("/") !== 0) { chain = p ? [p] : []; syncCols(); return }
         const home = pane.grove.home()
         const base = (p === home || p.indexOf(home + "/") === 0) ? home : "/"
         const out = [base]
@@ -25,6 +27,52 @@ Item {
             for (const r of rest) { acc += "/" + r; out.push(acc) }
         }
         chain = out
+        syncCols()
+    }
+    // The columns as a list model, changed in place: going deeper appends a
+    // column, going up removes the ones on the right, and the columns you
+    // already have stay as they are (an integer model rebuilt every column).
+    ListModel { id: cols }
+
+    // Sideways scrolling through the columns, with momentum like vertical.
+    Kinetic { id: stripKinetic; target: strip; horizontal: true; notch: 120 }
+    // The direction is chosen once per gesture (a pause of 200 ms starts a
+    // new one) from whichever axis moves more, and only that axis is passed
+    // on, so a slightly diagonal swipe doesn't jump between scrolling the
+    // columns and scrolling a list. Shift+wheel scrolls sideways.
+    property bool wheelHoriz: false
+    property real wheelLast: 0
+    function routeWheel(e, colKinetic) {
+        if (e.modifiers & Qt.ControlModifier) return
+        const shift = (e.modifiers & Qt.ShiftModifier) !== 0
+        const now = Date.now()
+        const dx = Math.abs(e.angleDelta.x) + Math.abs(e.pixelDelta.x)
+        const dy = Math.abs(e.angleDelta.y) + Math.abs(e.pixelDelta.y)
+        // Trackpad gestures start (and pause) with events that move nothing;
+        // those mustn't pick the direction, or a sideways swipe locks to
+        // up/down. They still go to the current direction's handler.
+        if (dx + dy > 0) {
+            if (now - wheelLast > 200) wheelHoriz = shift || dx > dy
+            wheelLast = now
+        }
+        const ev = { device: e.device, isEndEvent: e.isEndEvent, modifiers: e.modifiers,
+                     angleDelta: wheelHoriz ? Qt.point(shift ? e.angleDelta.y : e.angleDelta.x, 0) : Qt.point(0, e.angleDelta.y),
+                     pixelDelta: wheelHoriz ? Qt.point(shift ? e.pixelDelta.y : e.pixelDelta.x, 0) : Qt.point(0, e.pixelDelta.y) }
+        if (wheelHoriz) stripKinetic.wheel(ev)
+        else if (colKinetic) colKinetic.wheel(ev)
+    }
+    // Over the preview column (no list to scroll): sideways only.
+    WheelHandler { acceptedDevices: PointerDevice.AllDevices; acceptedModifiers: Qt.KeyboardModifierMask; onWheel: (e) => root.routeWheel(e, null) }
+    function syncCols() {
+        // The preview column ("") stays put at the end; folder columns are
+        // removed and inserted in front of it, so nothing is recreated that
+        // doesn't have to be (no blank frame anywhere).
+        if (cols.count === 0) cols.append({ folder: "" })
+        const n = cols.count - 1
+        let keep = 0
+        while (keep < n && keep < chain.length && cols.get(keep).folder === chain[keep]) keep++
+        if (n > keep) cols.remove(keep, n - keep)
+        for (let j = keep; j < chain.length; j++) cols.insert(j, { folder: chain[j] })
     }
     Component.onCompleted: computeChain()
     Connections {
@@ -39,7 +87,7 @@ Item {
     function updateCurrent() {
         const r = fm.currentRow
         current = r >= 0 && fm.selectionCount === 1 ? pane.itemAt(r) : null
-        Qt.callLater(() => strip.positionViewAtEnd())
+        Qt.callLater(() => strip.glideToEnd())
     }
 
     function positionAt(row) {
@@ -65,25 +113,42 @@ Item {
         id: strip
         anchors.fill: parent
         orientation: ListView.Horizontal
-        model: root.chain.length + 1
+        model: cols
         clip: true
         boundsBehavior: Flickable.StopAtBounds
+        interactive: false
         ScrollBar.horizontal: GScrollBar {}
-        onCountChanged: Qt.callLater(positionViewAtEnd)
+        // Opening a folder: its column fades in while its listing arrives,
+        // the preview column slides over to make room, and columns you leave
+        // fade out. (Reduce motion: instant.)
+        readonly property int animMs: Theme.reduceMotion ? 0 : 1
+        add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 180 * strip.animMs; easing.type: Easing.OutCubic } }
+        remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 120 * strip.animMs } }
+        displaced: Transition { NumberAnimation { property: "x"; duration: 220 * strip.animMs; easing.type: Easing.OutCubic } }
+        // Glide to show the newest column instead of jumping there.
+        NumberAnimation { id: glide; target: strip; property: "contentX"; duration: 260 * strip.animMs; easing.type: Easing.OutCubic }
+        function glideToEnd() {
+            const end = Math.max(originX, originX + contentWidth - width)
+            if (Math.abs(contentX - end) < 1) return
+            glide.stop(); glide.from = contentX; glide.to = end; glide.start()
+        }
+        onCountChanged: Qt.callLater(glideToEnd)
 
         delegate: Item {
             id: column
             required property int index
+            required property string folder
             // Wheel on the column (not inside the list, whose own scrolling is
             // off): smooth scrolling with momentum, as in the other views.
             Kinetic { id: colKinetic; target: lv; notch: 66 }
-            WheelHandler { acceptedModifiers: Qt.NoModifier; enabled: !column.isPreview; onWheel: (e) => colKinetic.wheel(e) }
-            readonly property bool isPreview: index === root.chain.length
+            WheelHandler { acceptedDevices: PointerDevice.AllDevices; acceptedModifiers: Qt.KeyboardModifierMask; onWheel: (e) => root.routeWheel(e, colKinetic) }
+            readonly property bool isPreview: folder === ""
             readonly property bool isLast: index === root.chain.length - 1
-            readonly property string folder: isPreview ? "" : root.chain[index]
             readonly property string selectedChild: index + 1 < root.chain.length ? root.chain[index + 1] : ""
             property alias list: lv
-            width: isPreview ? Math.max(root.colW * 1.3, strip.width - root.chain.length * root.colW) : root.colW
+            // This column's own width once dragged; otherwise the default.
+            property real ownWidth: 0
+            width: isPreview ? Math.max(root.colW * 1.3, strip.width - root.chain.length * root.colW) : (ownWidth > 0 ? ownWidth : root.colW)
             height: strip.height
 
             FolderModel {
@@ -91,15 +156,22 @@ Item {
                 onLoaded: if (column.selectedChild) selectPaths(JSON.stringify([column.selectedChild]))
             }
             readonly property var colModel: isLast ? root.fm : own
-            Component.onCompleted: {
-                if (!isPreview && !isLast) {
-                    own.applyShowHidden(root.fm.showHidden)
-                    own.applyFoldersFirst(root.fm.foldersFirst)
-                    own.applySort("name", false)
-                    own.loadPath(folder)
-                }
+            // A column that isn't the last lists its folder itself (the last one
+            // shows the pane's model); one that stops being last loads then.
+            property bool ownLoaded: false
+            // Loaded for every folder column, the last one too (in the
+            // background), so it has its contents ready the moment it stops
+            // being the last column.
+            function loadOwn() {
+                if (isPreview || ownLoaded) return
+                ownLoaded = true
+                own.applyShowHidden(root.fm.showHidden)
+                own.applyFoldersFirst(root.fm.foldersFirst)
+                own.applySort("name", false)
+                own.loadPath(folder)
             }
-            onSelectedChildChanged: if (!isPreview && !isLast && selectedChild) own.selectPaths(JSON.stringify([selectedChild]))
+            Component.onCompleted: loadOwn()
+            onSelectedChildChanged: if (!isPreview && selectedChild) own.selectPaths(JSON.stringify([selectedChild]))
 
             MouseArea {
                 anchors.fill: parent
@@ -196,11 +268,37 @@ Item {
                     }
                     FolderDrop { id: drop; anchors.fill: parent; pane: root.pane; path: r.path; enabledFor: r.isDir }
                     // A name cut short shows in full on hover.
-                    HoverHandler { id: rowHover }
+                    HoverHandler { acceptedDevices: PointerDevice.AllDevices; id: rowHover }
                     GTip { visible: rowHover.hovered && colName.truncated && !r.renaming; text: r.name }
                 }
             }
             Rectangle { visible: !column.isPreview; anchors.right: parent.right; width: 1; height: parent.height; color: Theme.separator }
+            // Divider handle: drag to resize this column, Alt+drag for all.
+            MouseArea {
+                visible: !column.isPreview
+                anchors.right: parent.right; anchors.rightMargin: -4
+                width: 9; height: parent.height
+                z: 10
+                cursorShape: Qt.SplitHCursor
+                hoverEnabled: true
+                property real startX: 0
+                property real startW: 0
+                property bool all: false
+                onPressed: (m) => {
+                    startX = mapToItem(root, m.x, 0).x
+                    startW = column.width
+                    all = (m.modifiers & Qt.AltModifier) !== 0
+                }
+                onPositionChanged: (m) => {
+                    if (!pressed) return
+                    const w = Math.max(120, Math.min(800, startW + mapToItem(root, m.x, 0).x - startX))
+                    if (all) { root.colW = w; for (let i = 0; i < strip.count; i++) { const c = strip.itemAtIndex(i); if (c) c.ownWidth = 0 } }
+                    else column.ownWidth = w
+                }
+                onReleased: if (all && root.pane.app) root.pane.win.setSetting("column_width", Math.round(root.colW))
+                onDoubleClicked: column.ownWidth = 0
+                GTip { visible: parent.containsMouse && !parent.pressed; text: "Drag to resize this column; Alt+drag resizes all columns; double-click restores" }
+            }
 
             // The preview column.
             Loader {

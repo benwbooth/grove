@@ -319,6 +319,7 @@ Window {
                 }
             }
 
+            KineticWheel { flickable: gsv4.contentItem; visible: gsv4.visible }
             ScrollView {
                 id: gsv4
                 ScrollBar.vertical: GScrollBar { parent: gsv4; x: gsv4.width - width; y: gsv4.topPadding; height: gsv4.availableHeight }
@@ -339,6 +340,7 @@ Window {
                 }
             }
 
+            KineticWheel { flickable: mdView.contentItem; visible: mdView.visible }
             ScrollView {
                 ScrollBar.vertical: GScrollBar { parent: mdView; x: mdView.width - width; y: mdView.topPadding; height: mdView.availableHeight }
                 ScrollBar.horizontal: GScrollBar { parent: mdView; x: mdView.leftPadding; y: mdView.height - height; width: mdView.availableWidth }
@@ -361,7 +363,9 @@ Window {
                 }
             }
 
+            KineticWheel { flickable: kwList364; visible: kwList364.visible }
             ListView {
+                id: kwList364
                 anchors.fill: parent
                 visible: ql.pv.kind === "archive"
                 clip: true

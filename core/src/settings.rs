@@ -91,6 +91,9 @@ pub struct Settings {
     pub welcomed: bool,
     #[serde(default)]
     pub sidebar_width: u32,
+    /// Column view: width of a column (0 = default), set by Alt-dragging a divider.
+    #[serde(default)]
+    pub column_width: u32,
     /// List view columns after the name, in order.
     #[serde(default = "default_columns")]
     pub list_columns: Vec<String>,
