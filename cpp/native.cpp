@@ -247,7 +247,6 @@ void grove_create_app()
     static char* argv[] = { name, nullptr };
     new QGuiApplication(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("grove"));
-    qApp->installEventFilter(new WheelLogFilter);
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Grove"));
     QGuiApplication::setOrganizationName(QStringLiteral("grove"));
     QGuiApplication::setDesktopFileName(QStringLiteral("grove"));
@@ -514,7 +513,7 @@ void grove_test_wheel_x(double x, double y, int32_t angleX)
 
 // Test hook: one trackpad scroll event exactly as Qt on Wayland makes it
 // (a touchpad device, pixel and angle amounts, system-synthesized source).
-void grove_test_touchpad(double x, double y, int32_t ax, int32_t ay, int32_t px, int32_t py)
+void grove_test_touchpad(double x, double y, int32_t ax, int32_t ay, int32_t px, int32_t py, int32_t phase)
 {
     static QPointingDevice* pad = nullptr;
     if (!pad) {
@@ -526,7 +525,7 @@ void grove_test_touchpad(double x, double y, int32_t ax, int32_t ay, int32_t px,
     if (!w) return;
     const QPointF pos(x, y);
     QWheelEvent ev(pos, w->mapToGlobal(pos), QPoint(px, py), QPoint(ax, ay), Qt::NoButton, Qt::NoModifier,
-                   Qt::NoScrollPhase, false, Qt::MouseEventSynthesizedBySystem, pad);
+                   Qt::ScrollPhase(phase), false, Qt::MouseEventSynthesizedBySystem, pad);
     QGuiApplication::sendEvent(w, &ev);
 }
 

@@ -42,7 +42,7 @@ Item {
     // columns and scrolling a list. Shift+wheel scrolls sideways.
     property bool wheelHoriz: false
     property real wheelLast: 0
-    property int routeLogLeft: 60
+    property int routeLogLeft: 6
     function routeWheel(e, colKinetic) {
         if (e.modifiers & Qt.ControlModifier) return
         const shift = (e.modifiers & Qt.ShiftModifier) !== 0
@@ -69,6 +69,11 @@ Item {
     }
     // Over the preview column (no list to scroll): sideways only.
     WheelHandler { acceptedDevices: PointerDevice.AllDevices; acceptedModifiers: Qt.KeyboardModifierMask; onWheel: (e) => root.routeWheel(e, null) }
+    // WheelHandler only takes its own orientation (vertical by default), so a
+    // purely sideways swipe needs a horizontal one; diagonal events already
+    // reach the vertical handler, so this one only takes pure sideways ones.
+    WheelHandler { acceptedDevices: PointerDevice.AllDevices; acceptedModifiers: Qt.KeyboardModifierMask; orientation: Qt.Horizontal
+                   onWheel: (e) => { if (e.angleDelta.y === 0 && e.pixelDelta.y === 0) root.routeWheel(e, null) } }
     function syncCols() {
         // The preview column ("") stays put at the end; folder columns are
         // removed and inserted in front of it, so nothing is recreated that
@@ -148,6 +153,8 @@ Item {
             // off): smooth scrolling with momentum, as in the other views.
             Kinetic { id: colKinetic; target: lv; notch: 66 }
             WheelHandler { acceptedDevices: PointerDevice.AllDevices; acceptedModifiers: Qt.KeyboardModifierMask; onWheel: (e) => root.routeWheel(e, colKinetic) }
+            WheelHandler { acceptedDevices: PointerDevice.AllDevices; acceptedModifiers: Qt.KeyboardModifierMask; orientation: Qt.Horizontal
+                           onWheel: (e) => { if (e.angleDelta.y === 0 && e.pixelDelta.y === 0) root.routeWheel(e, colKinetic) } }
             readonly property bool isPreview: folder === ""
             readonly property bool isLast: index === root.chain.length - 1
             readonly property string selectedChild: index + 1 < root.chain.length ? root.chain[index + 1] : ""

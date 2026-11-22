@@ -954,8 +954,8 @@ impl ffi::Grove {
         crate::portal::answer(&id.to_string(), ok, &uris.to_string(), &choices.to_string());
     }
 
-    pub fn test_touchpad(&self, x: f64, y: f64, ax: i32, ay: i32, px: i32, py: i32) {
-        ffi::grove_test_touchpad(x, y, ax, ay, px, py);
+    pub fn test_touchpad(&self, x: f64, y: f64, ax: i32, ay: i32, px: i32, py: i32, phase: i32) {
+        ffi::grove_test_touchpad(x, y, ax, ay, px, py, phase);
     }
 
     pub fn test_wheel_x(&self, x: f64, y: f64, angle_x: i32) {
