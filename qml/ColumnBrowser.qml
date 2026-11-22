@@ -343,7 +343,10 @@ Item {
                     FolderDrop { id: drop; anchors.fill: parent; pane: root.pane; path: r.path; enabledFor: r.isDir }
                     // A name cut short shows in full on hover.
                     HoverHandler { acceptedDevices: PointerDevice.AllDevices; id: rowHover }
-                    GTip { visible: rowHover.hovered && colName.truncated && !r.renaming; text: r.name }
+                    // Archives: how to see one's own info instead of its contents.
+                    readonly property bool archiveRow: r.isArchive && !r.isDir && root.pane.archiveLike(r)
+                    GTip { visible: rowHover.hovered && (colName.truncated || r.archiveRow) && !r.renaming
+                           text: r.archiveRow ? r.name + " — " + r.sizeText + "\nClick to open it like a folder. Alt+click to select it and see its info." : r.name }
                 }
             }
             Rectangle { visible: !column.isPreview; anchors.right: parent.right; width: 1; height: parent.height; color: Theme.separator }
