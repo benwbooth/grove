@@ -48,15 +48,37 @@ fn main() {
         })
         .collect();
 
-    CxxQtBuilder::new_qml_module(QmlModule::new("Grove").qml_files(qml_files))
+    // Qt's private QPA headers, for the global menu bar (GlobalMenuBar).
+    let qpa_headers: Vec<std::path::PathBuf> = match (query("QT_INSTALL_HEADERS"), query("QT_VERSION")) {
+        (Some(h), Some(v)) => {
+            let h = std::path::PathBuf::from(h);
+            let gui = h.join("QtGui").join(&v);
+            let core = h.join("QtCore").join(&v);
+            vec![gui.join("QtGui"), gui, core.join("QtCore"), core]
+        }
+        _ => Vec::new(),
+    };
+
+    let builder = CxxQtBuilder::new_qml_module(QmlModule::new("Grove").qml_files(qml_files))
         .crate_include_root(None)
         .include_dir("include")
         .qt_module("Quick")
         .qt_module("QuickControls2")
         .qt_module("Pdf")
         .cpp_file("cpp/native.cpp")
-        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs"])
-        .build();
+        // The menus in the desktop's global menu bar (moc runs on the header).
+        .cpp_file("include/global_menu.h")
+        .cpp_file("cpp/global_menu.cpp")
+        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs"]);
+    // Only adds include dirs and a define for our own code.
+    let builder = unsafe {
+        builder.cc_builder(|cc| {
+            cc.includes(&qpa_headers);
+            // Shown in About Grove.
+            cc.define("GROVE_VERSION", Some(format!("{:?}", env!("CARGO_PKG_VERSION")).as_str()));
+        })
+    };
+    builder.build();
 }
 
 /// Ben's rule: native text everywhere. Any Text/Label/TextField/TextArea/

@@ -4,6 +4,8 @@
 #include <QPainter>
 #include <QColor>
 #include "native_helpers.h"
+#include "global_menu.h"
+#include <QtQml/qqml.h>
 #include "grove/src/bridge.cxxqt.h"
 
 #include <QtCore/QBuffer>
@@ -898,6 +900,7 @@ void grove_create_app()
     new QGuiApplication(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("grove"));
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Grove"));
+    QGuiApplication::setApplicationVersion(QStringLiteral(GROVE_VERSION));
     QGuiApplication::setOrganizationName(QStringLiteral("grove"));
     QGuiApplication::setDesktopFileName(QStringLiteral("grove"));
     // Inter (SF Pro's open relative) when SF Pro isn't installed: the
@@ -933,6 +936,7 @@ void grove_create_app()
 
 int grove_run(const QString& url, const QString& importPath)
 {
+    qmlRegisterType<GlobalMenuBar>("GlobalMenu", 1, 0, "GlobalMenuBar");
     auto* engine = new QQmlApplicationEngine;
     engine->addImageProvider(QStringLiteral("thumb"), new ThumbProvider);
     engine->addImageProvider(QStringLiteral("pdfpage"), new PdfPageProvider);

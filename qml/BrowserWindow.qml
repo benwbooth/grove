@@ -3,6 +3,7 @@ import QtCore
 import QtQuick.Controls.Basic
 import QtQuick.Window
 import QtQuick.Layouts
+import GlobalMenu
 
 // A grove window: the glass sidebar, the toolbar, tabs (each one or two
 // panes), the status bar with the zoom slider, and the dialogs.
@@ -18,7 +19,7 @@ ApplicationWindow {
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
     property var currentTab: tabRepeater.count > 0 ? tabRepeater.itemAt(tabBar.currentIndex) : null
     property var activePane: currentTab ? currentTab.activePane : null
-    property bool modalOpen: burnSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened
+    property bool modalOpen: burnSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened || aboutSheet.opened
 
     width: 1180
     height: 720
@@ -680,10 +681,10 @@ ApplicationWindow {
         GButton {
             id: ab
             iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
-            tip: "More actions: new folder, sort, show hidden files, settings, help"
+            tip: "Menus: Grove, File, Edit, View, Go, Window, Help (also in the menu bar at the top of the screen)"
             // A second click closes it: the press outside already closed the
             // menu, so don't open it again right away.
-            onClicked: { if (actionMenu.visible || Date.now() - actionMenu.closedAt < 250) actionMenu.close(); else actionMenu.popup(ab, 0, ab.height + 4) }
+            onClicked: bw.toggleAppMenu(ab)
             Component.onCompleted: bw.actionButton = this
             Component.onDestruction: if (bw.actionButton === this) bw.actionButton = null
         }
@@ -732,37 +733,371 @@ ApplicationWindow {
     BurnSheet { id: burnSheet; app: bw.app; win: bw }
 
     // ---------- menus ----------
-    GMenu {
-        id: actionMenu
+    // Defined once: exported to the desktop's global menu bar (GlobalMenuBar:
+    // hearth's top bar, Plasma's Global Menu) and shown by the toolbar's
+    // action button (AppMenu). Shortcuts are only shown there: the Key
+    // shortcuts below (and the view's Keys.onPressed) do the work.
+    function menuKey(act) { return Help.seqs(act)[0] || "" }
+    readonly property var menuSel: activePane ? activePane.model.selectionCount : 0
+    // The one selected item (for Open With, Extract), else null.
+    readonly property var menuTarget: {
+        const p = activePane
+        if (!p || p.model.selectionCount !== 1 || p.model.currentRow < 0) return null
+        return p.itemAt(p.model.currentRow)
+    }
+    property var menuApps: []
+    onMenuTargetChanged: appsTimer.restart()
+    Timer {
+        id: appsTimer
+        interval: 150
+        onTriggered: {
+            const t = bw.menuTarget
+            if (!t || t.isDir || !t.path || bw.activePane.inTrash) { bw.menuApps = []; return }
+            const path = t.path
+            Async.call(bw.app.grove, k => bw.app.grove.appsFor(k, path), r => { if (bw.menuTarget && bw.menuTarget.path === path) bw.menuApps = r.apps || [] })
+        }
+    }
+    readonly property var menuModel: {
+        const p = activePane
+        const ok = !!p
+        const special = ok && p.special
+        const trash = ok && p.inTrash
+        const sel = menuSel
+        const t = menuTarget
+        const view = ok ? p.viewMode : ""
+        const sortKey = ok ? p.model.sortKey : ""
+        const group = ok ? p.groupBy : ""
+        const split = !!(currentTab && currentTab.split)
+        const st = app.settings
+        const k = menuKey
+        const sortItem = (id, text) => ({ id: "sort." + id, text: text, checkable: true, checked: sortKey === id, enabled: ok })
+        const groupItem = (id, text) => ({ id: "group." + id, text: text, checkable: true, checked: group === id, enabled: ok })
+        const tagItem = (n, i) => ({ id: "tag." + n, text: n, shortcut: k("tag" + n.toLowerCase()), enabled: sel > 0 && !special })
+        const openWith = menuApps.map((a, i) => ({ id: "openwith." + i, text: a.name + (a.isDefault ? "  (default)" : "") }))
+        if (openWith.length) openWith.push({ separator: true })
+        openWith.push({ id: "openwith.other", text: "Other…", enabled: !!t && !t.isDir && !trash })
+        return [
+            { title: "Grove", items: [
+                { id: "about", text: "About Grove" },
+                { separator: true },
+                { id: "settings", text: "Settings…", shortcut: k("settings") },
+                { id: "customizetoolbar", text: "Customize Toolbar…" },
+                { separator: true },
+                { id: "emptytrash", text: "Empty Trash…", enabled: app.trashCount > 0 },
+                { separator: true },
+                { id: "quit", text: "Quit Grove" }
+            ] },
+            { title: "File", items: [
+                { id: "newwindow", text: "New Window", shortcut: k("newwindow") },
+                { id: "newtab", text: "New Tab", shortcut: k("newtab") },
+                { id: "newfolder", text: "New Folder", shortcut: k("newfolder"), enabled: ok && !special },
+                { id: "newfile", text: "New File", shortcut: k("newfile"), enabled: ok && !special },
+                { separator: true },
+                { id: "open", text: "Open", shortcut: k("open"), enabled: sel > 0 && !trash },
+                { id: "opentab", text: "Open in New Tab", shortcut: "Ctrl+Return", enabled: !!t && !!t.isDir && !trash },
+                { id: "openwith", text: "Open With", enabled: !!t && !t.isDir && !trash, items: openWith },
+                { id: "quicklook", text: "Quick Look", shortcut: k("quicklook"), enabled: ok && p.model.currentRow >= 0 },
+                { id: "getinfo", text: "Get Info", shortcut: k("getinfo"), enabled: ok },
+                { separator: true },
+                { id: "rename", text: sel > 1 ? "Rename " + sel + " Items…" : "Rename…", shortcut: k("rename"), enabled: sel > 0 && !special },
+                { id: "duplicate", text: "Duplicate", shortcut: k("duplicate"), enabled: sel > 0 && !special },
+                { id: "alias", text: "Make Alias", shortcut: k("alias"), enabled: sel > 0 && !special },
+                { id: "compress", text: sel > 1 ? "Compress " + sel + " Items" : t ? "Compress “" + t.name + "”" : "Compress", enabled: sel > 0 && !special },
+                { id: "extract", text: "Extract Here", enabled: !!t && p.archiveLike(t) && !special },
+                { id: "burn", text: "Burn to Disc…", enabled: ok && (sel > 0 || !special) },
+                { id: "share", text: "Share with Nearby Device…", enabled: sel > 0 && !special && !(t && t.isDir) },
+                { separator: true },
+                { id: "putback", text: "Put Back", enabled: trash && sel > 0 },
+                { id: "movetotrash", text: trash ? "Delete Immediately…" : "Move to Trash", shortcut: k("movetotrash"), enabled: sel > 0 && (!special || trash) },
+                { id: "delete", text: "Delete Permanently…", shortcut: k("delete"), enabled: sel > 0 && !special },
+                { separator: true },
+                { id: "eject", text: "Eject", shortcut: k("eject"), enabled: ok },
+                { id: "closetab", text: "Close Tab", shortcut: tabs.count > 1 ? k("closetab") : "", enabled: tabs.count > 1 },
+                { id: "closewindow", text: "Close Window", shortcut: tabs.count > 1 ? "" : k("closetab") }
+            ] },
+            { title: "Edit", items: [
+                { id: "undo", text: app.grove.undoLabel ? "Undo " + app.grove.undoLabel : "Undo", shortcut: k("undo"), enabled: app.grove.undoLabel !== "" },
+                { id: "redo", text: app.grove.redoLabel ? "Redo " + app.grove.redoLabel : "Redo", shortcut: k("redo"), enabled: app.grove.redoLabel !== "" },
+                { separator: true },
+                { id: "cut", text: "Cut", shortcut: k("cut"), enabled: sel > 0 && (!special || trash) },
+                { id: "copy", text: "Copy", shortcut: k("copy"), enabled: sel > 0 },
+                { id: "paste", text: "Paste", shortcut: k("paste"), enabled: ok && !special },
+                { id: "movehere", text: "Move Here", shortcut: k("movehere"), enabled: ok && !special },
+                { id: "copypath", text: "Copy Path", shortcut: k("copypath"), enabled: ok },
+                { id: "copyother", text: "Copy to Other Side", shortcut: k("copyother"), enabled: split && sel > 0 },
+                { id: "moveother", text: "Move to Other Side", shortcut: k("moveother"), enabled: split && sel > 0 },
+                { separator: true },
+                { id: "selectall", text: "Select All", shortcut: k("selectall"), enabled: ok },
+                { id: "invert", text: "Invert Selection", shortcut: k("invert"), enabled: ok },
+                { id: "selectionmode", text: "Selection Mode", shortcut: k("selectionmode"), checkable: true, checked: ok && p.selectionMode, enabled: ok },
+                { separator: true },
+                { id: "batchrename", text: "Batch Rename…", shortcut: k("batchrename"), enabled: sel > 0 && !special },
+                { id: "tags", text: "Tags", enabled: sel > 0 && !special, items: ["Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Gray"].map(tagItem) },
+                { separator: true },
+                { id: "search", text: "Find…", shortcut: k("search"), enabled: ok },
+                { id: "filter", text: "Filter This Folder", shortcut: k("filter"), enabled: ok }
+            ] },
+            { title: "View", items: [
+                { id: "viewicons", text: "As Icons", shortcut: k("viewicons"), checkable: true, checked: view === "icons", enabled: ok },
+                { id: "viewlist", text: "As List", shortcut: k("viewlist"), checkable: true, checked: view === "list", enabled: ok },
+                { id: "viewcolumns", text: "As Columns", shortcut: k("viewcolumns"), checkable: true, checked: view === "columns", enabled: ok },
+                { id: "viewgallery", text: "As Gallery", shortcut: k("viewgallery"), checkable: true, checked: view === "gallery", enabled: ok },
+                { separator: true },
+                { id: "stacks", text: "Use Stacks", shortcut: k("stacks"), checkable: true, checked: ok && p.stacks !== "", enabled: ok },
+                { id: "sortby", text: "Sort By", enabled: ok, items: [
+                    sortItem("name", "Name"), sortItem("kind", "Kind"), sortItem("modified", "Date Modified"),
+                    sortItem("created", "Date Created"), sortItem("added", "Date Added"), sortItem("accessed", "Last Opened"),
+                    sortItem("size", "Size"),
+                    { separator: true },
+                    { id: "sort.descending", text: "Descending", checkable: true, checked: ok && p.model.descending, enabled: ok },
+                    { id: "sort.foldersfirst", text: "Folders First", checkable: true, checked: ok && p.model.foldersFirst, enabled: ok }
+                ] },
+                { id: "groupby", text: "Group By", enabled: ok, items: [
+                    groupItem("", "None"), groupItem("kind", "Kind"), groupItem("date", "Date Modified"),
+                    groupItem("size", "Size"), groupItem("name", "Name"), groupItem("tags", "Tags")
+                ] },
+                { separator: true },
+                { id: "sidebar", text: "Sidebar", shortcut: k("sidebar"), checkable: true, checked: sidebarShown },
+                { id: "folderspanel", text: "Folders Panel", shortcut: k("folderspanel"), checkable: true, checked: !!st.folders_panel },
+                { id: "infopanel", text: "Information Panel", shortcut: k("infopanel"), checkable: true, checked: !!st.info_panel },
+                { id: "terminalpanel", text: "Terminal Panel", shortcut: k("terminalpanel"), checkable: true, checked: !!st.terminal_panel },
+                { id: "split", text: "Split View", shortcut: k("split"), checkable: true, checked: split, enabled: !!currentTab },
+                { id: "statusbar", text: "Status Bar", checkable: true, checked: st.show_status_bar !== false },
+                { separator: true },
+                { id: "hidden", text: "Show Hidden Files", shortcut: k("hidden"), checkable: true, checked: !!st.show_hidden },
+                { id: "zoomin", text: "Bigger Icons", shortcut: k("zoomin"), enabled: ok },
+                { id: "zoomout", text: "Smaller Icons", shortcut: k("zoomout"), enabled: ok },
+                { id: "viewoptions", text: "Show View Options", shortcut: k("viewoptions"), enabled: ok },
+                { separator: true },
+                { id: "reload", text: "Reload", shortcut: k("reload"), enabled: ok }
+            ] },
+            { title: "Go", items: [
+                { id: "back", text: "Back", shortcut: k("back"), enabled: ok && p.backStack.length > 0 },
+                { id: "forward", text: "Forward", shortcut: k("forward"), enabled: ok && p.fwdStack.length > 0 },
+                { id: "up", text: "Enclosing Folder", shortcut: k("up"), enabled: ok && p.parentOf(p.path) !== "" },
+                { separator: true },
+                { id: "recents", text: "Recents", shortcut: k("recents") },
+                { id: "documents", text: "Documents", shortcut: k("documents") },
+                { id: "desktop", text: "Desktop", shortcut: k("desktop") },
+                { id: "downloads", text: "Downloads", shortcut: k("downloads") },
+                { id: "home", text: "Home", shortcut: k("home") },
+                { id: "computer", text: "Computer", shortcut: k("computer") },
+                { id: "trash", text: "Trash", shortcut: k("trash") },
+                { separator: true },
+                { id: "gotofolder", text: "Go to Folder…", shortcut: k("gotofolder") },
+                { id: "connect", text: "Connect to Server…", shortcut: k("connect") },
+                { id: "cloud", text: "Add Cloud Drive…" },
+                { separator: true },
+                { id: "terminal", text: "Open in Terminal", shortcut: k("terminal"), enabled: ok },
+                { id: "diskusage", text: "Disk Usage…", shortcut: k("diskusage") }
+            ] },
+            { title: "Window", items: [
+                { id: "minimize", text: "Minimize" },
+                { id: "zoom", text: "Zoom" },
+                { separator: true },
+                { id: "prevtab", text: "Show Previous Tab", shortcut: k("prevtab"), enabled: tabs.count > 1 },
+                { id: "nexttab", text: "Show Next Tab", shortcut: k("nexttab"), enabled: tabs.count > 1 },
+                { id: "tearoff", text: "Move Tab to New Window", enabled: tabs.count > 1 }
+            ] },
+            { title: "Help", items: [
+                { id: "help", text: "Grove Help and Keyboard Shortcuts", shortcut: k("help") }
+            ] }
+        ]
+    }
+    function homeOr(p) { return p && p.indexOf("/") === 0 ? p : app.grove.home() }
+    function menuAction(id) {
+        const p = activePane
+        const home = app.grove.home()
+        const dot = id.indexOf(".")
+        if (dot > 0) {
+            const kind = id.substring(0, dot), arg = id.substring(dot + 1)
+            if (!p) return
+            if (kind === "sort") {
+                if (arg === "descending") { p.model.applySort(p.model.sortKey, !p.model.descending); p.rememberView() }
+                else if (arg === "foldersfirst") setSetting("folders_first", !p.model.foldersFirst)
+                else p.sortBy(arg)
+            } else if (kind === "group") p.setGroupBy(arg)
+            else if (kind === "tag") p.toggleTag(arg)
+            else if (kind === "openwith") {
+                const t = menuTarget
+                if (!t) return
+                if (arg === "other") openWithDialog(t.path)
+                else if (menuApps[Number(arg)]) app.grove.openWith(JSON.stringify(p.selectedPaths()), menuApps[Number(arg)].id)
+            }
+            return
+        }
+        switch (id) {
+        case "about": aboutSheet.open(); break
+        case "settings": showSettings(); break
+        case "customizetoolbar": toolbarSheet.open(); break
+        case "emptytrash": emptyTrash(); break
+        case "quit": app.saveSession(); Qt.quit(); break
+        case "newwindow": app.openWindow([homeOr(p && p.path)]); break
+        case "newtab": newTab(homeOr(p && p.path), []); break
+        case "help": showHelp(""); break
+        case "minimize": bw.showMinimized(); break
+        case "zoom": bw.visibility === Window.Maximized ? bw.showNormal() : bw.showMaximized(); break
+        case "prevtab": tabBar.currentIndex = (tabBar.currentIndex + tabs.count - 1) % tabs.count; break
+        case "nexttab": tabBar.currentIndex = (tabBar.currentIndex + 1) % tabs.count; break
+        case "tearoff": tearOffTab(tabBar.currentIndex); break
+        case "closetab": closeTab(tabBar.currentIndex); break
+        case "closewindow": bw.close(); break
+        case "sidebar": sidebarShown = !sidebarShown; break
+        case "folderspanel": setPanel("folders_panel", !app.settings.folders_panel); break
+        case "infopanel": setPanel("info_panel", !app.settings.info_panel); break
+        case "terminalpanel": setPanel("terminal_panel", !app.settings.terminal_panel); break
+        case "statusbar": setSetting("show_status_bar", app.settings.show_status_bar === false); break
+        case "hidden": toggleHidden(); break
+        case "recents": go("recent:///"); break
+        case "documents": go(home + "/Documents"); break
+        case "desktop": go(home + "/Desktop"); break
+        case "downloads": go(home + "/Downloads"); break
+        case "home": go(home); break
+        case "computer": go("/"); break
+        case "trash": go("trash:///"); break
+        case "gotofolder": editPath(); break
+        case "connect": connectServer(); break
+        case "cloud": addCloudDrive(); break
+        case "diskusage": showDiskUsage(); break
+        case "undo": app.grove.undo(); break
+        case "redo": app.grove.redo(); break
+        default:
+            if (!p) return
+            switch (id) {
+            case "newfolder": p.newFolder(); break
+            case "newfile": p.newFile(""); break
+            case "open": p.openSelected(false); break
+            case "opentab": p.openSelected(true); break
+            case "quicklook": p.quickLook(); break
+            case "getinfo": { const s = p.selectedPaths(); showInfo(s.length ? s : [p.path]) } break
+            case "rename": p.rename(); break
+            case "duplicate": p.duplicate(); break
+            case "alias": p.makeAlias(); break
+            case "compress": p.compress("zip"); break
+            case "extract": p.extract(); break
+            case "burn": burnSelection(); break
+            case "share": share(p.selectedPaths()); break
+            case "putback": p.putBack(); break
+            case "movetotrash": p.trashSelected(); break
+            case "delete": p.deleteSelected(); break
+            case "eject": ejectCurrent(); break
+            case "cut": p.copy(true); break
+            case "copy": p.copy(false); break
+            case "paste": p.paste(false); break
+            case "movehere": p.paste(true); break
+            case "copypath": p.copyPath(); break
+            case "copyother": toOtherPane(false); break
+            case "moveother": toOtherPane(true); break
+            case "selectall": p.model.selectAll(); break
+            case "invert": p.model.invertSelection(); break
+            case "selectionmode": toggleSelectionMode(); break
+            case "batchrename": { const s = p.selectedPaths(); if (s.length) batchRename(s) } break
+            case "search": focusSearch(); break
+            case "filter": openFilter(); break
+            case "viewicons": p.setView("icons"); break
+            case "viewlist": p.setView("list"); break
+            case "viewcolumns": p.setView("columns"); break
+            case "viewgallery": p.setView("gallery"); break
+            case "stacks": toggleStacks(); break
+            case "split": currentTab.toggleSplit(); break
+            case "zoomin": p.zoom(1); break
+            case "zoomout": p.zoom(-1); break
+            case "viewoptions": toggleViewOptions(); break
+            case "reload": p.reload(); break
+            case "back": p.goBack(); break
+            case "forward": p.goForward(); break
+            case "up": p.goUp(); break
+            case "terminal": app.grove.openTerminal(p.path); break
+            }
+        }
+    }
+    GlobalMenuBar { id: globalMenu; window: bw; model: bw.menuModel; onTriggered: id => bw.menuAction(id) }
+    onVisibleChanged: if (visible) Qt.callLater(globalMenu.attach)
+    // The same menus in the window, from the toolbar's action button.
+    AppMenu {
+        id: appMenu
+        model: bw.menuModel
+        onTriggered: id => bw.menuAction(id)
         property real closedAt: 0
         onClosed: closedAt = Date.now()
-        GMenuItem { text: "New Window"; iconName: "window-new"; shortcutText: Help.shown("Ctrl+N"); onTriggered: bw.app.openWindow([bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home()]) }
-        GMenuItem { text: "New Tab"; iconName: "tab-new"; shortcutText: Help.shown("Ctrl+T"); onTriggered: bw.newTab(bw.activePane.path.indexOf("/") === 0 ? bw.activePane.path : bw.app.grove.home(), []) }
-        GMenuItem { text: "New Folder"; iconName: "folder-new"; shortcutText: Help.shown("Ctrl+Shift+N"); onTriggered: bw.activePane.newFolder() }
-        GMenuSeparator {}
-        GMenuItem { text: bw.app.grove.undoLabel ? "Undo " + bw.app.grove.undoLabel : "Undo"; iconName: "edit-undo"; shortcutText: Help.shown("Ctrl+Z"); enabled: bw.app.grove.undoLabel !== ""; onTriggered: bw.app.grove.undo() }
-        GMenuItem { text: bw.app.grove.redoLabel ? "Redo " + bw.app.grove.redoLabel : "Redo"; iconName: "edit-redo"; shortcutText: Help.shown("Ctrl+Shift+Z"); enabled: bw.app.grove.redoLabel !== ""; onTriggered: bw.app.grove.redo() }
-        GMenuSeparator {}
-        GMenuItem { text: "Filter This Folder"; iconName: "view-filter"; shortcutText: Help.shown("Ctrl+I"); onTriggered: bw.openFilter() }
-        GMenuItem { text: "Show View Options"; iconName: "configure"; shortcutText: Help.shown("Ctrl+J"); onTriggered: bw.toggleViewOptions() }
-        GMenuItem { text: "Use Stacks"; iconName: "view-list-tree|view-grid"; checkable: true; checked: bw.activePane && bw.activePane.stacks !== ""; shortcutText: Help.shown("Ctrl+Alt+0"); onTriggered: bw.toggleStacks() }
-        GMenuItem { text: "Selection Mode"; iconName: "object-select|edit-select"; checkable: true; checked: bw.activePane && bw.activePane.selectionMode; shortcutText: Help.shown("Ctrl+Shift+S"); tip: "Checkboxes on items: clicks and Space tick them"; onTriggered: bw.toggleSelectionMode() }
-        GMenuItem { text: "Show Hidden Files"; iconName: "view-hidden|view-visible"; checkable: true; checked: !!bw.app.settings.show_hidden; shortcutText: Help.shown("Ctrl+H"); onTriggered: bw.toggleHidden() }
-        GMenuItem { text: "Information Panel"; iconName: "dialog-information|help-about"; checkable: true; checked: !!bw.app.settings.info_panel; shortcutText: Help.shown("F11"); onTriggered: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
-        GMenuItem { text: "Terminal Panel"; iconName: "utilities-terminal|terminal"; checkable: true; checked: !!bw.app.settings.terminal_panel; shortcutText: Help.shown("F4"); onTriggered: bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel) }
-        GMenuItem { text: "Folders Panel"; iconName: "view-list-tree|sidebar-tree"; checkable: true; checked: !!bw.app.settings.folders_panel; shortcutText: Help.shown("F7"); onTriggered: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
-        GMenuItem { text: "Split View"; iconName: "view-split-left-right|view-dual"; checkable: true; checked: bw.currentTab && bw.currentTab.split; shortcutText: Help.shown("F3"); onTriggered: bw.currentTab.toggleSplit() }
-        GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: Help.shown("Ctrl+Alt+T"); onTriggered: bw.app.grove.openTerminal(bw.activePane.path) }
-        GMenuItem { text: "Connect to Server…"; iconName: "network-connect"; shortcutText: Help.shown("Ctrl+K"); onTriggered: bw.connectServer() }
-        GMenuItem { text: "Add Cloud Drive…"; iconName: "folder-cloud|network-server"; tip: "Set up Google Drive, OneDrive, Dropbox, iCloud, S3… step by step (rclone)"; onTriggered: bw.addCloudDrive() }
-        GMenuItem { text: "Disk Usage…"; iconName: "filelight|baobab|drive-harddisk"; tip: "See what takes the room in this folder: a tree with percentages and a treemap of every file"; shortcutText: Help.shown("Ctrl+Shift+U"); onTriggered: bw.showDiskUsage() }
-        GMenuSeparator {}
-        GMenuItem { text: "Burn to Disc…"; iconName: "media-optical-burn|media-optical"; tip: "Burn the selection (or this folder) to a CD, DVD or Blu-ray, or save a disc image"; onTriggered: bw.burnSelection() }
-        GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; enabled: bw.app.trashCount > 0; onTriggered: bw.emptyTrash() }
-        GMenuSeparator {}
-        GMenuItem { text: "Customize Toolbar…"; iconName: "configure"; tip: "Add, remove and rearrange toolbar items"; onTriggered: toolbarSheet.open() }
-        GMenuItem { text: "Settings…"; iconName: "configure"; shortcutText: Help.shown("Ctrl+,"); onTriggered: bw.showSettings() }
-        GMenuItem { text: "Help and Keyboard Shortcuts"; iconName: "help-contents"; shortcutText: Help.shown("F1"); onTriggered: bw.showHelp("") }
+        topPadding: Theme.menuPad + 0.001
+        bottomPadding: Theme.menuPad
+        leftPadding: Theme.menuPad + 0.001
+        rightPadding: Theme.menuPad
+        popupType: Popup.Item
+        implicitWidth: Math.max(Math.round(200 * Theme.pt), contentItem.implicitWidth + leftPadding + rightPadding)
+        itemDelegate: Component { GMenuItem {} }
+        delegate: GMenuItem {}
+        background: GlassPanel { implicitWidth: Math.round(200 * Theme.pt); tint: Theme.glassMenu; radius: Theme.glassRadius }
+        // AppMenu (shared between apps) makes plain submenus and separators:
+        // give them grove's glass look before they show.
+        onAboutToShow: bw.styleMenu(appMenu, true)
+    }
+    Component { id: menuGlass; GlassPanel { implicitWidth: Math.round(200 * Theme.pt); tint: Theme.glassMenu; radius: Theme.glassRadius } }
+    Component { id: menuRule; Rectangle { implicitHeight: 1; color: Theme.separator } }
+    Component { id: menuRowBg; Rectangle { property var mi; radius: Math.round(8 * Theme.pt); color: mi && mi.highlighted && mi.enabled ? Theme.accent : "transparent" } }
+    Component {
+        id: menuRowText
+        Item {
+            property var mi
+            implicitWidth: rowLabel.implicitWidth + 60
+            GLabel {
+                id: rowLabel
+                x: 24
+                anchors.verticalCenter: parent.verticalCenter
+                text: parent.mi ? parent.mi.text : ""
+                color: parent.mi && !parent.mi.enabled ? Theme.fgDisabled : parent.mi && parent.mi.highlighted ? Theme.accentText : Theme.fg
+            }
+        }
+    }
+    Component { id: menuArrow; GLabel { property var mi; text: "›"; font.pixelSize: Theme.title; color: mi && mi.highlighted ? Theme.accentText : Theme.fgSecondary } }
+    function styleMenu(m, top) {
+        if (!top) {
+            m.popupType = Popup.Item
+            m.topPadding = Theme.menuPad + 0.001; m.bottomPadding = Theme.menuPad
+            m.leftPadding = Theme.menuPad + 0.001; m.rightPadding = Theme.menuPad
+            m.overlap = 3
+            let w = Math.round(250 * Theme.pt)
+            for (let i = 0; i < m.count; i++) { const it = m.itemAt(i); if (it) w = Math.max(w, it.implicitWidth + m.leftPadding + m.rightPadding) }
+            m.implicitWidth = w
+            m.background = menuGlass.createObject(m)
+        }
+        for (let i = 0; i < m.count; i++) {
+            const it = m.itemAt(i)
+            if (!it) continue
+            // (Each object is new: AppMenu rebuilds its menus as it opens.)
+            if (it.text === undefined) {
+                it.topPadding = 4; it.bottomPadding = 4; it.leftPadding = 10; it.rightPadding = 10
+                it.contentItem = menuRule.createObject(it)
+            } else if (it.subMenu && it.shortcutText === undefined) {
+                // A plain MenuItem holding a submenu (Sort By, Open With...).
+                it.implicitHeight = Theme.menuRow
+                it.indicator = null
+                it.background = menuRowBg.createObject(it, { mi: it })
+                it.contentItem = menuRowText.createObject(it, { mi: it })
+                const ar = menuArrow.createObject(it, { mi: it })
+                ar.x = Qt.binding(() => it.width - ar.width - 8)
+                ar.y = Qt.binding(() => (it.height - ar.height) / 2)
+                it.arrow = ar
+            }
+            if (it.subMenu) styleMenu(it.subMenu, false)
+        }
+    }
+    function toggleAppMenu(button) {
+        if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close()
+        else appMenu.openBelow(button)
+    }
+    Sheet {
+        id: aboutSheet
+        title: "Grove"
+        message: "Version " + Qt.application.version + "\nA Finder-style file manager with Dolphin's power."
+        GLabel {
+            width: parent.width
+            text: "github.com/benwbooth/grove"
+            color: Theme.accent
+            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Qt.openUrlExternally("https://github.com/benwbooth/grove") }
+        }
+        buttons: [ PushButton { text: "OK"; primary: true; focus: true; onClicked: aboutSheet.close() } ]
     }
     function editPath() { if (pathBar) pathBar.edit(); else goSheet.open() }
     function focusSearch() { if (search) { search.forceActiveFocus(); search.selectAll() } else openFilter() }
@@ -1023,7 +1358,18 @@ ApplicationWindow {
         else if (cmd === "savesearch") saveSmartFolder(p)
         else if (cmd === "menu") p.showItemMenu(Number(arg), 100, 100)
         else if (cmd === "bgmenu") p.showBackgroundMenu()
-        else if (cmd === "actions") { if (actionButton) actionMenu.popup(actionButton, 0, actionButton.height + 4); else actionMenu.popup() }
+        else if (cmd === "actions") { if (actionButton) appMenu.openBelow(actionButton); else appMenu.openAt(root, root.width - appMenu.implicitWidth - 12, Theme.toolbarHeight) }
+        // "appmenu=View/Sort By": the action button's menus, those submenus open.
+        else if (cmd === "appmenu") {
+            if (!appMenu.visible) testStep("actions")
+            let m = appMenu
+            for (const title of (arg || "").split("/").filter(t => t)) {
+                for (let i = 0; i < m.count; i++) {
+                    const it = m.itemAt(i)
+                    if (it && it.subMenu && it.text === title) { m.currentIndex = i; it.subMenu.popup(it, it.width - 3, -Theme.menuPad); m = it.subMenu; break }
+                }
+            }
+        }
         else if (cmd === "toolbar") setSetting("toolbar", arg ? arg.split(",") : [])
         else if (cmd === "customize") toolbarSheet.open()
         else if (cmd === "shortcut") { const i = arg.indexOf(":"); const c = Object.assign({}, app.settings.shortcuts || {}); c[arg.substring(0, i)] = arg.substring(i + 1).split("|"); setSetting("shortcuts", c) }
