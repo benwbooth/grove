@@ -211,6 +211,8 @@ Item {
 
         delegate: Item {
             id: rowItem
+            // The name doesn't fit its column: hovering shows it in full.
+            readonly property bool nameTruncated: nameLabel.truncated
             required property int index
             required property string name
             required property string path
@@ -328,6 +330,7 @@ Item {
                     }
                     GitBadge { status: rowItem.git; anchors.right: ic.right; anchors.bottom: ic.bottom; anchors.margins: -4; scale: 0.8 }
                     GLabel {
+                        id: nameLabel
                         anchors.left: ic.right
                         anchors.leftMargin: 6
                         anchors.right: parent.right
@@ -392,6 +395,7 @@ Item {
                 row: rowItem.index
                 path: rowItem.path
                 name: rowItem.name
+                truncated: rowItem.nameTruncated
                 thumb: rowItem.thumb
                 mtime: rowItem.mtime
             }

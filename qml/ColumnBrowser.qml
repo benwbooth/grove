@@ -145,6 +145,7 @@ Item {
                     }
                     GIcon { id: ic; x: 12; anchors.verticalCenter: parent.verticalCenter; size: 18; name: r.iconName; opacity: r.hidden || r.cut ? 0.5 : 1 }
                     GLabel {
+                        id: colName
                         visible: !r.renaming
                         anchors.left: ic.right; anchors.leftMargin: 6
                         anchors.right: chevron.left; anchors.rightMargin: 4
@@ -192,6 +193,9 @@ Item {
                         Timer { id: openTimer; interval: 1; onTriggered: if (root.fm.selectionCount === 1) root.pane.navigate(r.path) }
                     }
                     FolderDrop { id: drop; anchors.fill: parent; pane: root.pane; path: r.path; enabledFor: r.isDir }
+                    // A name cut short shows in full on hover.
+                    HoverHandler { id: rowHover }
+                    GTip { visible: rowHover.hovered && colName.truncated && !r.renaming; text: r.name }
                 }
             }
             Rectangle { visible: !column.isPreview; anchors.right: parent.right; width: 1; height: parent.height; color: Theme.separator }
