@@ -139,11 +139,19 @@ Item {
         // Glide to show the newest column instead of jumping there.
         NumberAnimation { id: glide; target: strip; property: "contentX"; duration: 260 * strip.animMs; easing.type: Easing.OutCubic }
         function glideToEnd() {
-            const end = Math.max(originX, originX + contentWidth - width)
+            // Show the current folder's column at the right edge; the preview
+            // column only when a file is selected (an empty preview at the end
+            // made a narrow pane, e.g. a new split, look blank).
+            let end = Math.max(originX, originX + contentWidth - width)
+            const last = itemAtIndex(root.chain.length - 1)
+            if (last && !root.current)
+                end = Math.max(originX, Math.min(end, last.x + last.width - width))
             if (Math.abs(contentX - end) < 1) return
             glide.stop(); glide.from = contentX; glide.to = end; glide.start()
         }
         onCountChanged: Qt.callLater(glideToEnd)
+        // Column widths settle after layout: aim again so the current column ends at the edge.
+        onContentWidthChanged: Qt.callLater(glideToEnd)
 
         delegate: Item {
             id: column
