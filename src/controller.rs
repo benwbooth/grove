@@ -1030,6 +1030,19 @@ impl ffi::Grove {
         });
     }
 
+    pub fn audio_waveform(&self, key: &QString, path: &QString, width: i32, height: i32, dark: bool) {
+        let p = path.to_string();
+        let (w, h) = (width.clamp(64, 4096) as u32, height.clamp(16, 512) as u32);
+        let (base, played) = if dark { ("0x6b7280", "0x60a5fa") } else { ("0xb6bcc6", "0x2563eb") };
+        self.answer(key, move || {
+            let never = std::sync::atomic::AtomicBool::new(false);
+            match grove_core::previews::player_waveform(std::path::Path::new(&p), w, h, base, played, &never) {
+                Some((a, b)) => serde_json::json!({"base": a.display().to_string(), "played": b.display().to_string()}),
+                None => serde_json::json!({"error": "no waveform"}),
+            }
+        });
+    }
+
     pub fn archive_local(&self, key: &QString, path: &QString) {
         let p = path.to_string();
         self.answer(key, move || match crate::archive::local_copy(&p, true) {

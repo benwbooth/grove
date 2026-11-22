@@ -60,7 +60,7 @@ Item {
         sourceSize.width: Math.ceil(Math.min(width, 1024) * Screen.devicePixelRatio)
         sourceSize.height: Math.ceil(Math.min(height, 1024) * Screen.devicePixelRatio)
         source: visible && fv.pv.kind !== "image" ? fv.thumbSrc : ""
-        anchors.bottomMargin: fv.pv.kind === "media" ? 40 : 0
+        anchors.bottomMargin: fv.pv.kind === "media" ? (fv.pv.video ? 40 : 40 + Math.min(56, fv.height * 0.22) + 8) : 0
     }
     GIcon {
         anchors.centerIn: parent
@@ -128,6 +128,18 @@ Item {
         onSourceChanged: if (source != "" && fv.pv.video) { play(); pause() }
     }
     VideoOutput { id: video; anchors.fill: parent; anchors.bottomMargin: 40; visible: fv.pv.kind === "media" && !!fv.pv.video }
+    // Music: the waveform with a moving playhead, above the controls.
+    Waveform {
+        visible: fv.pv.kind === "media" && !fv.pv.video
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 40
+        width: parent.width
+        height: Math.min(56, parent.height * 0.22)
+        app: fv.app
+        player: player
+        duration: Math.max(player.duration, 1000 * (fv.pv.seconds || 0))
+        path: visible ? fv.path : ""
+    }
     Row {
         visible: fv.pv.kind === "media"
         anchors.bottom: parent.bottom

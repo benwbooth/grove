@@ -305,6 +305,9 @@ pub mod ffi {
         /// PostScript, CBR...) as a cached PDF to page through (async_reply {pdf}).
         #[qinvokable]
         fn doc_pdf(self: &Grove, key: &QString, path: &QString);
+        /// A track's waveform for the player (async_reply {base, played}: PNGs).
+        #[qinvokable]
+        fn audio_waveform(self: &Grove, key: &QString, path: &QString, width: i32, height: i32, dark: bool);
         /// A file inside an archive, taken out for previewing (async_reply {path}).
         #[qinvokable]
         fn archive_local(self: &Grove, key: &QString, path: &QString);

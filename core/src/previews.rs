@@ -246,6 +246,39 @@ pub fn audio_waveform(path: &Path, w: u32, h: u32, color: &str, cancel: &AtomicB
     made(run(&argv, None, cancel, Duration::from_secs(30)), out)
 }
 
+/// A track's waveform for the player, the whole track (up to 3 hours), in
+/// two colours from one decode: [base, played]. Cached by path, size and
+/// time (~/.cache/grove/waves).
+pub fn player_waveform(path: &Path, w: u32, h: u32, base: &str, played: &str, cancel: &AtomicBool) -> Option<(PathBuf, PathBuf)> {
+    which("ffmpeg")?;
+    let m = std::fs::metadata(path).ok()?;
+    let key = format!("{}|{}|{}|{w}x{h}|{base}|{played}", path.display(), m.len(), std::os::unix::fs::MetadataExt::mtime(&m));
+    let dir = crate::util::cache_home().join("grove/waves");
+    std::fs::create_dir_all(&dir).ok()?;
+    let id = crate::thumbs::md5_hex(&key);
+    let (a, b) = (dir.join(format!("{id}-a.png")), dir.join(format!("{id}-b.png")));
+    if a.is_file() && b.is_file() {
+        return Some((a, b));
+    }
+    let graph = format!(
+        "[0:a]aformat=channel_layouts=mono,asplit=2[x][y];[x]showwavespic=s={w}x{h}:colors={base}:scale=sqrt[a];[y]showwavespic=s={w}x{h}:colors={played}:scale=sqrt[b]"
+    );
+    let argv: Vec<String> = [
+        "ffmpeg", "-v", "error", "-nostdin", "-y", "-t", "10800", "-i", &s(path), "-filter_complex", &graph,
+        "-map", "[a]", "-frames:v", "1", &s(&a), "-map", "[b]", "-frames:v", "1", &s(&b),
+    ]
+    .iter()
+    .map(|x| x.to_string())
+    .collect();
+    if run(&argv, None, cancel, Duration::from_secs(120)) && a.is_file() && b.is_file() {
+        Some((a, b))
+    } else {
+        let _ = std::fs::remove_file(&a);
+        let _ = std::fs::remove_file(&b);
+        None
+    }
+}
+
 // ---------- archives: EPUB, comics, office documents ----------
 
 /// The names inside an archive (bsdtar -t).

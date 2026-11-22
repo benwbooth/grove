@@ -294,8 +294,8 @@ Window {
                     id: cover
                     visible: !ql.pv.video && status === Image.Ready
                     anchors.centerIn: parent
-                    anchors.verticalCenterOffset: -22
-                    width: Math.min(parent.width - 40, parent.height - 100, 420)
+                    anchors.verticalCenterOffset: -60
+                    width: Math.min(parent.width - 40, parent.height - 190, 420)
                     height: width
                     fillMode: Image.PreserveAspectFit
                     asynchronous: true
@@ -352,6 +352,20 @@ Window {
                         function onPositionChanged() { if (player.playbackState === MediaPlayer.PlayingState && player.position >= trimRange.second.value) player.pause() }
                     }
                 }
+                // Music: the track's waveform with a moving playhead (click to jump).
+                Waveform {
+                    id: qlWave
+                    visible: ql.pv.kind === "media" && !ql.pv.video && ql.editing !== "trim"
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 48
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: Math.min(parent.width - 60, 820)
+                    height: 72
+                    app: ql.app
+                    player: player
+                    duration: Math.max(player.duration, 1000 * (ql.pv.seconds || 0))
+                    path: visible && ql.item ? ql.item.path : ""
+                }
                 Row {
                     visible: ql.editing !== "trim"
                     anchors.bottom: parent.bottom
@@ -360,6 +374,8 @@ Window {
                     height: 36
                     GButton { iconName: player.playbackState === MediaPlayer.PlayingState ? "media-playback-pause" : "media-playback-start"; tip: "Play / pause"; onClicked: player.playbackState === MediaPlayer.PlayingState ? player.pause() : player.play(); anchors.verticalCenter: parent.verticalCenter }
                     Slider {
+                        // Music with a waveform: the waveform is the seek bar.
+                        visible: !(qlWave.visible && qlWave.base !== "")
                         width: Math.min(500, body.width - 200)
                         anchors.verticalCenter: parent.verticalCenter
                         from: 0; to: Math.max(1, player.duration, ql.item ? 1000 * (ql.pv.seconds || 0) : 0)
