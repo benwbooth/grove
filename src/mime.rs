@@ -117,6 +117,10 @@ pub fn thumbable(e: &Entry, m: &MimeRec) -> bool {
     if n.starts_with("image/") || n.starts_with("video/") || n == "application/pdf" {
         return true;
     }
+    // Everything grove draws itself or with its tools (thumbgen.rs).
+    if grove_core::previews::kind_of(std::slice::from_ref(&m.name), &e.name) != grove_core::previews::Kind::Other {
+        return true;
+    }
     let ts = grove_core::thumbs::thumbnailers();
     ts.iter().any(|t| t.mime_types.iter().any(|x| x == n))
 }

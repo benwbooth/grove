@@ -12,7 +12,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub const FLAVORS: [(&str, u32); 4] = [("normal", 128), ("large", 256), ("x-large", 512), ("xx-large", 1024)];
 const FAIL_DIR: &str = "fail/grove-1.0";
@@ -359,47 +359,28 @@ pub fn expand_exec(exec: &str, input: &Path, output: &Path, px: u32) -> Vec<Stri
 }
 
 /// Make a thumbnail with an external thumbnailer. Blocks (call it from a
-/// worker); gives up after 30 s or when `cancel` is set.
+/// worker); gives up after 30 s or when `cancel` is set. Marks the file as
+/// failed when the thumbnailer fails.
 pub fn generate_external(t: &Thumbnailer, path: &Path, px: u32, mime: &str, cancel: &AtomicBool) -> Option<PathBuf> {
+    let r = run_thumbnailer(t, path, px, mime, cancel);
+    if r.is_none() && !cancel.load(Ordering::Relaxed) {
+        mark_failed(path);
+    }
+    r
+}
+
+/// Run a system thumbnailer and store what it makes (no failure mark: the
+/// caller may try something else).
+pub fn run_thumbnailer(t: &Thumbnailer, path: &Path, px: u32, mime: &str, cancel: &AtomicBool) -> Option<PathBuf> {
     let (_, size_px) = flavor_for(px);
-    let tmpdir = std::env::temp_dir().join(format!("grove-thumb-{}", std::process::id()));
-    std::fs::create_dir_all(&tmpdir).ok()?;
-    let out = tmpdir.join(format!("{}.png", md5_hex(&format!("{}{}", file_uri(path), size_px))));
+    let out = crate::previews::temp_file("png");
     let argv = expand_exec(&t.exec, path, &out, size_px);
-    let (cmd, args) = argv.split_first()?;
-    let mut child = std::process::Command::new(cmd)
-        .args(args)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .ok()?;
-    let start = Instant::now();
-    let ok = loop {
-        match child.try_wait() {
-            Ok(Some(st)) => break st.success(),
-            Ok(None) => {
-                if cancel.load(Ordering::Relaxed) || start.elapsed() > Duration::from_secs(30) {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    let _ = std::fs::remove_file(&out);
-                    return None;
-                }
-                std::thread::sleep(Duration::from_millis(15));
-            }
-            Err(_) => break false,
-        }
-    };
+    let ok = crate::previews::run(&argv, None, cancel, Duration::from_secs(30));
     let bytes = std::fs::read(&out).ok();
     let _ = std::fs::remove_file(&out);
     match bytes {
         Some(b) if ok && b.starts_with(b"\x89PNG") => store(path, size_px, &b, mime),
-        _ => {
-            if !cancel.load(Ordering::Relaxed) {
-                mark_failed(path);
-            }
-            None
-        }
+        _ => None,
     }
 }
 

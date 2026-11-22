@@ -16,6 +16,7 @@
       # places, devices, git status). All optional at run time.
       runtimeFor = pkgs: with pkgs; [
         ffmpegthumbnailer libheif libarchive git sshfs rclone simple-mtpfs
+        poppler-utils vips imagemagick
         udisks fuse3 avahi cifs-utils smbnetfs ffmpeg-headless xorriso dvdplusrwtools
       ];
     in

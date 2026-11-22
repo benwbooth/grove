@@ -43,6 +43,11 @@ pub mod ffi {
         fn grove_thumb_flavor(px: u32) -> u32;
         fn grove_thumb_store(path: &str, flavor: u32, png: &[u8], mime: &str);
         fn grove_thumb_external(path: &str, mimes: &str, px: u32) -> String;
+        fn grove_thumb_kind(path: &str, mimes: &str) -> String;
+        fn grove_thumb_make(path: &str, mimes: &str, px: u32, token: u64) -> String;
+        fn grove_thumb_cancel(token: u64);
+        fn grove_thumb_done(token: u64);
+        fn grove_pdf_page(path: &str, page: u32, width: u32, token: u64) -> String;
     }
 
     extern "RustQt" {
@@ -328,6 +333,30 @@ fn grove_thumb_flavor(px: u32) -> u32 {
 
 fn grove_thumb_store(path: &str, flavor: u32, png: &[u8], mime: &str) {
     grove_core::thumbs::store(Path::new(path), flavor, png, mime);
+}
+
+fn mime_list(mimes: &str) -> Vec<String> {
+    mimes.split('\n').filter(|s| !s.is_empty()).map(String::from).collect()
+}
+
+fn grove_thumb_kind(path: &str, mimes: &str) -> String {
+    crate::thumbgen::kind_name(crate::thumbgen::kind(path, &mime_list(mimes))).to_string()
+}
+
+fn grove_thumb_make(path: &str, mimes: &str, px: u32, token: u64) -> String {
+    crate::thumbgen::make(path, &mime_list(mimes), px, token)
+}
+
+fn grove_thumb_cancel(token: u64) {
+    crate::thumbgen::cancel(token)
+}
+
+fn grove_thumb_done(token: u64) {
+    crate::thumbgen::done(token)
+}
+
+fn grove_pdf_page(path: &str, page: u32, width: u32, token: u64) -> String {
+    crate::thumbgen::pdf_page(path, page, width, token)
 }
 
 fn grove_thumb_external(path: &str, mimes: &str, px: u32) -> String {

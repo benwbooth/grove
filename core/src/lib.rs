@@ -5,6 +5,7 @@ pub mod checksum;
 pub mod versions;
 pub mod listing;
 pub mod mounts;
+pub mod previews;
 pub mod ops;
 pub mod recents;
 pub mod rename;

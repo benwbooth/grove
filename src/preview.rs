@@ -45,14 +45,40 @@ fn read_head(p: &Path, limit: usize) -> Option<(String, bool)> {
     Some((String::from_utf8_lossy(&buf).into_owned(), truncated))
 }
 
-pub fn highlight(text: &str, name: &str, dark: bool) -> String {
-    let ss = syntaxes();
+fn syntax_for<'a>(ss: &'a SyntaxSet, text: &str, name: &str) -> &'a syntect::parsing::SyntaxReference {
     let ext = Path::new(name).extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
-    let syntax = ss
-        .find_syntax_by_extension(&ext)
+    ss.find_syntax_by_extension(&ext)
         .or_else(|| ss.find_syntax_by_token(name))
         .or_else(|| text.lines().next().and_then(|l| ss.find_syntax_by_first_line(l)))
-        .unwrap_or_else(|| ss.find_syntax_plain_text());
+        .unwrap_or_else(|| ss.find_syntax_plain_text())
+}
+
+/// The first `max_lines` lines as coloured runs (light theme), for text
+/// thumbnails: [[["#rrggbb", "text"], ...], ...].
+pub fn highlight_runs(text: &str, name: &str, max_lines: usize) -> Vec<Vec<(String, String)>> {
+    let ss = syntaxes();
+    let syntax = syntax_for(ss, text, name);
+    let theme = &themes().themes["InspiredGitHub"];
+    let mut h = syntect::easy::HighlightLines::new(syntax, theme);
+    let mut out = vec![];
+    for line in syntect::util::LinesWithEndings::from(text).take(max_lines) {
+        let regions = h.highlight_line(line, ss).unwrap_or_default();
+        let runs: Vec<(String, String)> = regions
+            .into_iter()
+            .map(|(st, piece)| {
+                let c = st.foreground;
+                (format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b), piece.trim_end_matches(['\n', '\r']).to_string())
+            })
+            .filter(|(_, t)| !t.is_empty())
+            .collect();
+        out.push(runs);
+    }
+    out
+}
+
+pub fn highlight(text: &str, name: &str, dark: bool) -> String {
+    let ss = syntaxes();
+    let syntax = syntax_for(ss, text, name);
     let theme = &themes().themes[if dark { "base16-ocean.dark" } else { "InspiredGitHub" }];
     // Limit lines so the rich text stays quick.
     let shown: String = text.lines().take(2000).map(|l| format!("{l}\n")).collect();

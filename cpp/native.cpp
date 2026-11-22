@@ -15,6 +15,11 @@
 #include <QtCore/QMimeData>
 #include <QtCore/QMimeDatabase>
 #include <QtCore/QThreadPool>
+#include <QtGui/QRawFont>
+#include <QtGui/QGlyphRun>
+#include <QtGui/QVector3D>
+#include <QtGui/QMatrix4x4>
+#include <QtCore/QElapsedTimer>
 #include <QtCore/QUrl>
 #include <QtGui/QClipboard>
 #include <QtGui/QFontDatabase>
@@ -39,118 +44,549 @@
 static QString fromRust(const rust::String& s) { return QString::fromUtf8(s.data(), int(s.size())); }
 static rust::String toRust(const QString& s) { const QByteArray b = s.toUtf8(); return rust::String(b.constData(), size_t(b.size())); }
 
-// ---- thumbnails (freedesktop spec; grove_core::thumbs does the cache) ----
+// ---- previews: thumbnails (freedesktop spec; grove_core::thumbs keeps the
+// cache), PDF pages for Quick Look, font specimens ----
+//
+// Three pools, so nothing waits behind something slower:
+//   lookup: cache hits (a stat and a small PNG read),
+//   make:   in-process drawing (Qt-readable pictures, text pages, fonts,
+//           3D models),
+//   tools:  external tools (PDF pages, video frames, cover art, office
+//           documents, HEIC/RAW...; grove/src/thumbgen.rs).
+// Quick Look's PDF pages get a pool of their own. Newest requests first;
+// a request whose item scrolled away is dropped if it hasn't started and
+// its tool is killed if it has.
 
-class ThumbResponse : public QQuickImageResponse, public QRunnable {
+namespace {
+
+struct Pools {
+    QThreadPool lookup, make, tools, pages;
+    Pools()
+    {
+        const int ideal = QThread::idealThreadCount();
+        lookup.setMaxThreadCount(2);
+        make.setMaxThreadCount(qBound(2, ideal / 2, 4));
+        tools.setMaxThreadCount(qBound(2, ideal / 2, 6));
+        pages.setMaxThreadCount(3);
+    }
+};
+// Never destroyed: a tool still running at exit mustn't hold up quitting.
+Pools& pools() { static Pools* p = new Pools; return *p; }
+
+std::atomic<quint64> g_token { 1 };
+std::atomic<int> g_seq { 0 };
+bool thumbLog() { static const bool on = qEnvironmentVariableIsSet("GROVE_THUMB_LOG"); return on; }
+
+// A request answered on a worker pool, possibly handed from one pool to
+// another (lookup -> make/tools).
+class JobResponse : public QQuickImageResponse, public QRunnable {
 public:
-    ThumbResponse(const QString& path, const QSize& req, QThreadPool* pool) : m_path(path), m_req(req), m_pool(pool) { setAutoDelete(false); }
+    JobResponse() : m_token(g_token++), m_prio(++g_seq) { setAutoDelete(false); m_clock.start(); }
+    ~JobResponse() override { grove_thumb_done(m_token); }
     QQuickTextureFactory* textureFactory() const override { return QQuickTextureFactory::textureFactoryForImage(m_img); }
     // No picture: an error, so the view keeps showing the icon (and
     // doesn't cache an empty image for this file).
-    QString errorString() const override { return m_img.isNull() ? QStringLiteral("no thumbnail") : QString(); }
-    // Scrolled away: drop it if it hasn't started (the engine still needs
-    // finished() to clean up).
+    QString errorString() const override { return m_img.isNull() ? QStringLiteral("no preview") : QString(); }
     void cancel() override
     {
         m_cancelled = true;
-        if (m_pool->tryTake(this)) QMetaObject::invokeMethod(this, [this] { emit finished(); }, Qt::QueuedConnection);
+        grove_thumb_cancel(m_token);
+        QThreadPool* p = m_pool.load();
+        if (p && p->tryTake(this)) QMetaObject::invokeMethod(this, [this] { finish(); }, Qt::QueuedConnection);
     }
-    std::atomic<bool> m_cancelled { false };
-    std::atomic<bool> m_started { false };
-
+    void startOn(QThreadPool& p) { m_pool = &p; p.start(this, m_prio); }
     void run() override
     {
-        m_started = true;
-        if (!m_cancelled) produce();
-        emit finished();
+        if (!m_cancelled && work()) return;  // handed on to another pool
+        if (thumbLog()) qWarning().noquote() << "grove preview" << m_clock.elapsed() << "ms" << (m_cancelled ? "cancelled" : m_img.isNull() ? "none" : "ok") << m_what;
+        finish();
     }
 
-private:
-    void produce()
+protected:
+    // Do the work; true when it was handed to another pool instead.
+    virtual bool work() = 0;
+    void finish() { if (!m_finished.exchange(true)) emit finished(); }
+
+    quint64 m_token;
+    int m_prio;
+    std::atomic<bool> m_cancelled { false };
+    std::atomic<bool> m_finished { false };
+    std::atomic<QThreadPool*> m_pool { nullptr };
+    QElapsedTimer m_clock;
+    QImage m_img;
+    QString m_what;
+};
+
+QString takePath(QString id)
+{
+    const int q = id.lastIndexOf(QLatin1Char('?'));
+    if (q >= 0) id.truncate(q);
+    return QUrl::fromPercentEncoding(id.toUtf8());
+}
+
+// A picture file scaled to fit `px` (decoding only what's needed).
+QImage readScaled(const QString& file, int px)
+{
+    QImageReader r(file);
+    r.setAutoTransform(true);
+    const QSize s = r.size();
+    if (s.isValid() && (s.width() > px || s.height() > px)) r.setScaledSize(s.scaled(px, px, Qt::KeepAspectRatio));
+    QImage img = r.read();
+    if (!img.isNull() && (img.width() > px || img.height() > px))
+        img = img.scaled(px, px, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    return img;
+}
+
+// Text drawn as a sheet of paper: {"mono": bool, "lines": [[[colour, text], ...], ...]}.
+QImage drawPage(const QByteArray& json, int px)
+{
+    const QJsonObject o = QJsonDocument::fromJson(json).object();
+    const bool mono = o.value(QStringLiteral("mono")).toBool();
+    const QJsonArray lines = o.value(QStringLiteral("lines")).toArray();
+    // A letter-shaped page, drawn big and scaled down (the text reads as
+    // text at large sizes and as its shape at small ones).
+    const int W = 320, H = 414, margin = 18;
+    QImage page(W, H, QImage::Format_ARGB32_Premultiplied);
+    page.fill(Qt::white);
+    {
+        QPainter p(&page);
+        p.setRenderHint(QPainter::TextAntialiasing);
+        QFont f = mono ? QFontDatabase::systemFont(QFontDatabase::FixedFont) : QFont(QStringLiteral("Sans Serif"));
+        f.setPixelSize(mono ? 9 : 10);
+        if (mono) f.setStyleHint(QFont::TypeWriter);
+        p.setFont(f);
+        const QFontMetrics fm(f);
+        const int lh = fm.height() + (mono ? 1 : 3);
+        int y = margin + fm.ascent();
+        for (const QJsonValue& lv : lines) {
+            if (y > H - margin) break;
+            int x = margin;
+            for (const QJsonValue& rv : lv.toArray()) {
+                const QJsonArray run = rv.toArray();
+                const QString t = run.at(1).toString();
+                p.setPen(QColor(run.at(0).toString()));
+                p.drawText(x, y, t);
+                x += fm.horizontalAdvance(t);
+                if (x > W - margin / 2) break;
+            }
+            y += lh;
+        }
+    }
+    QImage out = page.scaled(px, px, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    QPainter p(&out);
+    p.setPen(QColor(0, 0, 0, 50));
+    p.drawRect(out.rect().adjusted(0, 0, -1, -1));
+    return out;
+}
+
+// An audio waveform on a soft card.
+QImage drawWave(const QString& file, int px)
+{
+    QImage wave(file);
+    if (wave.isNull()) return {};
+    QImage out(px, px, QImage::Format_ARGB32_Premultiplied);
+    out.fill(Qt::transparent);
+    QPainter p(&out);
+    p.setRenderHint(QPainter::Antialiasing);
+    QLinearGradient g(0, 0, 0, px);
+    g.setColorAt(0, QColor(0xf4, 0xf6, 0xfb));
+    g.setColorAt(1, QColor(0xe3, 0xe8, 0xf2));
+    p.setBrush(g);
+    p.setPen(QColor(0, 0, 0, 40));
+    const qreal r = px * 0.12;
+    p.drawRoundedRect(QRectF(0.5, 0.5, px - 1, px - 1), r, r);
+    const QImage w = wave.scaled(int(px * 0.84), int(px * 0.5), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    p.drawImage((px - w.width()) / 2, (px - w.height()) / 2, w);
+    return out;
+}
+
+// Glyphs of `text` in a raw font (no font database: adding application
+// fonts would make every text item in the app lay itself out again).
+QGlyphRun glyphs(const QRawFont& font, const QString& text)
+{
+    QList<quint32> idx = font.glyphIndexesForString(text);
+    QList<QPointF> adv = font.advancesForGlyphIndexes(idx);
+    QList<QPointF> pos;
+    QPointF at;
+    for (const QPointF& a : adv) { pos << at; at += a; }
+    QGlyphRun run;
+    run.setRawFont(font);
+    run.setGlyphIndexes(idx);
+    run.setPositions(pos);
+    return run;
+}
+
+// Characters a font can show: "Aa" or, for symbol fonts, its first few.
+QString sampleChars(const QRawFont& f, int want)
+{
+    if (f.supportsCharacter(QLatin1Char('A')) && f.supportsCharacter(QLatin1Char('a'))) return want <= 2 ? QStringLiteral("Aa") : QString();
+    QString s;
+    for (uint c = 0x21; c < 0x30000 && s.size() < want * 2; c++) {
+        if (c >= 0xd800 && c < 0xe000) continue;
+        if (f.supportsCharacter(char32_t(c))) s += QString::fromUcs4(reinterpret_cast<const char32_t*>(&c), 1);
+    }
+    return s;
+}
+
+QImage drawFont(const QString& path, int px)
+{
+    QRawFont font(path, px * 0.42);
+    if (!font.isValid()) return {};
+    const QString text = sampleChars(font, 2);
+    if (text.isEmpty()) return {};
+    QImage out(px, px, QImage::Format_ARGB32_Premultiplied);
+    out.fill(Qt::transparent);
+    QPainter p(&out);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setBrush(Qt::white);
+    p.setPen(QColor(0, 0, 0, 50));
+    p.drawRoundedRect(QRectF(px * 0.06 + 0.5, 0.5, px * 0.88 - 1, px - 1), px * 0.06, px * 0.06);
+    QGlyphRun run = glyphs(font, text);
+    QRectF b = run.boundingRect();
+    if (b.width() > px * 0.8) {  // too wide: shrink
+        font.setPixelSize(font.pixelSize() * px * 0.8 / b.width());
+        run = glyphs(font, text);
+        b = run.boundingRect();
+    }
+    p.setPen(QColor(0x22, 0x22, 0x22));
+    p.drawGlyphRun(QPointF((px - b.width()) / 2 - b.x(), (px - b.height()) / 2 - b.y()), run);
+    return out;
+}
+
+// A font specimen for Quick Look: its name, alphabet, digits, and a line
+// at several sizes.
+QImage drawSpecimen(const QString& path, int width)
+{
+    QRawFont font(path, 20);
+    if (!font.isValid()) return {};
+    const int W = qBound(400, width, 2400);
+    const qreal k = W / 1000.0;
+    QImage out(W, int(W * 0.72), QImage::Format_ARGB32_Premultiplied);
+    out.fill(Qt::white);
+    QPainter p(&out);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QColor(0x1d, 0x1d, 0x1f));
+    const bool latin = font.supportsCharacter(QLatin1Char('a'));
+    QStringList lines;
+    if (latin) lines << QStringLiteral("ABCDEFGHIJKLMNOPQRSTUVWXYZ") << QStringLiteral("abcdefghijklmnopqrstuvwxyz") << QStringLiteral("0123456789 .,:;!?&@#%()");
+    else lines << sampleChars(font, 24);
+    qreal y = 40 * k;
+    auto line = [&](const QString& t, qreal size) {
+        font.setPixelSize(size);
+        const QGlyphRun run = glyphs(font, t);
+        y += font.ascent();
+        p.drawGlyphRun(QPointF(40 * k, y), run);
+        y += font.descent() + size * 0.35;
+    };
+    line(font.familyName() + (font.styleName().isEmpty() ? QString() : QStringLiteral(" ") + font.styleName()), 44 * k);
+    y += 10 * k;
+    for (const QString& l : lines) line(l, 34 * k);
+    y += 14 * k;
+    const QString pangram = latin ? QStringLiteral("The quick brown fox jumps over the lazy dog") : sampleChars(font, 16);
+    for (qreal s : { 14.0, 20.0, 28.0, 40.0, 56.0 }) {
+        if (y + s * k * 1.4 > out.height()) break;
+        line(pangram, s * k);
+    }
+    return out;
+}
+
+// ---- 3D models (STL, OBJ): flat-shaded, seen from above and in front ----
+
+bool loadStl(const QString& path, QList<QVector3D>& tris)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly) || f.size() > 400 * 1024 * 1024) return false;
+    const QByteArray d = f.readAll();
+    if (d.size() >= 84) {
+        quint32 n;
+        memcpy(&n, d.constData() + 80, 4);
+        if (qint64(84) + qint64(n) * 50 == d.size()) {
+            tris.reserve(int(n) * 3);
+            for (quint32 i = 0; i < n; i++) {
+                const char* t = d.constData() + 84 + i * 50 + 12;
+                for (int v = 0; v < 3; v++) {
+                    float xyz[3];
+                    memcpy(xyz, t + v * 12, 12);
+                    tris << QVector3D(xyz[0], xyz[2], -xyz[1]);  // Z up -> Y up
+                }
+            }
+            return !tris.isEmpty();
+        }
+    }
+    // ASCII: "vertex x y z" lines.
+    for (const QByteArray& raw : d.split('\n')) {
+        const QByteArray l = raw.trimmed();
+        if (!l.startsWith("vertex")) continue;
+        const QList<QByteArray> p = l.simplified().split(' ');
+        if (p.size() >= 4) tris << QVector3D(p[1].toFloat(), p[3].toFloat(), -p[2].toFloat());
+    }
+    tris.resize(tris.size() / 3 * 3);
+    return !tris.isEmpty();
+}
+
+bool loadObj(const QString& path, QList<QVector3D>& tris)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly) || f.size() > 400 * 1024 * 1024) return false;
+    QList<QVector3D> v;
+    while (!f.atEnd()) {
+        const QByteArray l = f.readLine().simplified();
+        if (l.startsWith("v ")) {
+            const QList<QByteArray> p = l.split(' ');
+            if (p.size() >= 4) v << QVector3D(p[1].toFloat(), p[2].toFloat(), p[3].toFloat());
+        } else if (l.startsWith("f ")) {
+            const QList<QByteArray> p = l.split(' ');
+            QList<int> idx;
+            for (int i = 1; i < p.size(); i++) {
+                int k = p[i].split('/').first().toInt();
+                if (k < 0) k = int(v.size()) + k + 1;
+                if (k >= 1 && k <= v.size()) idx << k - 1;
+            }
+            for (int i = 1; i + 1 < idx.size(); i++) tris << v[idx[0]] << v[idx[i]] << v[idx[i + 1]];
+        }
+    }
+    return !tris.isEmpty();
+}
+
+QImage drawModel(const QString& path, int px, const std::atomic<bool>& cancelled)
+{
+    QList<QVector3D> t;
+    if (!(path.endsWith(QLatin1String(".obj"), Qt::CaseInsensitive) ? loadObj(path, t) : loadStl(path, t))) return {};
+    QVector3D lo = t[0], hi = t[0];
+    for (const QVector3D& p : t) {
+        lo = QVector3D(qMin(lo.x(), p.x()), qMin(lo.y(), p.y()), qMin(lo.z(), p.z()));
+        hi = QVector3D(qMax(hi.x(), p.x()), qMax(hi.y(), p.y()), qMax(hi.z(), p.z()));
+    }
+    const QVector3D c = (lo + hi) / 2;
+    QMatrix4x4 m;
+    m.rotate(-28, 1, 0, 0);
+    m.rotate(35, 0, 1, 0);
+    m.translate(-c);
+    struct Face { QPointF p[3]; float z; float light; };
+    QList<Face> faces;
+    faces.reserve(t.size() / 3);
+    float minx = 1e30f, maxx = -1e30f, miny = 1e30f, maxy = -1e30f;
+    const QVector3D L = QVector3D(-0.4f, 0.7f, 0.6f).normalized();
+    for (qsizetype i = 0; i + 2 < t.size(); i += 3) {
+        const QVector3D a = m.map(t[i]), b = m.map(t[i + 1]), d = m.map(t[i + 2]);
+        QVector3D n = QVector3D::crossProduct(b - a, d - a);
+        if (n.isNull()) continue;
+        n.normalize();
+        Face f { { QPointF(a.x(), -a.y()), QPointF(b.x(), -b.y()), QPointF(d.x(), -d.y()) }, (a.z() + b.z() + d.z()) / 3, 0.28f + 0.72f * qAbs(QVector3D::dotProduct(n, L)) };
+        for (const QPointF& q : f.p) {
+            minx = qMin(minx, float(q.x())); maxx = qMax(maxx, float(q.x()));
+            miny = qMin(miny, float(q.y())); maxy = qMax(maxy, float(q.y()));
+        }
+        faces << f;
+        if ((i & 0xffff) == 0 && cancelled) return {};
+    }
+    if (faces.isEmpty()) return {};
+    std::sort(faces.begin(), faces.end(), [](const Face& x, const Face& y) { return x.z < y.z; });
+    const int S = px * 2;  // drawn big, scaled down (smooth edges without seams)
+    const float span = qMax(maxx - minx, maxy - miny);
+    const float k = span > 0 ? S * 0.86f / span : 1;
+    QImage img(S, S, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    p.translate(S / 2.0 - (minx + maxx) / 2 * k, S / 2.0 - (miny + maxy) / 2 * k);
+    p.scale(k, k);
+    p.setPen(Qt::NoPen);
+    const QColor base(0x7d, 0xa7, 0xd9);
+    for (qsizetype i = 0; i < faces.size(); i++) {
+        const Face& f = faces[i];
+        p.setBrush(QColor::fromRgbF(base.redF() * f.light, base.greenF() * f.light, base.blueF() * f.light));
+        p.drawPolygon(f.p, 3);
+        if ((i & 0xffff) == 0 && cancelled) return {};
+    }
+    p.end();
+    return img.scaled(px, px, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+}
+
+QImage drawPdfWithQt(const QString& path, int px)
+{
+    QPdfDocument doc;
+    if (doc.load(path) != QPdfDocument::Error::None || doc.pageCount() < 1) return {};
+    const QSize s = doc.pagePointSize(0).toSize().scaled(px, px, Qt::KeepAspectRatio);
+    const QImage page = doc.render(0, s);
+    if (page.isNull()) return {};
+    QImage img(page.size(), QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::white);
+    QPainter p(&img);
+    p.drawImage(0, 0, page);
+    return img;
+}
+
+QStringList mimeChain(const QString& path, QString* name)
+{
+    static thread_local QMimeDatabase db;
+    const QMimeType mt = db.mimeTypeForFile(path);
+    *name = mt.name();
+    QStringList mimes { mt.name() };
+    for (const QString& p : mt.allAncestors()) mimes << p;
+    return mimes;
+}
+
+class ThumbResponse : public JobResponse {
+public:
+    ThumbResponse(const QString& path, const QSize& req) : m_path(path), m_req(req) { m_what = path; }
+
+protected:
+    bool work() override
     {
         const int px = qMax(16, qMax(m_req.width(), m_req.height()));
         const rust::String rp = toRust(m_path);
-        const QString cached = fromRust(grove_thumb_lookup(rp, uint32_t(px)));
-        if (!cached.isEmpty() && m_img.load(cached)) return;
-        if (grove_thumb_failed(rp)) return;
+        if (m_stage == 0) {
+            // The fast part: an up-to-date thumbnail in the cache.
+            const QString cached = fromRust(grove_thumb_lookup(rp, uint32_t(px)));
+            if (!cached.isEmpty() && m_img.load(cached)) return false;
+            if (grove_thumb_failed(rp)) return false;
+            m_mimes = mimeChain(m_path, &m_mime);
+            m_kind = fromRust(grove_thumb_kind(rp, toRust(m_mimes.join(QLatin1Char('\n')))));
+            m_qtImage = m_kind == QLatin1String("picture") && QImageReader(m_path).canRead();
+            const bool inProcess = m_qtImage || m_kind == QLatin1String("text") || m_kind == QLatin1String("font") || m_kind == QLatin1String("model");
+            m_stage = 1;
+            m_what = m_kind + QLatin1Char(' ') + m_path;
+            startOn(inProcess ? pools().make : pools().tools);
+            return true;
+        }
+        make(px, rp);
+        if (!m_img.isNull()) return false;
+        if (!m_cancelled) grove_thumb_mark_failed(rp);
+        return false;
+    }
+
+private:
+    void keep(QImage img, uint32_t flavor)
+    {
+        if (img.isNull() || m_cancelled) return;
+        if (img.width() > int(flavor) || img.height() > int(flavor))
+            img = img.scaled(int(flavor), int(flavor), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        // Saved with the spec's keys (Rust writes the PNG text chunks).
+        QByteArray png;
+        {
+            QBuffer buf(&png);
+            buf.open(QIODevice::WriteOnly);
+            img.save(&buf, "PNG");
+        }
+        rust::Slice<const uint8_t> bytes(reinterpret_cast<const uint8_t*>(png.constData()), size_t(png.size()));
+        grove_thumb_store(toRust(m_path), flavor, bytes, toRust(m_mime));
+        m_img = img;
+    }
+
+    void make(int px, const rust::String& rp)
+    {
         const uint32_t flavor = grove_thumb_flavor(uint32_t(px));
-        QMimeDatabase db;
-        const QMimeType mt = db.mimeTypeForFile(m_path);
-        const QString mime = mt.name();
-        QImage img;
-        if (mime.startsWith(QLatin1String("image/"))) {
-            QImageReader r(m_path);
-            r.setAutoTransform(true);
-            if (r.canRead()) {
-                QSize s = r.size();
-                if (s.isValid() && (s.width() > int(flavor) || s.height() > int(flavor)))
-                    r.setScaledSize(s.scaled(int(flavor), int(flavor), Qt::KeepAspectRatio));
-                img = r.read();
-            }
-        } else if (mime == QLatin1String("application/pdf")) {
-            QPdfDocument doc;
-            if (doc.load(m_path) == QPdfDocument::Error::None && doc.pageCount() > 0) {
-                const QSizeF pt = doc.pagePointSize(0);
-                const QSize s = pt.toSize().scaled(int(flavor), int(flavor), Qt::KeepAspectRatio);
-                QImage page = doc.render(0, s);
-                if (!page.isNull()) {
-                    img = QImage(page.size(), QImage::Format_ARGB32_Premultiplied);
-                    img.fill(Qt::white);
-                    QPainter p(&img);
-                    p.drawImage(0, 0, page);
-                }
-            }
-        }
-        if (m_cancelled) return;
-        if (!img.isNull()) {
-            if (img.width() > int(flavor) || img.height() > int(flavor))
-                img = img.scaled(int(flavor), int(flavor), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-            // Save with the spec's keys (Rust writes the PNG text chunks).
-            QByteArray png;
-            {
-                QBuffer buf(&png);
-                buf.open(QIODevice::WriteOnly);
-                img.save(&buf, "PNG");
-            }
-            rust::Slice<const uint8_t> bytes(reinterpret_cast<const uint8_t*>(png.constData()), size_t(png.size()));
-            grove_thumb_store(rp, flavor, bytes, toRust(mime));
-            m_img = img;
-            return;
-        }
-        // External thumbnailers (ffmpegthumbnailer, heif-thumbnailer, ...).
-        QStringList mimes { mime };
-        for (const QString& p : mt.allAncestors()) mimes << p;
-        const QString out = fromRust(grove_thumb_external(rp, toRust(mimes.join(QLatin1Char('\n'))), uint32_t(px)));
-        if (!out.isEmpty()) m_img.load(out);
-        else if (!m_cancelled) grove_thumb_mark_failed(rp);
+        const int f = int(flavor);
+        if (m_qtImage) { keep(readScaled(m_path, f), flavor); if (!m_img.isNull()) return; }
+        if (m_kind == QLatin1String("font")) { keep(drawFont(m_path, f), flavor); return; }
+        if (m_kind == QLatin1String("model")) { keep(drawModel(m_path, f, m_cancelled), flavor); return; }
+        const QString r = fromRust(grove_thumb_make(rp, toRust(m_mimes.join(QLatin1Char('\n'))), flavor, m_token));
+        if (m_cancelled) { cleanup(r); return; }
+        if (r.startsWith(QLatin1String("thumb:"))) m_img.load(r.mid(6));
+        else if (r.startsWith(QLatin1String("image:"))) keep(readScaled(r.mid(6), f), flavor);
+        else if (r.startsWith(QLatin1String("wave:"))) keep(drawWave(r.mid(5), f), flavor);
+        else if (r.startsWith(QLatin1String("page:"))) keep(drawPage(r.mid(5).toUtf8(), f), flavor);
+        else if (r == QLatin1String("qtpdf")) keep(drawPdfWithQt(m_path, f), flavor);
+        cleanup(r);
+    }
+
+    static void cleanup(const QString& r)
+    {
+        if (r.startsWith(QLatin1String("image:"))) QFile::remove(r.mid(6));
+        else if (r.startsWith(QLatin1String("wave:"))) QFile::remove(r.mid(5));
     }
 
     QString m_path;
     QSize m_req;
-    QThreadPool* m_pool;
-    QImage m_img;
+    int m_stage = 0;
+    QString m_mime, m_kind;
+    QStringList m_mimes;
+    bool m_qtImage = false;
 };
 
 class ThumbProvider : public QQuickAsyncImageProvider {
 public:
-    ThumbProvider() { m_pool.setMaxThreadCount(qBound(2, QThread::idealThreadCount() / 2, 6)); }
     QQuickImageResponse* requestImageResponse(const QString& id, const QSize& req) override
     {
         // id: <percent-encoded path>?m=<mtime> (the mtime only busts caches).
-        QString path = id;
-        const int q = path.lastIndexOf(QLatin1Char('?'));
-        if (q >= 0) path.truncate(q);
-        path = QUrl::fromPercentEncoding(path.toUtf8());
-        auto* r = new ThumbResponse(path, req.isValid() ? req : QSize(128, 128), &m_pool);
-        // Newest first: what's on screen now beats what scrolled away.
-        m_pool.start(r, ++m_seq);
+        auto* r = new ThumbResponse(takePath(id), req.isValid() ? req : QSize(128, 128));
+        r->startOn(pools().lookup);
         return r;
+    }
+};
+
+// image://pdfpage/<path>?p=<page>&m=<mtime>: one page at the requested width.
+class PdfPageResponse : public JobResponse {
+public:
+    PdfPageResponse(const QString& path, int page, int width) : m_path(path), m_page(page), m_width(width) { m_what = QStringLiteral("pdf page %1 ").arg(page) + path; }
+
+protected:
+    bool work() override
+    {
+        const QString out = fromRust(grove_pdf_page(toRust(m_path), uint32_t(m_page), uint32_t(m_width), m_token));
+        if (!out.isEmpty()) {
+            m_img.load(out);
+            QFile::remove(out);
+            return false;
+        }
+        if (m_cancelled) return false;
+        // No pdftoppm/mutool: QtPdf.
+        QPdfDocument doc;
+        if (doc.load(m_path) == QPdfDocument::Error::None && m_page >= 1 && m_page <= doc.pageCount()) {
+            const QSizeF pt = doc.pagePointSize(m_page - 1);
+            const QSize s(m_width, int(m_width * pt.height() / qMax(1.0, pt.width())));
+            QImage page = doc.render(m_page - 1, s);
+            if (!page.isNull()) {
+                m_img = QImage(page.size(), QImage::Format_ARGB32_Premultiplied);
+                m_img.fill(Qt::white);
+                QPainter p(&m_img);
+                p.drawImage(0, 0, page);
+            }
+        }
+        return false;
     }
 
 private:
-    QThreadPool m_pool;
-    int m_seq = 0;
+    QString m_path;
+    int m_page, m_width;
 };
+
+class PdfPageProvider : public QQuickAsyncImageProvider {
+public:
+    QQuickImageResponse* requestImageResponse(const QString& id, const QSize& req) override
+    {
+        const int q = id.lastIndexOf(QLatin1Char('?'));
+        const QUrlQuery query(q >= 0 ? id.mid(q + 1) : QString());
+        auto* r = new PdfPageResponse(takePath(id), qMax(1, query.queryItemValue(QStringLiteral("p")).toInt()), req.width() > 0 ? req.width() : 800);
+        r->startOn(pools().pages);
+        return r;
+    }
+};
+
+// image://specimen/<path>: a font specimen at the requested width.
+class SpecimenResponse : public JobResponse {
+public:
+    SpecimenResponse(const QString& path, int width) : m_path(path), m_width(width) { m_what = QStringLiteral("specimen ") + path; }
+
+protected:
+    bool work() override { m_img = drawSpecimen(m_path, m_width); return false; }
+
+private:
+    QString m_path;
+    int m_width;
+};
+
+class SpecimenProvider : public QQuickAsyncImageProvider {
+public:
+    QQuickImageResponse* requestImageResponse(const QString& id, const QSize& req) override
+    {
+        auto* r = new SpecimenResponse(takePath(id), req.width() > 0 ? req.width() : 1000);
+        r->startOn(pools().make);
+        return r;
+    }
+};
+
+}  // namespace
 
 // ---- theme icons: image://icon/name|fallback|fallback ----
 class IconProvider : public QQuickImageProvider {
@@ -285,6 +721,8 @@ int grove_run(const QString& url, const QString& importPath)
 {
     auto* engine = new QQmlApplicationEngine;
     engine->addImageProvider(QStringLiteral("thumb"), new ThumbProvider);
+    engine->addImageProvider(QStringLiteral("pdfpage"), new PdfPageProvider);
+    engine->addImageProvider(QStringLiteral("specimen"), new SpecimenProvider);
     engine->addImageProvider(QStringLiteral("icon"), new IconProvider);
     if (!importPath.isEmpty()) engine->addImportPath(importPath);
     engine->load(QUrl(url));
