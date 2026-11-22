@@ -43,6 +43,13 @@ Item {
     onActiveChanged: Qt.callLater(reload)
     Connections { target: Theme; function onDarkChanged() { if (dv.active) dv.reload() } }
 
+    // Tests (GROVE_TEST qlview=...): "end", "top", "dump".
+    function testAction(a) {
+        if (a === "end") list.positionViewAtEnd()
+        else if (a === "top") list.positionViewAtBeginning()
+        console.warn("grove test doc", a, "blocks", list.count, "lines", doc.lines, "loading", doc.loading, "y", Math.round(list.contentY))
+    }
+
     FontMetrics { id: fm; font.family: Theme.mono; font.pixelSize: Theme.body * 0.95 * prefs.textZoom }
 
     // Momentum both ways (unwrapped text pans sideways too).

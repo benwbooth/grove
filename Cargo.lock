@@ -1045,6 +1045,7 @@ dependencies = [
  "grove-core",
  "imagesize",
  "libc",
+ "memchr",
  "parking_lot",
  "percent-encoding",
  "rand",

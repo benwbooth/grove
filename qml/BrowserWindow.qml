@@ -1351,6 +1351,12 @@ ApplicationWindow {
         else if (cmd === "split") currentTab.toggleSplit()
         else if (cmd === "tab") newTab(arg, [])
         else if (cmd === "ql") quickLook(p)
+        // A viewer's test hook (DocView, DataTable): "qlview=end", "qlview=sort:1:1"...
+        else if (cmd === "qlview") {
+            const find = (it) => { if (!it || !it.visible) return null; if (typeof it.testAction === "function") return it; for (let i = 0; i < it.children.length; i++) { const f = find(it.children[i]); if (f) return f } return null }
+            const v = find(ql.visible ? ql.contentItem : bw.contentItem)
+            if (v) v.testAction(arg); else console.warn("grove test qlview: no viewer")
+        }
         else if (cmd === "info") showInfo([arg])
         else if (cmd === "filter") { openFilter(); p.model.applyFilter(arg) }
         else if (cmd === "search") { if (search) search.text = arg; p.startSearch(arg) }

@@ -8,7 +8,9 @@
 //! grove_markdown_html), "office" (an office document's text), "plain".
 
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
+use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QVariant};
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -26,6 +28,8 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qhash.h");
         type QHash_i32_QByteArray = cxx_qt_lib::QHash<cxx_qt_lib::QHashPair_i32_QByteArray>;
+        include!("cxx-qt-lib/qlist.h");
+        type QList_i32 = cxx_qt_lib::QList<i32>;
     }
 
     unsafe extern "C++" {
@@ -65,6 +69,12 @@ pub mod qobject {
         #[inherit]
         #[cxx_name = "endResetModel"]
         unsafe fn end_reset_model(self: Pin<&mut TextDoc>);
+        #[inherit]
+        fn index(self: &TextDoc, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex;
+        #[qsignal]
+        #[inherit]
+        #[cxx_name = "dataChanged"]
+        fn data_changed(self: Pin<&mut TextDoc>, top_left: &QModelIndex, bottom_right: &QModelIndex, roles: &QList_i32);
     }
 
     unsafe extern "RustQt" {
@@ -115,6 +125,24 @@ pub struct TextDocRust {
     blocks: Vec<Block>,
     gen: u64,
     cancel: Option<Arc<AtomicBool>>,
+    /// A big file: only an index of where its blocks start; their text is
+    /// read from disk when the list shows them.
+    stream: Option<Stream>,
+}
+
+/// A streamed file: block starts (byte offsets) and line counts, the
+/// coloured blocks at the top, and a small cache of blocks read on demand.
+pub struct Stream {
+    starts: Vec<u64>,
+    lines: Vec<u32>,
+    /// Where the last indexed block ends.
+    end: u64,
+    /// The coloured blocks at the top.
+    rich: HashMap<usize, Block>,
+    cache: RefCell<HashMap<usize, Block>>,
+    order: RefCell<VecDeque<usize>>,
+    pending: RefCell<HashSet<usize>>,
+    tx: std::sync::mpsc::Sender<(usize, u64, u64)>,
 }
 
 const ROLES: [&str; 2] = ["text", "rich"];
@@ -123,8 +151,19 @@ const BLOCK_LINES: usize = 200;
 /// Syntax colouring stops here (it costs ~1 s per 100 000 lines); the
 /// rest is plain text.
 const HIGHLIGHT_LINES: usize = 20_000;
-/// The most read of one file.
+/// The most read of one file (smaller files only: bigger ones stream).
 const READ_LIMIT: u64 = 1 << 30;
+/// Code and plain text from this size are streamed: indexed on a worker,
+/// each block read from disk when it comes on screen.
+pub const STREAM_FROM: u64 = 16 << 20;
+/// A streamed file colours this many lines at its top.
+const STREAM_HIGHLIGHT_LINES: usize = 5_000;
+/// Blocks kept in memory (besides the coloured ones).
+const CACHE_BLOCKS: usize = 160;
+/// A block ends at a line end once this big, or anywhere (at a character
+/// boundary) once HARD_BLOCK_BYTES (one enormous line).
+const SOFT_BLOCK_BYTES: u64 = 1 << 20;
+const HARD_BLOCK_BYTES: u64 = 4 << 20;
 
 fn qs(s: &str) -> QString {
     QString::from(s)
@@ -132,6 +171,9 @@ fn qs(s: &str) -> QString {
 
 impl qobject::TextDoc {
     fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
+        if let Some(st) = &self.rust().stream {
+            return stream_data(st, index.row() as usize, role);
+        }
         let Some(b) = self.rust().blocks.get(index.row() as usize) else { return QVariant::default() };
         match ROLES.get((role - 0x0100) as usize) {
             Some(&"text") => QVariant::from(&b.text),
@@ -149,7 +191,10 @@ impl qobject::TextDoc {
     }
 
     fn row_count(&self, _parent: &QModelIndex) -> i32 {
-        self.rust().blocks.len() as i32
+        match &self.rust().stream {
+            Some(st) => st.starts.len() as i32,
+            None => self.rust().blocks.len() as i32,
+        }
     }
 
     fn load(mut self: Pin<&mut Self>, path: &QString, mode: &QString, dark: bool) {
@@ -160,6 +205,7 @@ impl qobject::TextDoc {
             self.as_mut().begin_reset_model();
         }
         self.as_mut().rust_mut().blocks.clear();
+        self.as_mut().rust_mut().stream = None;
         self.as_mut().rust_mut().gen += 1;
         unsafe {
             self.as_mut().end_reset_model();
@@ -183,9 +229,44 @@ impl qobject::TextDoc {
         let px = if self.rust().pixel > 0.0 { self.rust().pixel } else { 14.0 };
         let width = self.rust().page_width;
         let qt = self.qt_thread();
+        if mode == "code" || mode == "plain" {
+            // Big files stream (the size is read on the worker; it hands
+            // back to the whole-file path when the file is small).
+            let qt2 = qt.clone();
+            let p2 = p.clone();
+            let cancel2 = cancel.clone();
+            let mode2 = mode.clone();
+            let big = std::thread::Builder::new().name("grove-textdoc".into()).spawn(move || {
+                let size = std::fs::metadata(&p2).map(|m| m.len()).unwrap_or(0);
+                if size < STREAM_FROM {
+                    return false;
+                }
+                index_stream(qt2, gen, p2, mode2 == "code", dark, cancel2);
+                true
+            });
+            // Small: the whole-file path below, on its own thread.
+            let _ = big.map(move |h| {
+                std::thread::spawn(move || {
+                    if h.join().unwrap_or(true) {
+                        return;
+                    }
+                    whole_file(qt, gen, p, mode, dark, family, px, width, cancel);
+                })
+            });
+            return;
+        }
         std::thread::Builder::new()
             .name("grove-textdoc".into())
-            .spawn(move || {
+            .spawn(move || whole_file(qt, gen, p, mode, dark, family, px, width, cancel))
+            .ok();
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn whole_file(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, mode: String, dark: bool, family: String, px: f64, width: f64, cancel: Arc<AtomicBool>) {
+    {
+        {
+            (move || {
                 let send = |blocks: Vec<Block>, lines: usize, cols: usize, done: bool, err: Option<String>| {
                     let b = Batch(blocks);
                     let _ = qt.queue(move |m| m.add_blocks(gen, b, lines, cols, done, err));
@@ -301,10 +382,12 @@ impl qobject::TextDoc {
                         send(batch, total_lines, 0, true, None);
                     }
                 }
-            })
-            .ok();
+            })();
+        }
     }
+}
 
+impl qobject::TextDoc {
     fn add_blocks(mut self: Pin<&mut Self>, gen: u64, batch: Batch, lines: usize, cols: usize, done: bool, err: Option<String>) {
         if gen != self.rust().gen {
             return;
@@ -463,5 +546,348 @@ mod tests {
         assert!(s.len() >= 2);
         assert!(s.iter().any(|x| x.contains("```\na\n\nb\n```")));
         assert_eq!(s.concat().matches("line ").count(), 100);
+    }
+}
+
+// ---- Streaming big files ----
+
+/// What the indexer found since its last message: new blocks (start,
+/// lines), coloured top blocks, totals.
+struct IndexBatch {
+    starts: Vec<u64>,
+    lines: Vec<u32>,
+    end: u64,
+    total_lines: usize,
+    cols: usize,
+    done: bool,
+    err: Option<String>,
+}
+unsafe impl Send for IndexBatch {}
+
+struct ReadyBlock(Block);
+unsafe impl Send for ReadyBlock {}
+
+fn placeholder(lines: u32) -> QString {
+    // As many (empty) lines as the block has, so the list's height is
+    // right before its text arrives.
+    qs(&"\n".repeat(lines.saturating_sub(1) as usize))
+}
+
+fn stream_data(st: &Stream, row: usize, role: i32) -> QVariant {
+    let Some(&start) = st.starts.get(row) else { return QVariant::default() };
+    let name = ROLES.get((role - 0x0100) as usize).copied();
+    if let Some(b) = st.rich.get(&row) {
+        return match name {
+            Some("text") => QVariant::from(&b.text),
+            Some("rich") => QVariant::from(&b.rich),
+            _ => QVariant::default(),
+        };
+    }
+    if let Some(b) = st.cache.borrow().get(&row) {
+        return match name {
+            Some("text") => QVariant::from(&b.text),
+            Some("rich") => QVariant::from(&false),
+            _ => QVariant::default(),
+        };
+    }
+    if name == Some("rich") {
+        return QVariant::from(&false);
+    }
+    if name != Some("text") {
+        return QVariant::default();
+    }
+    if st.pending.borrow_mut().insert(row) {
+        let end = st.starts.get(row + 1).copied().unwrap_or(st.end);
+        let _ = st.tx.send((row, start, end));
+    }
+    QVariant::from(&placeholder(st.lines[row]))
+}
+
+impl qobject::TextDoc {
+    fn stream_begin(mut self: Pin<&mut Self>, gen: u64, tx: std::sync::mpsc::Sender<(usize, u64, u64)>) {
+        if gen != self.rust().gen {
+            return;
+        }
+        unsafe {
+            self.as_mut().begin_reset_model();
+        }
+        self.as_mut().rust_mut().stream = Some(Stream {
+            starts: vec![],
+            lines: vec![],
+            end: 0,
+            rich: HashMap::new(),
+            cache: RefCell::new(HashMap::new()),
+            order: RefCell::new(VecDeque::new()),
+            pending: RefCell::new(HashSet::new()),
+            tx,
+        });
+        unsafe {
+            self.as_mut().end_reset_model();
+        }
+    }
+
+    fn stream_add(mut self: Pin<&mut Self>, gen: u64, b: IndexBatch) {
+        if gen != self.rust().gen || self.rust().stream.is_none() {
+            return;
+        }
+        let have = self.rust().stream.as_ref().map(|s| s.starts.len()).unwrap_or(0);
+        if !b.starts.is_empty() {
+            let first = have as i32;
+            let last = (have + b.starts.len()) as i32 - 1;
+            unsafe {
+                self.as_mut().begin_insert_rows(&QModelIndex::default(), first, last);
+            }
+            {
+                let mut r = self.as_mut().rust_mut();
+                let st = r.stream.as_mut().unwrap();
+                st.starts.extend(b.starts);
+                st.lines.extend(b.lines);
+                st.end = b.end;
+            }
+            unsafe {
+                self.as_mut().end_insert_rows();
+            }
+        } else if let Some(st) = self.as_mut().rust_mut().stream.as_mut() {
+            st.end = b.end;
+        }
+        self.as_mut().set_lines(b.total_lines.min(i32::MAX as usize) as i32);
+        self.as_mut().set_max_cols(b.cols.min(i32::MAX as usize) as i32);
+        if let Some(e) = b.err {
+            self.as_mut().set_error(qs(&e));
+        }
+        if b.done {
+            self.as_mut().set_loading(false);
+        }
+    }
+
+    fn stream_rich(mut self: Pin<&mut Self>, gen: u64, row: usize, b: ReadyBlock) {
+        if gen != self.rust().gen {
+            return;
+        }
+        match self.as_mut().rust_mut().stream.as_mut() {
+            Some(st) => {
+                st.rich.insert(row, b.0);
+            }
+            None => return,
+        }
+        let idx = self.index(row as i32, 0, &QModelIndex::default());
+        self.as_mut().data_changed(&idx, &idx, &QList::<i32>::default());
+    }
+
+    fn stream_block(mut self: Pin<&mut Self>, gen: u64, row: usize, b: ReadyBlock) {
+        if gen != self.rust().gen {
+            return;
+        }
+        {
+            let r = self.rust();
+            let Some(st) = r.stream.as_ref() else { return };
+            st.pending.borrow_mut().remove(&row);
+            let mut cache = st.cache.borrow_mut();
+            let mut order = st.order.borrow_mut();
+            cache.insert(row, b.0);
+            order.push_back(row);
+            while order.len() > CACHE_BLOCKS {
+                if let Some(old) = order.pop_front() {
+                    cache.remove(&old);
+                }
+            }
+        }
+        let idx = self.index(row as i32, 0, &QModelIndex::default());
+        self.as_mut().data_changed(&idx, &idx, &QList::<i32>::default());
+    }
+}
+
+/// Index a big file's blocks (byte offsets of every BLOCK_LINES lines) in
+/// one pass of big reads, the first block at once; colour the top; answer
+/// block reads from a second thread.
+fn index_stream(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, code: bool, dark: bool, cancel: Arc<AtomicBool>) {
+    use std::io::{Read, Seek, SeekFrom};
+    let path = std::path::Path::new(&p);
+    let mut f = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(e) => {
+            let err = grove_core::util::plain_error(&e, path);
+            let _ = qt.queue(move |m| m.add_blocks(gen, Batch(vec![]), 0, 0, true, Some(err)));
+            return;
+        }
+    };
+    // The block reader: one request at a time, newest first.
+    let (tx, rx) = std::sync::mpsc::channel::<(usize, u64, u64)>();
+    {
+        let qt = qt.clone();
+        let p = p.clone();
+        let cancel = cancel.clone();
+        std::thread::Builder::new()
+            .name("grove-textdoc-read".into())
+            .spawn(move || {
+                let Ok(mut f) = std::fs::File::open(&p) else { return };
+                while let Ok(first) = rx.recv() {
+                    let mut reqs = vec![first];
+                    while let Ok(r) = rx.try_recv() {
+                        reqs.push(r);
+                    }
+                    for (row, start, end) in reqs.into_iter().rev() {
+                        if cancel.load(Ordering::Relaxed) {
+                            return;
+                        }
+                        let mut buf = vec![0u8; end.saturating_sub(start) as usize];
+                        let ok = f.seek(SeekFrom::Start(start)).and_then(|_| f.read_exact(&mut buf)).is_ok();
+                        if !ok {
+                            buf.clear();
+                        }
+                        let text = block_text(&buf, code);
+                        let b = ReadyBlock(Block { text: qs(&text), rich: false });
+                        let _ = qt.queue(move |m| m.stream_block(gen, row, b));
+                    }
+                }
+            })
+            .ok();
+    }
+    let _ = qt.queue(move |m| m.stream_begin(gen, tx));
+
+    // Colouring the top: a thread of its own (syntect is slow on some
+    // syntaxes), so the plain text shows at once and turns coloured.
+    let (ctx, crx) = std::sync::mpsc::channel::<(usize, u64, u64)>();
+    if code {
+        let qt = qt.clone();
+        let p = p.clone();
+        let cancel = cancel.clone();
+        std::thread::Builder::new()
+            .name("grove-textdoc-colour".into())
+            .spawn(move || {
+                let Ok(mut f) = std::fs::File::open(&p) else { return };
+                let mut head = vec![0u8; 65536];
+                let n = f.read(&mut head).unwrap_or(0);
+                head.truncate(n);
+                let head = String::from_utf8_lossy(&head).into_owned();
+                let path = std::path::Path::new(&p);
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let name = crate::langguess::name_for(&p, &head, &name);
+                let mut hl = crate::preview::Highlighter::new(&head, &name, dark);
+                while let Ok((row, start, end)) = crx.recv() {
+                    if cancel.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    let mut buf = vec![0u8; end.saturating_sub(start) as usize];
+                    if f.seek(SeekFrom::Start(start)).and_then(|_| f.read_exact(&mut buf)).is_err() {
+                        return;
+                    }
+                    let html = hl.html(&block_text(&buf, true));
+                    let b = ReadyBlock(Block { text: qs(&html), rich: true });
+                    let _ = qt.queue(move |m| m.stream_rich(gen, row, b));
+                }
+            })
+            .ok();
+    }
+
+    // The first read small (the first lines show at once), then big ones.
+    let mut buf = vec![0u8; 4 << 20];
+    let mut first_read = 256 << 10;
+    let mut pos: u64 = 0; // file offset of buf[0]
+    let mut block_start: u64 = 0;
+    let mut block_lines: u32 = 0;
+    let mut line_start: u64 = 0;
+    let mut total_lines: usize = 0;
+    let mut cols: usize = 0;
+    let mut rows = 0usize;
+    let mut coloured = 0usize;
+    let mut batch = IndexBatch { starts: vec![], lines: vec![], end: 0, total_lines: 0, cols: 0, done: false, err: None };
+    let mut last_send = std::time::Instant::now();
+    let mut sent_first = false;
+
+    // A block ends at `end` (exclusive) with `lines` lines.
+    let mut finish = |end: u64, lines: u32, batch: &mut IndexBatch, block_start: &mut u64| {
+        if end <= *block_start {
+            return;
+        }
+        batch.starts.push(*block_start);
+        batch.lines.push(lines.max(1));
+        batch.end = end;
+        if code && coloured < STREAM_HIGHLIGHT_LINES {
+            let _ = ctx.send((rows, *block_start, end));
+            coloured += lines as usize;
+        }
+        rows += 1;
+        *block_start = end;
+    };
+
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            return;
+        }
+        let want = if first_read > 0 { std::mem::take(&mut first_read) } else { buf.len() };
+        let n = match f.read(&mut buf[..want]) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) => {
+                batch.err = Some(grove_core::util::plain_error(&e, path));
+                break;
+            }
+        };
+        let chunk = &buf[..n];
+        let mut i = 0usize;
+        while i < n {
+            match memchr::memchr(b'\n', &chunk[i..]) {
+                Some(k) => {
+                    let nl = i + k;
+                    let abs_end = pos + nl as u64 + 1;
+                    cols = cols.max((abs_end - 1 - line_start) as usize);
+                    line_start = abs_end;
+                    total_lines += 1;
+                    block_lines += 1;
+                    if block_lines as usize >= BLOCK_LINES || abs_end - block_start >= SOFT_BLOCK_BYTES {
+                        finish(abs_end, block_lines, &mut batch, &mut block_start);
+                        block_lines = 0;
+                    }
+                    i = nl + 1;
+                }
+                None => i = n,
+            }
+            // One enormous line: cut it (at a character boundary).
+            let here = pos + i as u64;
+            if here - block_start >= HARD_BLOCK_BYTES {
+                let mut cut = i;
+                while cut > 0 && cut < n && (chunk[cut] & 0xC0) == 0x80 {
+                    cut -= 1;
+                }
+                let cut_abs = pos + cut as u64;
+                if cut_abs > block_start {
+                    finish(cut_abs, block_lines + 1, &mut batch, &mut block_start);
+                    block_lines = 0;
+                }
+            }
+        }
+        pos += n as u64;
+        if (!sent_first && !batch.starts.is_empty()) || last_send.elapsed().as_millis() >= 100 {
+            sent_first = true;
+            last_send = std::time::Instant::now();
+            batch.total_lines = total_lines;
+            batch.cols = cols;
+            let b = std::mem::replace(&mut batch, IndexBatch { starts: vec![], lines: vec![], end: block_start, total_lines: 0, cols: 0, done: false, err: None });
+            let _ = qt.queue(move |m| m.stream_add(gen, b));
+        }
+    }
+    // The last block (a last line without a newline counts).
+    if pos > line_start {
+        total_lines += 1;
+        cols = cols.max((pos - line_start) as usize);
+        block_lines += 1;
+    }
+    finish(pos, block_lines, &mut batch, &mut block_start);
+    batch.total_lines = total_lines;
+    batch.cols = cols;
+    batch.done = true;
+    let _ = qt.queue(move |m| m.stream_add(gen, batch));
+}
+
+/// A block's bytes as display text: no final newline, tabs as spaces (code).
+fn block_text(bytes: &[u8], code: bool) -> String {
+    let s = String::from_utf8_lossy(bytes);
+    let s = s.strip_suffix('\n').unwrap_or(&s);
+    let s = s.strip_suffix('\r').unwrap_or(s);
+    if code && s.contains('\t') {
+        s.replace('\t', "    ")
+    } else {
+        s.to_string()
     }
 }
