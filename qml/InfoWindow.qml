@@ -177,7 +177,7 @@ Window {
                 Fact { k: "Kind"; v: iw.info.kind || "" }
                 Fact { k: "Size"; v: iw.info.isDir ? (iw.folderBytes >= 0 ? iw.app.size(iw.folderBytes) + " on disk, " + iw.folderItems + " items" + (iw.counting ? " (counting…)" : "") : "Counting…") : (iw.info.size || 0).toLocaleString(Qt.locale(), "f", 0) + " bytes (" + (iw.info.sizeText || "") + ")" }
                 Fact { k: "Uncompressed"; visible: !!iw.arch
-                       v: !iw.arch ? "" : iw.arch.uncompressedText + (iw.arch.ratio ? " — packed to " + Math.round(iw.arch.ratio * 100) + "%" : "") + (iw.arch.files > 1 ? ", " + iw.arch.files + " files" : "") }
+                       v: !iw.arch ? "" : iw.arch.uncompressedText + (iw.arch.ratio && iw.arch.ratio < 1 ? " — packed to " + Math.round(iw.arch.ratio * 100) + "%" : "") + (iw.arch.files > 1 ? ", " + iw.arch.files + " files" : "") }
                 Fact { k: "Where"; v: iw.info.parent || "" }
                 Fact { k: "Created"; v: iw.fmt(iw.info.btime) }
                 Fact { k: "Modified"; v: iw.fmt(iw.info.mtime) }

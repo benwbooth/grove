@@ -85,7 +85,7 @@ Item {
             GLabel { text: p.arch ? p.arch.compressedText : ""; visible: !!p.arch }
             GLabel { text: "Uncompressed"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90; visible: !!p.arch }
             GLabel { visible: !!p.arch
-                text: !p.arch ? "" : p.arch.uncompressedText + (p.arch.ratio ? " (" + Math.round(p.arch.ratio * 100) + "% packed)" : "") + (p.arch.files > 1 ? ", " + p.arch.files + " files" : "") }
+                text: !p.arch ? "" : p.arch.uncompressedText + (p.arch.ratio && p.arch.ratio < 1 ? " (packed to " + Math.round(p.arch.ratio * 100) + "%)" : "") + (p.arch.files > 1 ? ", " + p.arch.files + " files" : "") }
             GLabel { text: "Created"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90 }
             GLabel { text: p.info.btime ? new Date(p.info.btime * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat) : "--" }
             GLabel { text: "Modified"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90 }

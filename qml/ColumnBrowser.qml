@@ -254,7 +254,9 @@ Item {
                     required property string tagColors
                     required property bool hidden
                     required property bool cut
+                    required property string sizeText
                     width: lv.width
+                    readonly property bool browsable: r.isDir || (r.isArchive && root.pane.archiveLike(r))
                     height: Theme.rowHeight
                     readonly property bool renaming: column.isLast && root.pane.renamingRow === index
                     Rectangle {
@@ -268,7 +270,7 @@ Item {
                         id: colName
                         visible: !r.renaming
                         anchors.left: ic.right; anchors.leftMargin: 6
-                        anchors.right: chevron.left; anchors.rightMargin: 4
+                        anchors.right: sizeLbl.left; anchors.rightMargin: 4
                         anchors.verticalCenter: parent.verticalCenter
                         text: r.name
                         elide: Text.ElideMiddle
@@ -282,12 +284,22 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         sourceComponent: RenameField { pane: root.pane; row: r.index; original: r.name; isDir: r.isDir }
                     }
-                    TagDots { anchors.right: chevron.left; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; tags: r.tags; colors: r.tagColors }
+                    // Archives open like folders, so their size shows here
+                    // (Alt+click selects one without opening it: full info).
+                    GLabel {
+                        id: sizeLbl
+                        anchors.right: chevron.left; anchors.rightMargin: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: r.isArchive && !r.isDir ? r.sizeText : ""
+                        font.pixelSize: Theme.small
+                        color: r.selected && column.isLast && root.pane.active ? Theme.accentText : Theme.fgSecondary
+                    }
+                    TagDots { anchors.right: sizeLbl.left; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; tags: r.tags; colors: r.tagColors }
                     GLabel {
                         id: chevron
                         anchors.right: parent.right; anchors.rightMargin: 12
                         anchors.verticalCenter: parent.verticalCenter
-                        text: r.isDir || (r.isArchive && root.pane.archiveLike(r)) ? "›" : ""
+                        text: r.browsable ? "›" : ""
                         font.pixelSize: Theme.title
                         color: r.selected && column.isLast && root.pane.active ? Theme.accentText : Theme.fgSecondary
                     }
@@ -295,10 +307,10 @@ Item {
                         anchors.fill: parent
                         visible: !column.isLast
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
-                        onClicked: {
+                        onClicked: (mouse) => {
                             root.pane.activated()
                             root.pane.forceActiveFocus()
-                            const d = root.pane.browsePath(r)
+                            const d = (mouse.modifiers & Qt.AltModifier) && !r.isDir ? "" : root.pane.browsePath(r)
                             if (d) root.pane.navigate(d)
                             else root.pane.navigate(column.folder, { select: [r.path] })
                         }
@@ -310,7 +322,7 @@ Item {
                         pane: root.pane
                         row: r.index
                         iconUrl: Theme.iconUrl(r.iconName)
-                        onLeftPressed: (mods) => { if (root.pane.browsePath(r) && !(mods & (Qt.ShiftModifier | Qt.ControlModifier))) openTimer.restart() }
+                        onLeftPressed: (mods) => { if (root.pane.browsePath(r) && !(mods & (Qt.ShiftModifier | Qt.ControlModifier)) && !((mods & Qt.AltModifier) && !r.isDir)) openTimer.restart() }
                         Timer { id: openTimer; interval: 1; onTriggered: if (root.fm.selectionCount === 1) root.pane.navigate(root.pane.browsePath(r)) }
                     }
                     FolderDrop { id: drop; anchors.fill: parent; pane: root.pane; path: r.path; enabledFor: r.isDir }

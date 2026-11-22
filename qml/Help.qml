@@ -21,6 +21,7 @@ QtObject {
         { id: "recents", group: "Navigate", action: "Recents", defaults: ["Ctrl+Shift+F"], fixed: "", note: "Finder: ⇧⌘F" },
         { id: "computer", group: "Navigate", action: "Computer", defaults: ["Ctrl+Shift+C"], fixed: "", note: "Finder: ⇧⌘C" },
         { id: "trash", group: "Navigate", action: "Trash", defaults: ["Ctrl+Shift+T"], fixed: "", note: "" },
+        { id: "archiveselect", group: "Navigate", action: "Select an archive without opening it (column view: shows its info)", defaults: [], fixed: "Alt+click", note: "Archives open like folders" },
         { id: "diskusage", group: "Navigate", action: "Disk Usage (what takes the room)", defaults: ["Ctrl+Shift+U"], fixed: "", note: "Like KDirStat / Filelight" },
         { id: "connect", group: "Navigate", action: "Connect to Server\u2026", defaults: ["Ctrl+K"], fixed: "", note: "Finder: ⌘K" },
         { id: "reload", group: "Navigate", action: "Reload", defaults: ["F5", "Ctrl+R"], fixed: "", note: "Dolphin: F5" },
