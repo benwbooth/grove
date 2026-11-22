@@ -218,6 +218,11 @@ pub fn preview(path: &str, dark: bool) -> Value {
     if crate::table::is_table_name(&lower) {
         return with(json!({"kind": "table"}));
     }
+    // SQLite databases (by their header, whatever the name): a browser of
+    // their tables, opened read-only.
+    if crate::table::is_sqlite(path) {
+        return with(json!({"kind": "table", "sqlite": true}));
+    }
     let never = std::sync::atomic::AtomicBool::new(false);
     // Books, DjVu, XPS, PostScript, comics: the cover (or icon) at once,
     // then every page once it's been made into a PDF (Quick Look asks).

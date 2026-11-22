@@ -9,6 +9,10 @@
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
+
+#[path = "tablepaged.rs"]
+mod paged;
+pub use paged::BIG_CSV;
 use serde_json::{json, Value};
 use std::cmp::Ordering as CmpOrdering;
 use std::pin::Pin;
@@ -28,6 +32,8 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qhash.h");
         type QHash_i32_QByteArray = cxx_qt_lib::QHash<cxx_qt_lib::QHashPair_i32_QByteArray>;
+        include!("cxx-qt-lib/qlist.h");
+        type QList_i32 = cxx_qt_lib::QList<i32>;
     }
 
     unsafe extern "RustQt" {
@@ -52,6 +58,18 @@ pub mod qobject {
         /// A query's result is shown (instead of the sheet).
         #[qproperty(bool, querying)]
         #[qproperty(QString, query_error, cxx_name = "queryError")]
+        /// Rows are read a page at a time (a big CSV, a SQLite database).
+        #[qproperty(bool, paged)]
+        /// A big CSV is still being indexed (the count grows).
+        #[qproperty(bool, indexing)]
+        /// Importing a big CSV for sorting/SQL: 0..1 (-1: not importing).
+        #[qproperty(f64, import_progress, cxx_name = "importProgress")]
+        /// A SQLite database: its tables ([{"name", "kind", "rows"}]), the
+        /// one shown and its schema (CREATE statements).
+        #[qproperty(bool, is_db, cxx_name = "isDb")]
+        #[qproperty(QString, tables)]
+        #[qproperty(QString, table)]
+        #[qproperty(QString, schema)]
         type TableData = super::TableDataRust;
     }
 
@@ -64,6 +82,22 @@ pub mod qobject {
         #[inherit]
         #[cxx_name = "endResetModel"]
         unsafe fn end_reset_model(self: Pin<&mut TableData>);
+        #[inherit]
+        #[cxx_name = "beginInsertRows"]
+        unsafe fn begin_insert_rows(self: Pin<&mut TableData>, parent: &QModelIndex, first: i32, last: i32);
+        #[inherit]
+        #[cxx_name = "endInsertRows"]
+        unsafe fn end_insert_rows(self: Pin<&mut TableData>);
+        #[inherit]
+        fn index(self: &TableData, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex;
+        #[qsignal]
+        #[inherit]
+        #[cxx_name = "dataChanged"]
+        fn data_changed(self: Pin<&mut TableData>, top_left: &QModelIndex, bottom_right: &QModelIndex, roles: &QList_i32);
+        /// The rows asked for with requestTsv (paged tables).
+        #[qsignal]
+        #[cxx_name = "tsvReady"]
+        fn tsv_ready(self: Pin<&mut TableData>, text: QString, rows: i32);
     }
 
     unsafe extern "RustQt" {
@@ -107,6 +141,13 @@ pub mod qobject {
         /// indexes) as TSV, for copying.
         #[qinvokable]
         fn rows_tsv(self: &TableData, first: i32, last: i32, order: &QString) -> QString;
+        /// Paged tables: the shown rows (up to 100 000) as TSV, answered
+        /// by tsvReady.
+        #[qinvokable]
+        fn request_tsv(self: &TableData, order: &QString);
+        /// A SQLite database: show this table or view.
+        #[qinvokable]
+        fn show_table(self: Pin<&mut TableData>, name: &QString);
     }
 }
 
@@ -161,6 +202,26 @@ pub struct TableDataRust {
     view_gen: u64,
     cancel: Option<Arc<AtomicBool>>,
     db: Arc<Mutex<Option<rusqlite::Connection>>>,
+    paged: bool,
+    indexing: bool,
+    import_progress: f64,
+    is_db: bool,
+    tables: QString,
+    table: QString,
+    schema: QString,
+    /// A paged table's worker (set once the worker says it's paged).
+    paged_state: Option<paged::Paged>,
+    link: Option<Link>,
+}
+
+/// The way to a paged worker, until it says the file is paged.
+struct Link(std::sync::mpsc::Sender<paged::Cmd>, Arc<Mutex<Option<rusqlite::InterruptHandle>>>, Arc<AtomicBool>);
+
+/// A SQLite database (by its first 16 bytes; reads the disk).
+pub fn is_sqlite(path: &str) -> bool {
+    use std::io::Read;
+    let mut b = [0u8; 16];
+    std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut b)).is_ok() && &b == b"SQLite format 3\0"
 }
 
 const ROLES: [&str; 2] = ["cells", "row"];
@@ -197,6 +258,11 @@ pub fn parse_delimited(text: &str, delim: char, max_rows: usize) -> Vec<Vec<Stri
     } else {
         delim
     };
+    parse_exact(text, delim, max_rows)
+}
+
+/// Delimited text into rows with exactly this separator.
+pub fn parse_exact(text: &str, delim: char, max_rows: usize) -> Vec<Vec<String>> {
     let mut rows = vec![];
     let mut row: Vec<String> = vec![];
     let mut field = String::new();
@@ -554,6 +620,14 @@ unsafe impl Send for Loaded {}
 
 impl qobject::TableData {
     fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
+        if self.rust().paged_state.is_some() {
+            let (cells, row) = self.paged_cells(index.row().max(0) as usize);
+            return match ROLES.get((role - 0x0100) as usize) {
+                Some(&"cells") => QVariant::from(&qs(&cells)),
+                Some(&"row") => QVariant::from(&row),
+                _ => QVariant::default(),
+            };
+        }
         let r = self.rust();
         let Some(&i) = r.vis.get(index.row() as usize) else { return QVariant::default() };
         match ROLES.get((role - 0x0100) as usize) {
@@ -584,10 +658,25 @@ impl qobject::TableData {
     }
 
     fn row_count(&self, _parent: &QModelIndex) -> i32 {
-        self.rust().vis.len() as i32
+        match &self.rust().paged_state {
+            Some(p) => p.count.min(i32::MAX as usize) as i32,
+            None => self.rust().vis.len() as i32,
+        }
+    }
+
+    fn request_tsv(&self, order: &QString) {
+        let order: Vec<usize> = serde_json::from_str(&order.to_string()).unwrap_or_default();
+        self.p_tsv_request(order);
+    }
+
+    fn show_table(self: Pin<&mut Self>, name: &QString) {
+        self.p_table(name.to_string());
     }
 
     fn cell(&self, row: i32, column: i32) -> QString {
+        if self.rust().paged_state.is_some() {
+            return self.paged_cell(row.max(0) as usize, column.max(0) as usize);
+        }
         let r = self.rust();
         r.vis
             .get(row as usize)
@@ -628,6 +717,26 @@ impl qobject::TableData {
     }
 
     fn load(mut self: Pin<&mut Self>, path: &QString) {
+        // The last file's worker stops (and its imported copy goes).
+        if let Some(l) = self.as_mut().rust_mut().link.take() {
+            l.2.store(true, Ordering::Relaxed);
+        }
+        if self.rust().paged_state.is_some() {
+            unsafe {
+                self.as_mut().begin_reset_model();
+            }
+            self.as_mut().rust_mut().paged_state = None;
+            unsafe {
+                self.as_mut().end_reset_model();
+            }
+        }
+        self.as_mut().set_paged(false);
+        self.as_mut().set_is_db(false);
+        self.as_mut().set_indexing(false);
+        self.as_mut().set_import_progress(-1.0);
+        self.as_mut().set_tables(qs("[]"));
+        self.as_mut().set_table(QString::default());
+        self.as_mut().set_schema(QString::default());
         self.as_mut().reset();
         self.as_mut().rust_mut().gen += 1;
         self.as_mut().rust_mut().all = Arc::new(vec![]);
@@ -652,9 +761,24 @@ impl qobject::TableData {
         self.as_mut().set_loading(true);
         let gen = self.rust().gen;
         let qt = self.qt_thread();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let interrupt = Arc::new(Mutex::new(None));
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.as_mut().rust_mut().link = Some(Link(tx.clone(), interrupt.clone(), cancel.clone()));
         std::thread::Builder::new()
             .name("grove-table".into())
             .spawn(move || {
+                // A SQLite database, or a CSV too big to read whole: paged.
+                let lower = p.to_lowercase();
+                let is_db = is_sqlite(&p);
+                let delim = delimiter_for(&lower);
+                let big = !is_db && delim.is_some() && std::fs::metadata(&p).map(|m| m.len() >= BIG_CSV).unwrap_or(false);
+                if is_db || big {
+                    let _ = qt.queue(move |m| m.p_open(gen, is_db));
+                    paged::run(qt, gen, p, is_db, delim.unwrap_or(','), tx, rx, cancel, interrupt);
+                    return;
+                }
+                drop((tx, rx));
                 let r = Loaded(read_sheets(&p));
                 let _ = qt.queue(move |m| m.loaded(gen, r));
             })
@@ -700,6 +824,9 @@ impl qobject::TableData {
     }
 
     fn recompute(mut self: Pin<&mut Self>) {
+        if self.rust().paged_state.is_some() {
+            return self.p_view();
+        }
         if let Some(c) = self.as_mut().rust_mut().cancel.take() {
             c.store(true, Ordering::Relaxed);
         }
@@ -777,6 +904,12 @@ impl qobject::TableData {
     fn run_query(mut self: Pin<&mut Self>, sql: &QString) {
         let sql = sql.to_string();
         self.as_mut().set_query_error(QString::default());
+        if self.rust().paged_state.is_some() {
+            self.as_mut().rust_mut().view = View { sort: -1, ..View::default() };
+            self.as_mut().set_sort_column(-1);
+            self.as_mut().set_descending(false);
+            return self.p_query(sql);
+        }
         if sql.trim().is_empty() {
             let idx = self.rust().sheet;
             let Some(s) = self.rust().all.get(idx.max(0) as usize).cloned() else { return };

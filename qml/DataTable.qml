@@ -2,11 +2,14 @@ import QtQuick
 import QtQuick.Controls.Basic
 import Grove
 
-// CSV, TSV and spreadsheets in Quick Look: every row, with sheet tabs,
+// CSV, TSV, spreadsheets and SQLite databases: every row, with sheet tabs,
 // search, sorting (click a header), column filters, columns to drag into
 // another order, resize or hide, and SQL over the sheets. TableData reads,
 // sorts, filters and queries on worker threads; the list shows the rows
-// on screen.
+// on screen. Big CSVs and databases are paged: rows are read as they come
+// on screen; a database lists its tables and views on the left (a menu
+// when narrow) and shows a table's schema on request. Databases are only
+// ever read.
 Item {
     id: dt
     property string path: ""
@@ -22,13 +25,38 @@ Item {
     property var filters: []        // [{col, op, value}]
     property bool showFilters: false
     property bool showQuery: false
+    property bool showSchema: false
+    // Narrow (the preview column, the gallery): tables in a menu.
+    readonly property bool compact: width < 640
+    readonly property real sideW: tbl.isDb && !compact ? Math.round(210 * Theme.pt) : 0
+    readonly property real mainW: width - sideW
+    readonly property var tableList: { try { return JSON.parse(tbl.tables) } catch (e) { return [] } }
     readonly property var shown: order.filter(c => !hidden[c])
     readonly property real gutter: Math.max(44, String(tbl.total).length * fm.averageCharacterWidth + 20)
     readonly property real totalWidth: gutter + shown.reduce((a, c) => a + colWidth(c), 0)
     readonly property var sheetNames: { try { return JSON.parse(tbl.sheets) } catch (e) { return [] } }
 
     function colWidth(c) { return widths[c] !== undefined ? widths[c] : Math.min(420, Math.max(64, ((cols[c] || {}).width || 8) * fm.averageCharacterWidth + 24)) }
-    function reload() { tbl.load(active ? path : ""); filters = []; showQuery = false; search.text = ""; query.text = "" }
+    function reload() { tbl.load(active ? path : ""); filters = []; showQuery = false; showSchema = false; search.text = ""; query.text = "" }
+    function copyRows() {
+        if (!dt.app) return
+        if (tbl.paged) tbl.requestTsv(JSON.stringify(dt.shown))
+        else dt.app.grove.copyText(tbl.rowsTsv(0, Math.max(0, tbl.count - 1), JSON.stringify(dt.shown)))
+    }
+    function rowsText(n) { return n.toLocaleString(Qt.locale(), "f", 0) }
+    // Tests (GROVE_TEST qlview=...): end, sort:col:desc, search:text,
+    // filter:col:op:value, sql:query, table:name, schema, dump.
+    function testAction(a) {
+        const i = a.indexOf(":"), cmd = i < 0 ? a : a.substring(0, i), rest = i < 0 ? "" : a.substring(i + 1)
+        if (cmd === "end") list.positionViewAtEnd()
+        else if (cmd === "sort") { const v = rest.split(":"); tbl.sortBy(Number(v[0]), v[1] === "1") }
+        else if (cmd === "search") search.text = rest
+        else if (cmd === "filter") { const v = rest.split(":"); dt.filters = [{ col: Number(v[0]), op: v[1], value: v.slice(2).join(":") }]; dt.showFilters = true; dt.sendFilters() }
+        else if (cmd === "sql") { dt.showQuery = true; query.text = rest; tbl.runQuery(rest) }
+        else if (cmd === "table") tbl.showTable(rest)
+        else if (cmd === "schema") dt.showSchema = true
+        console.warn("grove test table", a, "count", tbl.count, "total", tbl.total, "busy", tbl.busy, "indexing", tbl.indexing, "import", tbl.importProgress.toFixed(2), "paged", tbl.paged, "db", tbl.isDb, "table", tbl.table, "err", tbl.error + tbl.queryError, "first", list.count ? (list.itemAtIndex(list.indexAt(0, list.contentY + 1)) || {}).cells : "")
+    }
     onPathChanged: Qt.callLater(reload)
     onActiveChanged: Qt.callLater(reload)
     function focusSearch() { search.forceActiveFocus(); search.selectAll() }
@@ -50,6 +78,11 @@ Item {
 
     TableData {
         id: tbl
+        onTsvReady: (text, rows) => {
+            if (!dt.app) return
+            dt.app.grove.copyText(text)
+            if (rows >= 100000 && dt.app.toast) dt.app.toast("info", "Copied the first 100,000 rows")
+        }
         onColumnsChanged: {
             let c = []
             try { c = JSON.parse(columns) } catch (e) {}
@@ -68,9 +101,69 @@ Item {
     FontMetrics { id: fmMono; font.family: Theme.mono; font.pixelSize: Theme.body }
 
     // Tools: sheets, search, filters, query, columns, count.
+    // A database's tables and views (wide), with their row counts.
+    Rectangle {
+        id: side
+        visible: dt.sideW > 0
+        width: dt.sideW
+        height: parent.height
+        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.03) : Qt.rgba(0, 0, 0, 0.025)
+        Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.separator }
+        GLabel {
+            id: sideHead
+            x: 12; y: 10
+            text: "Tables"
+            font.bold: true
+            color: Theme.fgSecondary
+            font.pixelSize: Theme.small
+        }
+        ListView {
+            id: tableView
+            anchors { top: sideHead.bottom; topMargin: 6; bottom: parent.bottom; left: parent.left; right: parent.right; rightMargin: 1 }
+            clip: true
+            model: dt.tableList
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: GScrollBar {}
+            delegate: Rectangle {
+                id: trow
+                required property var modelData
+                readonly property bool current: modelData.name === tbl.table && !tbl.querying
+                width: ListView.view.width
+                height: Theme.rowHeight + 2
+                radius: 6
+                color: current ? Theme.accent : tm.containsMouse ? Theme.hover : "transparent"
+                GIcon { id: ticon; x: 10; anchors.verticalCenter: parent.verticalCenter; size: 16; name: trow.modelData.kind === "view" ? "view-filter" : "table" }
+                GLabel {
+                    x: ticon.x + ticon.width + 6
+                    width: parent.width - x - countLabel.width - 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: trow.modelData.name
+                    elide: Text.ElideRight
+                    color: trow.current ? Theme.accentText : Theme.fg
+                }
+                GLabel {
+                    id: countLabel
+                    anchors.right: parent.right; anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: trow.modelData.kind === "view" ? "view" : trow.modelData.rows >= 0 ? dt.rowsText(trow.modelData.rows) : "…"
+                    color: trow.current ? Theme.accentText : Theme.fgTertiary
+                    font.pixelSize: Theme.small
+                }
+                MouseArea {
+                    id: tm
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: { dt.filters = []; search.text = ""; tbl.showTable(trow.modelData.name) }
+                }
+                GTip { visible: tm.containsMouse; text: (trow.modelData.kind === "view" ? "View “" : "Table “") + trow.modelData.name + "”" + (trow.modelData.rows >= 0 ? " — " + dt.rowsText(trow.modelData.rows) + " rows" : "") + ". Click to show it" }
+            }
+        }
+    }
+
     Column {
         id: tools
-        width: parent.width
+        x: dt.sideW
+        width: dt.mainW
         spacing: 6
         topPadding: 8
         bottomPadding: 6
@@ -79,6 +172,15 @@ Item {
             x: 12
             width: parent.width - 24
             spacing: 6
+            // A database's tables when narrow.
+            GCombo {
+                visible: tbl.isDb && dt.compact
+                width: Math.max(130, Math.min(200, parent.width * 0.35))
+                model: dt.tableList.map(t => t.name)
+                currentIndex: Math.max(0, dt.tableList.findIndex(t => t.name === tbl.table))
+                tip: "The table or view to show"
+                onActivated: (i) => { dt.filters = []; search.text = ""; tbl.showTable(dt.tableList[i].name) }
+            }
             // Sheet tabs (spreadsheets with more than one sheet).
             Repeater {
                 model: dt.sheetNames.length > 1 ? dt.sheetNames : []
@@ -118,8 +220,18 @@ Item {
                 text: "SQL"
                 capsule: true
                 flat: !dt.showQuery
-                tip: "Query with SQL (SQLite): the sheet is table t, every sheet is also a table under its own name"
+                tip: tbl.isDb ? "Query the database with SQL (read-only: statements that would change it don't run)" : "Query with SQL (SQLite): the sheet is table t, every sheet is also a table under its own name"
                 onClicked: { dt.showQuery = !dt.showQuery; if (dt.showQuery) query.forceActiveFocus() }
+            }
+            GButton {
+                visible: tbl.isDb
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Schema"
+                capsule: true
+                flat: !dt.showSchema
+                enabled: tbl.schema !== ""
+                tip: "Show the table's definition (CREATE statement) and its indexes"
+                onClicked: dt.showSchema = !dt.showSchema
             }
             GButton {
                 id: colsButton
@@ -133,15 +245,21 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 iconName: "edit-copy"
                 tip: "Copy the rows shown (tab-separated, with the header) for pasting into a spreadsheet"
-                onClicked: if (dt.app) dt.app.grove.copyText(tbl.rowsTsv(0, Math.max(0, tbl.count - 1), JSON.stringify(dt.shown)))
+                onClicked: dt.copyRows()
             }
             GLabel {
                 anchors.verticalCenter: parent.verticalCenter
                 color: Theme.fgSecondary
                 text: tbl.loading ? "Reading…"
+                    : tbl.importProgress >= 0 ? "Preparing to sort and query… " + Math.round(tbl.importProgress * 100) + "%"
                     : (tbl.count === tbl.total ? tbl.total.toLocaleString(Qt.locale(), "f", 0) + " rows"
                        : tbl.count.toLocaleString(Qt.locale(), "f", 0) + " of " + tbl.total.toLocaleString(Qt.locale(), "f", 0) + " rows")
-                      + (tbl.querying ? " (query result)" : "") + (tbl.busy ? " …" : "")
+                      + (tbl.indexing ? " so far…" : "") + (tbl.querying ? " (query result)" : "") + (tbl.busy ? " …" : "")
+                GTip {
+                    visible: countHover.containsMouse && tbl.importProgress >= 0
+                    text: "A big file is copied into a temporary database once, so sorting, filtering and SQL don't need it all in memory (deleted when you close it)"
+                }
+                MouseArea { id: countHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
             }
         }
 
@@ -205,19 +323,19 @@ Item {
             spacing: 6
             GField {
                 id: query
-                width: dt.width - 24 - runQ.width - backQ.width - 12
+                width: dt.mainW - 24 - runQ.width - backQ.width - 12
                 font.family: Theme.mono
-                placeholderText: "SELECT * FROM t WHERE …  (Return runs it)"
-                tip: "SQLite SQL. Table t is the sheet shown; every sheet is also a table under its own name. Quote odd column names with \"double quotes\""
+                placeholderText: tbl.isDb ? "SELECT * FROM \"" + tbl.table + "\" WHERE …  (Return runs it)" : "SELECT * FROM t WHERE …  (Return runs it)"
+                tip: tbl.isDb ? "SQLite SQL over this database, read-only: queries that change it are refused. Quote odd names with \"double quotes\"" : "SQLite SQL. Table t is the sheet shown; every sheet is also a table under its own name. Quote odd column names with \"double quotes\""
                 onAccepted: tbl.runQuery(text)
             }
             GButton { id: runQ; text: "Run"; capsule: true; flat: false; tip: "Run the query (Return)"; onClicked: tbl.runQuery(query.text) }
-            GButton { id: backQ; text: "Show Sheet"; capsule: true; enabled: tbl.querying; tip: "Back to the sheet itself"; onClicked: tbl.runQuery("") }
+            GButton { id: backQ; text: tbl.isDb ? "Show Table" : "Show Sheet"; capsule: true; enabled: tbl.querying; tip: tbl.isDb ? "Back to the table itself" : "Back to the sheet itself"; onClicked: tbl.runQuery("") }
         }
         GLabel {
             visible: tbl.queryError !== "" || tbl.error !== ""
             x: 12
-            width: dt.width - 24
+            width: dt.mainW - 24
             wrapMode: Text.Wrap
             color: Theme.danger
             text: tbl.error !== "" ? tbl.error : "SQL: " + tbl.queryError
@@ -259,7 +377,8 @@ Item {
     Rectangle {
         id: header
         anchors.top: tools.bottom
-        width: parent.width
+        x: dt.sideW
+        width: dt.mainW
         height: Theme.rowHeight + 4
         color: Theme.dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(0, 0, 0, 0.04)
         clip: true
@@ -380,13 +499,14 @@ Item {
         }
     }
 
-    PanWheel { anchors.top: header.bottom; anchors.bottom: parent.bottom; width: parent.width; flickable: list; notch: Theme.rowHeight * 3 }
+    PanWheel { anchors.top: header.bottom; anchors.bottom: schemaPane.top; x: dt.sideW; width: dt.mainW; flickable: list; notch: Theme.rowHeight * 3 }
 
     ListView {
         id: list
         anchors.top: header.bottom
-        anchors.bottom: parent.bottom
-        width: parent.width
+        anchors.bottom: schemaPane.top
+        x: dt.sideW
+        width: dt.mainW
         clip: true
         interactive: false
         model: tbl
@@ -460,8 +580,52 @@ Item {
 
     GLabel {
         anchors.centerIn: list
-        visible: !tbl.loading && tbl.count === 0 && tbl.error === ""
+        visible: !tbl.loading && !tbl.busy && tbl.count === 0 && tbl.error === "" && tbl.importProgress < 0 && !tbl.indexing
         text: tbl.total === 0 ? "This table is empty" : "No rows match"
         color: Theme.fgSecondary
+    }
+
+    // A database table's definition and indexes.
+    Rectangle {
+        id: schemaPane
+        anchors.bottom: parent.bottom
+        x: dt.sideW
+        width: dt.mainW
+        height: dt.showSchema && tbl.schema !== "" ? Math.round(Math.min(parent.height * 0.4, Math.max(90, schemaText.contentHeight + 40))) : 0
+        visible: height > 0
+        color: Theme.dark ? Qt.rgba(1, 1, 1, 0.04) : Qt.rgba(0, 0, 0, 0.03)
+        Rectangle { width: parent.width; height: 1; color: Theme.separator }
+        GButton {
+            anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 6
+            z: 1
+            iconName: "window-close"
+            iconSize: 14
+            tip: "Hide the schema"
+            onClicked: dt.showSchema = false
+        }
+        Flickable {
+            id: schemaFlick
+            anchors.fill: parent
+            anchors.topMargin: 1
+            clip: true
+            contentWidth: Math.max(width, schemaText.contentWidth + 24)
+            contentHeight: schemaText.contentHeight + 20
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: GScrollBar {}
+            ScrollBar.horizontal: GScrollBar {}
+            TextEdit {
+                id: schemaText
+                x: 12; y: 10
+                text: tbl.schema
+                readOnly: true
+                selectByMouse: true
+                font.family: Theme.mono
+                font.pixelSize: Theme.small
+                renderType: Text.NativeRendering
+                color: Theme.fg
+                selectionColor: Theme.accent
+                selectedTextColor: Theme.accentText
+            }
+        }
     }
 }
