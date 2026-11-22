@@ -70,6 +70,10 @@ pub mod qobject {
         #[qproperty(QString, tables)]
         #[qproperty(QString, table)]
         #[qproperty(QString, schema)]
+        /// The first row the model's rows start at: it holds at most WINDOW
+        /// rows (deep rows of a huge table sat at positions too large for
+        /// the scene graph's floats: uneven gaps). The view moves it.
+        #[qproperty(i32, row_base, cxx_name = "rowBase")]
         type TableData = super::TableDataRust;
     }
 
@@ -141,6 +145,9 @@ pub mod qobject {
         /// indexes) as TSV, for copying.
         #[qinvokable]
         fn rows_tsv(self: &TableData, first: i32, last: i32, order: &QString) -> QString;
+        /// Show rows from `base` on (at most WINDOW of them).
+        #[qinvokable]
+        fn move_window(self: Pin<&mut TableData>, base: i32);
         /// Paged tables: the shown rows (up to 100 000) as TSV, answered
         /// by tsvReady.
         #[qinvokable]
@@ -179,6 +186,7 @@ struct Shown(Vec<u32>);
 
 #[derive(Default)]
 pub struct TableDataRust {
+    row_base: i32,
     path: QString,
     loading: bool,
     busy: bool,
@@ -618,10 +626,46 @@ fn run_sql(db: &rusqlite::Connection, sql: &str) -> Result<Sheet, String> {
 struct Loaded(Result<Vec<Sheet>, String>);
 unsafe impl Send for Loaded {}
 
+/// Rows the model holds at once (200k × a row ≈ 5 M px: exact in floats).
+pub const WINDOW: usize = 200_000;
+
 impl qobject::TableData {
+    pub(crate) fn all_rows(&self) -> usize {
+        match &self.rust().paged_state {
+            Some(p) => p.count,
+            None => self.rust().vis.len(),
+        }
+    }
+    fn base(&self) -> usize {
+        self.rust().row_base.max(0) as usize
+    }
+    fn move_window(mut self: Pin<&mut Self>, base: i32) {
+        let total = self.all_rows();
+        let b = (base.max(0) as usize).min(total.saturating_sub(WINDOW)) as i32;
+        if b == self.rust().row_base {
+            return;
+        }
+        unsafe {
+            self.as_mut().begin_reset_model();
+        }
+        self.as_mut().rust_mut().row_base = b;
+        unsafe {
+            self.as_mut().end_reset_model();
+        }
+        self.as_mut().row_base_changed();
+    }
+    /// Back to the top window (before a reset that shows other rows).
+    pub(crate) fn window_home(mut self: Pin<&mut Self>) {
+        if self.rust().row_base != 0 {
+            self.as_mut().rust_mut().row_base = 0;
+            self.as_mut().row_base_changed();
+        }
+    }
+
     fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
+        let at = index.row().max(0) as usize + self.base();
         if self.rust().paged_state.is_some() {
-            let (cells, row) = self.paged_cells(index.row().max(0) as usize);
+            let (cells, row) = self.paged_cells(at);
             return match ROLES.get((role - 0x0100) as usize) {
                 Some(&"cells") => QVariant::from(&qs(&cells)),
                 Some(&"row") => QVariant::from(&row),
@@ -629,7 +673,7 @@ impl qobject::TableData {
             };
         }
         let r = self.rust();
-        let Some(&i) = r.vis.get(index.row() as usize) else { return QVariant::default() };
+        let Some(&i) = r.vis.get(at) else { return QVariant::default() };
         match ROLES.get((role - 0x0100) as usize) {
             Some(&"cells") => {
                 let row = &r.cur.rows[i as usize];
@@ -658,10 +702,7 @@ impl qobject::TableData {
     }
 
     fn row_count(&self, _parent: &QModelIndex) -> i32 {
-        match &self.rust().paged_state {
-            Some(p) => p.count.min(i32::MAX as usize) as i32,
-            None => self.rust().vis.len() as i32,
-        }
+        self.all_rows().saturating_sub(self.base()).min(WINDOW) as i32
     }
 
     fn request_tsv(&self, order: &QString) {
@@ -706,6 +747,7 @@ impl qobject::TableData {
         if let Some(c) = self.as_mut().rust_mut().cancel.take() {
             c.store(true, Ordering::Relaxed);
         }
+        self.as_mut().window_home();
         unsafe {
             self.as_mut().begin_reset_model();
         }
@@ -722,6 +764,7 @@ impl qobject::TableData {
             l.2.store(true, Ordering::Relaxed);
         }
         if self.rust().paged_state.is_some() {
+            self.as_mut().window_home();
             unsafe {
                 self.as_mut().begin_reset_model();
             }
@@ -859,6 +902,7 @@ impl qobject::TableData {
         if vg != self.rust().view_gen {
             return;
         }
+        self.as_mut().window_home();
         unsafe {
             self.as_mut().begin_reset_model();
         }

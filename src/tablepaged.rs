@@ -484,6 +484,10 @@ struct Worker {
     table: String,
     /// Parsed file pages, for showing the imported CSV's rows as written.
     file_pages: HashMap<usize, Arc<Vec<Vec<String>>>>,
+    /// The unsorted base's rowid at the start of each page, found as far as
+    /// pages were asked for: a deep page is then a key lookup, not an
+    /// OFFSET that steps over every row before it (slower the deeper).
+    keys: Option<(String, Vec<i64>)>,
 }
 
 pub struct Rows(Page);
@@ -511,6 +515,7 @@ pub fn run(qt: cxx_qt::CxxQtThread<qobject::TableData>, gen: u64, path: String, 
         is_db: db,
         table: String::new(),
         file_pages: HashMap::new(),
+        keys: None,
     };
     if !db {
         clean_scratch(&grove_core::util::cache_home().join("grove/tables"));
@@ -703,7 +708,59 @@ impl Worker {
         Some(Page { rows, nums })
     }
 
+    /// The rowid that page `p` of the unsorted base starts at (extends the
+    /// list of page starts from where it stopped, up to `p`).
+    fn page_key(&mut self, p: usize) -> Option<i64> {
+        let base = self.base.as_ref()?;
+        if !base.rowid {
+            return None;
+        }
+        let sql = base.sql.clone();
+        if self.keys.as_ref().map(|(b, _)| b != &sql).unwrap_or(true) {
+            self.keys = Some((sql.clone(), vec![]));
+        }
+        let have = self.keys.as_ref()?.1.len();
+        if p < have {
+            return self.keys.as_ref()?.1.get(p).copied();
+        }
+        let conn = self.conn.as_ref()?;
+        // Continue after the last page start found (rows from there on).
+        let (after, mut since) = match self.keys.as_ref()?.1.last() {
+            Some(&k) => (k - 1, 0usize),
+            None => (i64::MIN, 0usize),
+        };
+        let mut st = conn.prepare(&format!("SELECT rowid FROM {sql} WHERE rowid > ?1 ORDER BY rowid")).ok()?;
+        let mut q = st.query([after]).ok()?;
+        let mut found = vec![];
+        let mut skip_first = have > 0; // that row starts a page we have
+        while let Ok(Some(r)) = q.next() {
+            let k: i64 = r.get(0).ok()?;
+            if skip_first {
+                skip_first = false;
+                since = 1;
+                continue;
+            }
+            if since % PAGE == 0 {
+                found.push(k);
+                if have + found.len() > p {
+                    break;
+                }
+            }
+            since += 1;
+            if self.cancel.load(Ordering::Relaxed) {
+                return None;
+            }
+        }
+        drop(q);
+        drop(st);
+        let keys = &mut self.keys.as_mut()?.1;
+        keys.extend(found);
+        keys.get(p).copied()
+    }
+
     fn sql_page(&mut self, p: usize) -> Option<Page> {
+        // Unsorted rowid tables: by key (constant time at any depth).
+        let key = if self.mat.is_none() && self.base.as_ref().map(|b| b.rowid).unwrap_or(false) { self.page_key(p) } else { None };
         let base = self.base.as_ref()?;
         let conn = self.conn.as_ref()?;
         let lo = (p * PAGE) as i64;
@@ -716,10 +773,14 @@ impl Worker {
             None if base.rowid => (format!("SELECT rowid, * FROM {} LIMIT ?2 - ?1 OFFSET ?1", base.sql), true),
             None => (format!("SELECT * FROM {} LIMIT ?2 - ?1 OFFSET ?1", base.sql), false),
         };
+        let (sql, args) = match key {
+            Some(k) => (format!("SELECT rowid, * FROM {} WHERE rowid >= ?1 ORDER BY rowid LIMIT ?2", base.sql), [k, PAGE as i64]),
+            None => (sql, [lo, hi]),
+        };
         let mut st = conn.prepare_cached(&sql).ok()?;
         let n = st.column_count();
         let mut out = Page { rows: vec![], nums: vec![] };
-        let mut q = st.query([lo, hi]).ok()?;
+        let mut q = st.query(args).ok()?;
         let mut i = 0;
         while let Ok(Some(r)) = q.next() {
             let first = if numbered { 1 } else { 0 };
@@ -1232,6 +1293,7 @@ impl qobject::TableData {
             return;
         }
         let width = serde_json::from_str::<Vec<Value>>(&cols).map(|c| c.len()).unwrap_or(0);
+        self.as_mut().window_home();
         unsafe {
             self.as_mut().begin_reset_model();
         }
@@ -1271,13 +1333,20 @@ impl qobject::TableData {
         if !pg.file_mode || shown <= pg.count {
             return;
         }
-        let first = pg.count as i32;
-        unsafe {
-            self.as_mut().begin_insert_rows(&QModelIndex::default(), first, shown as i32 - 1);
-        }
-        self.as_mut().rust_mut().paged_state.as_mut().unwrap().count = shown;
-        unsafe {
-            self.as_mut().end_insert_rows();
+        // Rows added inside the model's window only (it holds WINDOW rows).
+        let base = self.rust().row_base.max(0) as usize;
+        let had = pg.count.saturating_sub(base).min(super::WINDOW);
+        let now = shown.saturating_sub(base).min(super::WINDOW);
+        if now > had {
+            unsafe {
+                self.as_mut().begin_insert_rows(&QModelIndex::default(), had as i32, now as i32 - 1);
+            }
+            self.as_mut().rust_mut().paged_state.as_mut().unwrap().count = shown;
+            unsafe {
+                self.as_mut().end_insert_rows();
+            }
+        } else {
+            self.as_mut().rust_mut().paged_state.as_mut().unwrap().count = shown;
         }
         self.as_mut().set_count(shown.min(i32::MAX as usize) as i32);
     }
@@ -1306,7 +1375,14 @@ impl qobject::TableData {
                 return;
             }
             let first = p * PAGE;
-            (first as i32, ((first + n).min(pg.count).max(first + 1) - 1) as i32)
+            // In the model's window (rows from row_base, at most WINDOW).
+            let base = r.row_base.max(0) as usize;
+            let last = (first + n).min(pg.count).max(first + 1) - 1;
+            let end = (base + super::WINDOW).min(pg.count);
+            if last < base || first >= end {
+                return;
+            }
+            ((first.max(base) - base) as i32, (last.min(end - 1) - base) as i32)
         };
         let a = self.index(first, 0, &QModelIndex::default());
         let b = self.index(last, 0, &QModelIndex::default());

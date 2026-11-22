@@ -44,11 +44,31 @@ Item {
         else dt.app.grove.copyText(tbl.rowsTsv(0, Math.max(0, tbl.count - 1), JSON.stringify(dt.shown)))
     }
     function rowsText(n) { return n.toLocaleString(Qt.locale(), "f", 0) }
+    // Huge tables: the list holds a window of rows (tbl.rowBase on), so
+    // deep rows aren't placed at positions too large for exact drawing.
+    // It moves when you scroll near its edges or drag the scroll bar.
+    readonly property int windowRows: 200000
+    readonly property bool windowed: tbl.count > windowRows
+    readonly property real rowH: Theme.rowHeight
+    function topRow() { return tbl.rowBase + Math.floor(list.contentY / rowH) }
+    function jumpTo(row) {
+        const r = Math.max(0, Math.min(tbl.count - 1, Math.round(row)))
+        const nb = Math.max(0, Math.min(Math.max(0, tbl.count - windowRows), r - windowRows / 2))
+        const frac = list.contentY / rowH - Math.floor(list.contentY / rowH)
+        if (nb !== tbl.rowBase) tbl.moveWindow(nb)
+        list.contentY = Math.max(0, Math.min(list.contentHeight - list.height, (r - tbl.rowBase + frac) * rowH))
+    }
+    function recenter() {
+        if (!windowed) return
+        const local = Math.floor(list.contentY / rowH)
+        if ((local < windowRows * 0.1 && tbl.rowBase > 0) || (local > windowRows * 0.85 && tbl.rowBase + windowRows < tbl.count))
+            jumpTo(topRow())
+    }
     // Tests (GROVE_TEST qlview=...): end, sort:col:desc, search:text,
     // filter:col:op:value, sql:query, table:name, schema, dump.
     function testAction(a) {
         const i = a.indexOf(":"), cmd = i < 0 ? a : a.substring(0, i), rest = i < 0 ? "" : a.substring(i + 1)
-        if (cmd === "end") list.positionViewAtEnd()
+        if (cmd === "end") { if (dt.windowed) dt.jumpTo(tbl.count - 1); list.positionViewAtEnd() }
         else if (cmd === "sort") { const v = rest.split(":"); tbl.sortBy(Number(v[0]), v[1] === "1") }
         else if (cmd === "search") search.text = rest
         else if (cmd === "filter") { const v = rest.split(":"); dt.filters = [{ col: Number(v[0]), op: v[1], value: v.slice(2).join(":") }]; dt.showFilters = true; dt.sendFilters() }
@@ -514,8 +534,9 @@ Item {
         flickableDirection: Flickable.HorizontalAndVerticalFlick
         contentWidth: Math.max(width, dt.totalWidth)
         reuseItems: true
-        ScrollBar.vertical: GScrollBar {}
+        ScrollBar.vertical: GScrollBar { visible: !dt.windowed && size < 1 }
         ScrollBar.horizontal: GScrollBar {}
+        onContentYChanged: if (dt.windowed) Qt.callLater(dt.recenter)
         delegate: Rectangle {
             id: rowItem
             required property string cells
@@ -533,7 +554,7 @@ Item {
                     rightPadding: 10
                     horizontalAlignment: Text.AlignRight
                     verticalAlignment: Text.AlignVCenter
-                    text: tbl.querying ? rowItem.index + 1 : rowItem.row
+                    text: tbl.querying ? tbl.rowBase + rowItem.index + 1 : rowItem.row
                     color: Theme.fgTertiary
                     font.pixelSize: Theme.small
                 }
@@ -627,5 +648,20 @@ Item {
                 selectedTextColor: Theme.accentText
             }
         }
+    }
+    // The whole table's scroll bar (huge tables: the list holds a window).
+    GScrollBar {
+        id: wholeBar
+        visible: dt.windowed
+        orientation: Qt.Vertical
+        x: list.x + list.width - width
+        y: list.y
+        height: list.height
+        size: Math.min(1, list.height / Math.max(1, tbl.count * dt.rowH))
+        function follow() { position = Qt.binding(() => Math.min(1 - size, (tbl.rowBase * dt.rowH + list.contentY) / Math.max(1, tbl.count * dt.rowH))) }
+        Component.onCompleted: follow()
+        // Dragging it jumps there; letting go makes it follow the list again.
+        onPositionChanged: if (pressed) dt.jumpTo(position * tbl.count)
+        onPressedChanged: if (!pressed) follow()
     }
 }
