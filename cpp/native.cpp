@@ -218,6 +218,25 @@ public:
     }
 };
 
+// Logs the first wheel events the app receives, before any QML sees them
+// (to tell "never arrives" from "arrives but goes to the wrong place").
+class WheelLogFilter : public QObject {
+public:
+    int left = 80;
+    bool eventFilter(QObject* o, QEvent* e) override
+    {
+        if (left > 0 && e->type() == QEvent::Wheel && o->isWindowType()) {
+            auto* w = static_cast<QWheelEvent*>(e);
+            left--;
+            qWarning().noquote() << "grove raw wheel: angle" << w->angleDelta().x() << w->angleDelta().y()
+                                 << "pixel" << w->pixelDelta().x() << w->pixelDelta().y()
+                                 << "phase" << int(w->phase()) << "at" << w->position().x() << w->position().y()
+                                 << "device" << (w->pointingDevice() ? w->pointingDevice()->name() : QString());
+        }
+        return false;
+    }
+};
+
 void grove_create_app()
 {
     // Native (FreeType) text everywhere: Qt Quick's distance-field text is
@@ -228,6 +247,7 @@ void grove_create_app()
     static char* argv[] = { name, nullptr };
     new QGuiApplication(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("grove"));
+    qApp->installEventFilter(new WheelLogFilter);
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Grove"));
     QGuiApplication::setOrganizationName(QStringLiteral("grove"));
     QGuiApplication::setDesktopFileName(QStringLiteral("grove"));
