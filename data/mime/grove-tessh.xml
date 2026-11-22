@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- tessh, Tessera's shell language (~/src/tessera, docs/TESSH.md). -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="text/x-tessh">
+    <comment>tessh script</comment>
+    <sub-class-of type="text/plain"/>
+    <sub-class-of type="application/x-executable-script"/>
+    <generic-icon name="text-x-script"/>
+    <glob pattern="*.tsh"/>
+    <glob pattern="*.tessh"/>
+    <magic priority="50">
+      <match type="string" value="#!" offset="0">
+        <match type="string" value="tessh" offset="2:64"/>
+      </match>
+    </magic>
+  </mime-type>
+</mime-info>

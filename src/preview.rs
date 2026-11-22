@@ -15,8 +15,15 @@ fn syntaxes() -> &'static SyntaxSet {
     S.get_or_init(|| {
         let mut b = two_face::syntax::extra_newlines().into_builder();
         // Languages bat lacks (data/syntaxes, each with its licence).
-        if let Ok(d) = syntect::parsing::SyntaxDefinition::load_from_str(include_str!("../data/syntaxes/PowerShell.sublime-syntax"), true, None) {
-            b.add(d);
+        for src in [
+            include_str!("../data/syntaxes/PowerShell.sublime-syntax"),
+            // Tessera's shell language (.tsh, .tessh, #!…tessh).
+            include_str!("../data/syntaxes/tessh.sublime-syntax"),
+        ] {
+            match syntect::parsing::SyntaxDefinition::load_from_str(src, true, None) {
+                Ok(d) => b.add(d),
+                Err(e) => eprintln!("grove: a syntax didn't load: {e}"),
+            }
         }
         b.build()
     })
@@ -316,7 +323,7 @@ mod tests {
     fn finds_many_languages() {
         let ss = super::syntaxes();
         let mut bad = vec![];
-        for n in ["s.ps1", "RUN.BAT", "Makefile", "CMakeLists.txt", "a.toml", "x.nix", "v.vbs", "a.ts", "a.lua", "a.asm", "a.s", "c.ini", "Dockerfile", "a.qml", "a.kt", "a.swift", "a.zig", "a.dart", "a.ex", "a.hs", "a.vue", "a.svelte", "a.cs", "a.fs", "a.vb", "a.ahk", "a.reg", "a.proto", "a.graphql", "a.glsl", "a.cue", "a.srt", "a.diff", "a.r", "a.jl", "a.nim", "a.tcl", "a.pas", "a.f90", "a.cob", "a.v", "a.vhd", "a.scss", "a.less"] {
+        for n in ["a.tsh", "b.tessh", "s.ps1", "RUN.BAT", "Makefile", "CMakeLists.txt", "a.toml", "x.nix", "v.vbs", "a.ts", "a.lua", "a.asm", "a.s", "c.ini", "Dockerfile", "a.qml", "a.kt", "a.swift", "a.zig", "a.dart", "a.ex", "a.hs", "a.vue", "a.svelte", "a.cs", "a.fs", "a.vb", "a.ahk", "a.reg", "a.proto", "a.graphql", "a.glsl", "a.cue", "a.srt", "a.diff", "a.r", "a.jl", "a.nim", "a.tcl", "a.pas", "a.f90", "a.cob", "a.v", "a.vhd", "a.scss", "a.less"] {
             let got = &super::syntax_for(ss, "", n).name;
             if got == "Plain Text" { bad.push(n) }
         }
@@ -332,6 +339,16 @@ mod tests {
         assert!(a.contains("&lt;"));
         assert_eq!(a.matches('\n').count(), 1);
         assert!(super::is_markdown_name("readme.markdown"));
+    }
+
+    #[test]
+    fn tessh_by_name_and_shebang() {
+        let ss = super::syntaxes();
+        assert_eq!(super::syntax_for(ss, "", "build.tsh").name, "tessh");
+        assert_eq!(super::syntax_for(ss, "", "x.tessh").name, "tessh");
+        assert_eq!(super::syntax_for(ss, "#!/usr/bin/env tessh\nls\n", "run").name, "tessh");
+        let h = super::highlight("name = world\nprint hello $name  # hi\nls -la ~/src | head -3\n", "a.tsh", true);
+        assert!(h.matches("<span").count() > 6, "{h}");
     }
 
     #[test]

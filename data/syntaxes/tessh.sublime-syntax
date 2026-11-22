@@ -1,0 +1,135 @@
+%YAML 1.2
+---
+# tessh: Tessera's shell language (~/src/tessera, docs/TESSH.md). Written
+# for grove from tessera's tree-sitter grammar and highlight queries
+# (tree-sitter-tessh/grammar.js, queries/highlights.scm): the same keywords,
+# strings with $name / $(expr) / ${expr:fmt} interpolation, variables, flags,
+# keyword arguments, symbols, unquotes, shell and infix operators.
+name: tessh
+scope: source.tessh
+version: 2
+file_extensions:
+  - tsh
+  - tessh
+first_line_match: ^#!.*\btessh\b
+
+variables:
+  ident: '[A-Za-z_][A-Za-z0-9_]*'
+  word_end: '(?=[\s()\[\]{}"''`,;]|$)'
+  keywords: (?:def|class|if|elif|else|then|while|for|in|try|except\*?|finally|with|as|match|case|return|yield|await|async|raise|assert|del|pass|break|continue|global|nonlocal|import|from|do|fn|lambda|quote|quasi|defmacro|defop|and|or|not|is)
+
+contexts:
+  main:
+    - match: '#.*$'
+      scope: comment.line.number-sign.tessh
+    # A line's first word is the command or function it runs.
+    - match: '^[ \t]*({{keywords}}){{word_end}}'
+      captures:
+        1: keyword.control.tessh
+    - match: '^[ \t]*(\\[^\s()\[\]{}"''`]+)'
+      captures:
+        1: support.function.builtin.tessh
+    - match: '^[ \t]*((?:True|False|None)){{word_end}}'
+      captures:
+        1: constant.language.tessh
+    - match: '^[ \t]*({{ident}}(?:[.\-][A-Za-z0-9_]+)*)(?![=A-Za-z0-9_]){{word_end}}'
+      captures:
+        1: entity.name.function.tessh variable.function.tessh
+    - include: words
+
+  words:
+    - match: '#.*$'
+      scope: comment.line.number-sign.tessh
+    - include: strings
+    - match: '\$\?'
+      scope: variable.language.tessh
+    - match: '\$~?{{ident}}(?:\.{{ident}})*'
+      scope: variable.other.tessh
+    - match: '~@?\('
+      scope: punctuation.section.embedded.begin.tessh
+    - match: '~@?{{ident}}'
+      scope: variable.other.unquote.tessh
+    - match: ':\('
+      scope: punctuation.section.embedded.begin.tessh
+    - match: ':{{ident}}{{word_end}}'
+      scope: constant.other.symbol.tessh
+    - match: '`[^`\s]+`'
+      scope: keyword.operator.infix.tessh
+    - match: '(?<![\w.])[-+]?(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|(?:[0-9][0-9_]*(?:\.(?:[0-9][0-9_]*)?)?|\.[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)?[jJ]?){{word_end}}'
+      scope: constant.numeric.tessh
+    - match: '(?<![\w/.-])--?[A-Za-z][A-Za-z0-9_-]*(?:=\S*)?'
+      scope: variable.parameter.flag.tessh
+    - match: '(?<![\w/.-]){{ident}}(?==)(?!==)'
+      scope: variable.parameter.keyword.tessh
+    - match: '(?<!\S){{keywords}}{{word_end}}'
+      scope: keyword.control.tessh
+    - match: '(?<!\S)(?:True|False|None){{word_end}}'
+      scope: constant.language.tessh
+    - match: '(?<!\S)(?:2>&1|&&|\|\||>>|[|&<>])(?!\S)'
+      scope: keyword.operator.shell.tessh
+    - match: '(?<!\S)[+\-*/<>=!&|%^@?:][+\-*/<>=!&|%^~@?:.]*(?!\S)'
+      scope: keyword.operator.tessh
+    - match: '[()\[\]{}]'
+      scope: punctuation.section.group.tessh
+    - match: '[,;]'
+      scope: punctuation.separator.tessh
+
+  strings:
+    - match: '[bBrR]{1,2}"""'
+      push:
+        - meta_scope: string.quoted.triple.tessh
+        - match: '"""'
+          pop: true
+    - match: "[bBrR]{0,2}'''"
+      push:
+        - meta_scope: string.quoted.single.triple.tessh
+        - match: "'''"
+          pop: true
+    - match: '"""'
+      push:
+        - meta_scope: string.quoted.triple.tessh
+        - match: '"""'
+          pop: true
+        - include: interpolation
+    - match: '[bBrR]{1,2}"'
+      push:
+        - meta_scope: string.quoted.double.raw.tessh
+        - match: '\\.'
+          scope: constant.character.escape.tessh
+        - match: '"'
+          pop: true
+    - match: '"'
+      push:
+        - meta_scope: string.quoted.double.tessh
+        - match: '"'
+          pop: true
+        - include: interpolation
+    - match: "[bBrR]{0,2}'"
+      push:
+        - meta_scope: string.quoted.single.tessh
+        - match: "'"
+          pop: true
+
+  interpolation:
+    - match: '\\[nt\\"$0-7xuUN]'
+      scope: constant.character.escape.tessh
+    - match: '\$\('
+      scope: punctuation.section.interpolation.begin.tessh
+      push:
+        - clear_scopes: 1
+        - meta_scope: meta.interpolation.tessh
+        - match: '\)'
+          scope: punctuation.section.interpolation.end.tessh
+          pop: true
+        - include: words
+    - match: '\$\{'
+      scope: punctuation.section.interpolation.begin.tessh
+      push:
+        - clear_scopes: 1
+        - meta_scope: meta.interpolation.tessh
+        - match: '\}'
+          scope: punctuation.section.interpolation.end.tessh
+          pop: true
+        - include: words
+    - match: '\$~?{{ident}}(?:\.{{ident}})*'
+      scope: variable.other.tessh

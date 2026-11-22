@@ -21,7 +21,20 @@ fn cache() -> &'static Mutex<HashMap<String, Arc<MimeRec>>> {
     C.get_or_init(Default::default)
 }
 
+/// Types grove knows before the system's MIME database does (it ships
+/// data/mime/*.xml for the system; these cover a fresh dev build).
+fn known_here(name: &str) -> Option<MimeRec> {
+    let l = name.to_ascii_lowercase();
+    if l.ends_with(".tsh") || l.ends_with(".tessh") {
+        return Some(MimeRec { name: "text/x-tessh".into(), icon: "text-x-script".into(), generic: "text-x-script".into(), comment: "tessh script".into() });
+    }
+    None
+}
+
 fn lookup(name: &str, path: &str, deep: bool) -> MimeRec {
+    if let Some(r) = known_here(name) {
+        return r;
+    }
     let s = ffi::grove_mime_info(&QString::from(name), &QString::from(path), deep).to_string();
     let mut it = s.split('\n');
     MimeRec {

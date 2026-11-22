@@ -623,7 +623,7 @@ pub fn kind_of(mimes: &[String], name: &str) -> Kind {
         "rs", "go", "java", "kt", "kts", "scala", "groovy", "gradle", "cs", "fs", "fsx", "vb", "vbs", "bas", "frm", "cls", "swift", "dart",
         "py", "pyw", "pyi", "rb", "pl", "pm", "php", "lua", "tcl", "r", "jl", "nim", "zig", "d", "v", "sv", "vhd", "vhdl", "hs", "lhs",
         "ml", "mli", "elm", "ex", "exs", "erl", "hrl", "clj", "cljs", "lisp", "lsp", "scm", "rkt", "el", "vim", "sql", "graphql", "proto",
-        "sh", "bash", "zsh", "fish", "ksh", "csh", "bat", "cmd", "btm", "ps1", "psm1", "psd1", "ahk", "au3", "asm", "s", "inc", "a51",
+        "sh", "bash", "zsh", "fish", "ksh", "csh", "tsh", "tessh", "bat", "cmd", "btm", "ps1", "psm1", "psd1", "ahk", "au3", "asm", "s", "inc", "a51",
         "nix", "cmake", "mk", "mak", "make", "ninja", "meson", "bazel", "bzl", "dockerfile", "qml", "qrc", "pro", "pri", "ui", "glsl",
         "hlsl", "vert", "frag", "shader", "cg", "diff", "patch", "srt", "ass", "ssa", "vtt", "tex", "sty", "bib", "nfo", "diz", "reg",
         "inf", "desktop", "service", "gitignore", "gitattributes", "editorconfig", "lock", "cue", "m3u", "pls",
