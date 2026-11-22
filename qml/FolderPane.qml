@@ -269,10 +269,10 @@ FocusScope {
         if (archiveLike(it)) { navigate("archive://" + it.path + "#"); return }
         grove.openPaths(JSON.stringify([it.path]))
     }
+    // Anything bsdtar can open (grove's list: zip, tar.*, 7z, rar, iso, cab,
+    // deb/rpm, cbz/cbr, jar/apk...), decided by the model from type and name.
     function archiveLike(it) {
-        const n = (it.name || "").toLowerCase()
-        return [".zip", ".tar", ".tar.gz", ".tgz", ".tar.xz", ".tar.zst", ".tar.bz2", ".7z", ".rar", ".jar"].some(e => n.endsWith(e))
-            && app && app.settings.browse_archives !== false
+        return !!it && !!it.isArchive && app && app.settings.browse_archives !== false
     }
     function openSelected(inNewTab) {
         const sel = selectedPaths()

@@ -16,14 +16,66 @@ pub struct ArchEntry {
     pub mtime_text: String,
 }
 
+/// A lone compressed file (not a tar): "notes.txt.gz" -> "notes.txt". It
+/// browses as a folder holding that one file, decompressed with bsdcat
+/// (libarchive: gzip, xz, bzip2, zstd, lzip, lz4, lzma, compress).
+pub fn single_compressed(name: &str) -> Option<String> {
+    let n = name.to_lowercase();
+    const SUFFIXES: &[&str] = &[".gz", ".xz", ".bz2", ".bz", ".zst", ".zstd", ".lz", ".lzma", ".lz4", ".z"];
+    let suf = SUFFIXES.iter().find(|s| n.ends_with(*s))?;
+    let stem = &name[..name.len() - suf.len()];
+    if stem.is_empty() || stem.to_lowercase().ends_with(".tar") {
+        return None;
+    }
+    Some(stem.to_string())
+}
+
+fn single_of(path: &str) -> Option<String> {
+    Path::new(path).file_name().and_then(|n| single_compressed(&n.to_string_lossy()))
+}
+
+/// Decompress a lone compressed file to `out` with bsdcat.
+fn bsdcat_to(archive: &str, out: &Path) -> Result<(), String> {
+    let file = std::fs::File::create(out).map_err(|e| e.to_string())?;
+    let o = std::process::Command::new("bsdcat")
+        .arg(archive)
+        .stdout(file)
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(|_| "Decompressing needs bsdcat (libarchive), which isn't installed.".to_string())?;
+    if !o.status.success() {
+        let _ = std::fs::remove_file(out);
+        return Err(format!("Couldn't decompress: {}", String::from_utf8_lossy(&o.stderr).trim()));
+    }
+    Ok(())
+}
+
+/// Every container bsdtar (libarchive) can list and extract: zip and its
+/// relatives, tar with any compression, 7z, rar, cab, iso/udf, cpio, ar/deb,
+/// rpm, xar/pkg, lha, warc, comic book archives. Documents that happen to be
+/// zips (EPUB, ODF, OOXML) aren't on the list: they open in their apps.
 pub fn is_archive(mime: &str, name: &str) -> bool {
     let n = name.to_lowercase();
-    matches!(
-        mime,
-        "application/zip" | "application/x-tar" | "application/x-compressed-tar" | "application/x-xz-compressed-tar" | "application/x-zstd-compressed-tar"
-            | "application/x-bzip2-compressed-tar" | "application/x-7z-compressed" | "application/vnd.rar" | "application/x-rar" | "application/x-iso9660-image"
-            | "application/x-cpio" | "application/vnd.debian.binary-package" | "application/x-rpm" | "application/java-archive" | "application/x-archive"
-    ) || [".zip", ".tar", ".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.zst", ".tar.bz2", ".7z", ".rar", ".iso", ".cpio", ".jar"].iter().any(|e| n.ends_with(e))
+    const MIMES: &[&str] = &[
+        "application/zip", "application/x-zip-compressed", "application/x-tar", "application/x-compressed-tar",
+        "application/x-xz-compressed-tar", "application/x-zstd-compressed-tar", "application/x-bzip2-compressed-tar",
+        "application/x-lzma-compressed-tar", "application/x-lzip-compressed-tar", "application/x-lz4-compressed-tar",
+        "application/x-tarz", "application/x-7z-compressed", "application/vnd.rar", "application/x-rar",
+        "application/x-rar-compressed", "application/x-iso9660-image", "application/x-cd-image", "application/x-udf-image",
+        "application/x-cpio", "application/x-cpio-compressed", "application/vnd.debian.binary-package",
+        "application/x-deb", "application/x-rpm", "application/x-source-rpm", "application/java-archive",
+        "application/x-archive", "application/vnd.ms-cab-compressed", "application/x-cabinet", "application/x-xar",
+        "application/x-lha", "application/x-lzh-compressed", "application/x-cbz", "application/vnd.comicbook+zip",
+        "application/x-cbr", "application/vnd.comicbook-rar", "application/x-cb7", "application/x-cbt",
+        "application/x-apple-diskimage", "application/x-ms-wim", "application/x-msi", "application/x-java-archive",
+    ];
+    const EXTS: &[&str] = &[
+        ".zip", ".zipx", ".tar", ".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.zst", ".tzst", ".tar.bz2", ".tbz", ".tbz2",
+        ".tar.lz", ".tar.lzma", ".tlz", ".tar.lz4", ".tar.z", ".taz", ".7z", ".rar", ".iso", ".udf", ".cpio", ".jar",
+        ".war", ".ear", ".apk", ".aar", ".xpi", ".crx", ".whl", ".nupkg", ".vsix", ".deb", ".udeb", ".ipk", ".rpm",
+        ".ar", ".a", ".cab", ".xar", ".pkg", ".lha", ".lzh", ".cbz", ".cbr", ".cb7", ".cbt", ".warc",
+    ];
+    MIMES.contains(&mime) || EXTS.iter().any(|e| n.ends_with(e)) || single_compressed(name).is_some()
 }
 
 /// Parse `bsdtar -tvf` (ls -l style) lines.
@@ -68,6 +120,9 @@ fn nth_field_start(line: &str, n: usize) -> Option<usize> {
 }
 
 pub fn list(path: &str) -> Result<Vec<ArchEntry>, String> {
+    if let Some(inner) = single_of(path) {
+        return Ok(vec![ArchEntry { path: inner, size: 0, is_dir: false, mtime_text: String::new() }]);
+    }
     let o = std::process::Command::new("bsdtar").args(["-tvf", path]).output().map_err(|_| "Archives need bsdtar (libarchive), which isn't installed.".to_string())?;
     if !o.status.success() {
         return Err(format!("This archive can't be read: {}", String::from_utf8_lossy(&o.stderr).trim()));
@@ -122,6 +177,23 @@ pub fn extract_job(qt: CxxQtThread<ffi::Grove>, id: i32, archive: String, dest: 
         let title = format!("Extracting “{}”", a.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
         job_msg(&qt, id, json!({"id": id, "title": title, "state": "running", "indeterminate": true}));
         let dest_dir = if dest.is_empty() { a.parent().unwrap_or(Path::new("/")).to_path_buf() } else { PathBuf::from(&dest) };
+        // A lone compressed file: decompress it next to itself.
+        if let Some(inner) = single_of(&archive) {
+            let mut out = dest_dir.join(&inner);
+            if out.exists() {
+                out = grove_core::ops::unique_name(&out);
+            }
+            match bsdcat_to(&archive, &out) {
+                Ok(()) => {
+                    crate::controller::push_history_any("Extract", grove_core::ops::Action::Exists { paths: vec![out.clone()] });
+                    job_msg(&qt, id, json!({"id": id, "title": title, "state": "done", "results": [out], "dest": dest_dir}));
+                }
+                Err(e) => job_msg(&qt, id, json!({"id": id, "title": title, "state": "failed", "errors": [e]})),
+            }
+            let s = serde_json::to_string(&vec![dest_dir.to_string_lossy()]).unwrap();
+            let _ = qt.queue(move |g| g.folders_touched(QString::from(s.as_str())));
+            return;
+        }
         let entries = match list(&archive) {
             Ok(e) => e,
             Err(e) => return job_msg(&qt, id, json!({"id": id, "title": title, "state": "failed", "errors": [e]})),
@@ -198,6 +270,11 @@ pub fn compress_job(qt: CxxQtThread<ffi::Grove>, id: i32, paths: Vec<PathBuf>, f
 pub fn extract_member(archive: &str, inner: &str) -> Result<PathBuf, String> {
     let dir = grove_core::util::cache_home().join("grove/archives").join(grove_core::thumbs::md5_hex(archive));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    if single_of(archive).is_some() {
+        let out = dir.join(inner);
+        bsdcat_to(archive, &out)?;
+        return Ok(out);
+    }
     let o = std::process::Command::new("bsdtar").arg("-xf").arg(archive).arg("-C").arg(&dir).arg(inner).output().map_err(|e| e.to_string())?;
     if !o.status.success() {
         return Err(format!("Couldn't take “{inner}” out of the archive: {}", String::from_utf8_lossy(&o.stderr).trim()));
@@ -224,5 +301,15 @@ mod tests {
         let implied = parse_listing("-rw-r--r--  0 a b 1 Jan 1 2020 x/y/z.txt\n");
         assert_eq!(children(&implied, "")[0].path, "x");
         assert!(children(&implied, "x")[0].is_dir);
+    }
+    #[test]
+    fn lone_compressed_files() {
+        assert_eq!(single_compressed("notes.txt.gz").as_deref(), Some("notes.txt"));
+        assert_eq!(single_compressed("dump.sql.zst").as_deref(), Some("dump.sql"));
+        assert_eq!(single_compressed("x.tar.gz"), None);
+        assert_eq!(single_compressed("readme.md"), None);
+        assert!(is_archive("application/gzip", "log.1.gz"));
+        assert!(is_archive("application/x-7z-compressed", "a.7z"));
+        assert!(!is_archive("application/epub+zip", "book.epub"));
     }
 }

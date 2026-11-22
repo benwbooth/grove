@@ -1078,6 +1078,7 @@ impl qobject::FolderModel {
             "tagColors": b.tags.iter().map(|t| grove_core::tags::color_of(t).unwrap_or("")).collect::<Vec<_>>().join(","),
             "tagText": b.tags.join(", "), "sizeText": if b.e.is_dir { "--".to_string() } else { grove_core::util::human_size(b.e.size) },
             "row": row, "dims": self.media_of(&b, false).dims,
+            "isArchive": !b.e.is_dir && crate::archive::is_archive(&b.mime.name, &b.e.name),
             "duration": crate::media::cached(&b.e.path, b.e.mtime).map(|m| m.duration).unwrap_or_default(),
         });
         qs(&v.to_string())
