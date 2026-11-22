@@ -17,7 +17,12 @@ Item {
     Settings { id: prefs; category: "viewer"; property bool wrapText: false; property bool markdownSource: false; property bool wrapMarkdown: true; property real textZoom: 1 }
     readonly property bool rendered: mode === "markdown" && !prefs.markdownSource
     readonly property string shownMode: mode === "markdown" && prefs.markdownSource ? "code" : mode
-    readonly property bool wrap: rendered ? prefs.wrapMarkdown : prefs.wrapText
+    // Office documents read as a page: white paper at letter width, margins.
+    readonly property bool paper: mode === "office"
+    readonly property real paperW: Math.max(240, Math.min(list.width - 32, 816 * prefs.textZoom))
+    readonly property real paperX: Math.max(16, (list.width - paperW) / 2)
+    readonly property real paperPad: Math.min(72, paperW * 0.09)
+    readonly property bool wrap: paper || (rendered ? prefs.wrapMarkdown : prefs.wrapText)
     readonly property alias lines: doc.lines
     readonly property alias loading: doc.loading
     readonly property real charWidth: fm.averageCharacterWidth
@@ -62,6 +67,23 @@ Item {
         delegate: TextEdit {
             id: block
             required property var model
+            required property int index
+            readonly property bool firstBlock: index === 0
+            readonly property bool lastBlock: index === list.count - 1 && !doc.loading
+            // The page behind the text (office documents).
+            Rectangle {
+                visible: dv.paper
+                z: -1
+                x: dv.paperX
+                y: block.firstBlock ? 16 : 0
+                width: dv.paperW
+                height: block.height - (block.firstBlock ? 16 : 0) - (block.lastBlock ? 24 : 0)
+                color: "white"
+                Rectangle { visible: block.firstBlock; width: parent.width; height: 1; color: Qt.rgba(0, 0, 0, 0.18) }
+                Rectangle { visible: block.lastBlock; anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Qt.rgba(0, 0, 0, 0.18) }
+                Rectangle { x: -1; width: 1; height: parent.height; color: Qt.rgba(0, 0, 0, 0.25) }
+                Rectangle { x: parent.width; width: 1; height: parent.height; color: Qt.rgba(0, 0, 0, 0.25) }
+            }
             // Coloured code is <pre> HTML, which never wraps: pre-wrap does.
             text: dv.wrap && block.model.rich && dv.shownMode === "code" ? block.model.text.replace('<pre style="margin:0">', '<pre style="margin:0; white-space:pre-wrap">') : block.model.text
             width: dv.wrap ? list.width : list.contentWidth
@@ -71,15 +93,17 @@ Item {
             wrapMode: dv.wrap ? TextEdit.Wrap : TextEdit.NoWrap
             onImplicitWidthChanged: if (!dv.wrap && implicitWidth > dv.widest) dv.widest = implicitWidth
             // Pictures in Markdown next to the file.
-            baseUrl: dv.mode === "markdown" ? "file://" + dv.path.substring(0, dv.path.lastIndexOf("/") + 1) : ""
+            baseUrl: dv.mode === "markdown" ? "file://" + dv.path.substring(0, dv.path.lastIndexOf("/") + 1) : dv.paper ? "file:///" : ""
             font.family: dv.shownMode === "code" ? Theme.mono : Theme.family
             font.pixelSize: (dv.shownMode === "code" ? Theme.body * 0.95 : Theme.body) * prefs.textZoom
             renderType: Text.NativeRendering
-            color: Theme.fg
+            color: dv.paper ? "#1d1d1f" : Theme.fg
             selectionColor: Theme.accent
             selectedTextColor: Theme.accentText
-            leftPadding: dv.shownMode === "code" ? 12 : 24
-            rightPadding: dv.shownMode === "code" ? 12 : 24
+            leftPadding: dv.paper ? dv.paperX + dv.paperPad : dv.shownMode === "code" ? 12 : 24
+            rightPadding: dv.paper ? list.width - dv.paperX - dv.paperW + dv.paperPad : dv.shownMode === "code" ? 12 : 24
+            topPadding: dv.paper && firstBlock ? 16 + dv.paperPad : 0
+            bottomPadding: dv.paper && lastBlock ? 24 + dv.paperPad : 0
             onLinkActivated: (link) => Qt.openUrlExternally(link)
             HoverHandler { cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.IBeamCursor }
         }
@@ -97,7 +121,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             x: 12
             width: parent.width - tools.width - 30
-            text: doc.lines > 0 ? doc.lines.toLocaleString(Qt.locale(), "f", 0) + (doc.lines === 1 ? " line" : " lines") + (doc.loading ? " so far…" : "") : ""
+            text: dv.paper ? "" : doc.lines > 0 ? doc.lines.toLocaleString(Qt.locale(), "f", 0) + (doc.lines === 1 ? " line" : " lines") + (doc.loading ? " so far…" : "") : ""
             color: Theme.fgSecondary
             font.pixelSize: Theme.small
         }
@@ -123,9 +147,10 @@ Item {
                 onClicked: prefs.textZoom = Math.max(0.6, Math.round((prefs.textZoom - 0.1) * 10) / 10) }
             GButton { iconName: "zoom-in"; iconSize: 16; enabled: prefs.textZoom < 2.5; tip: "Larger text"; anchors.verticalCenter: parent.verticalCenter
                 onClicked: prefs.textZoom = Math.min(2.5, Math.round((prefs.textZoom + 0.1) * 10) / 10) }
-            Rectangle { width: 1; height: 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
+            Rectangle { visible: !dv.paper; width: 1; height: 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
             GButton {
                 id: wrapBtn
+                visible: !dv.paper
                 checked: dv.wrap
                 WrapGlyph { anchors.centerIn: parent; size: 16; color: wrapBtn.enabled ? wrapBtn.tint : Theme.fgDisabled }
                 anchors.verticalCenter: parent.verticalCenter

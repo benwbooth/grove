@@ -190,6 +190,26 @@ impl qobject::TextDoc {
                     let b = Batch(blocks);
                     let _ = qt.queue(move |m| m.add_blocks(gen, b, lines, cols, done, err));
                 };
+                // Word/OpenDocument/RTF/PowerPoint: formatted (headings, bold,
+                // lists, tables, pictures) through pandoc, drawn as a page.
+                if mode == "office" {
+                    if let Some(blocks) = office_html(&p, &cancel) {
+                        if cancel.load(Ordering::Relaxed) {
+                            return;
+                        }
+                        let n = blocks.len();
+                        let mut first = true;
+                        let mut batch = vec![];
+                        for b in blocks {
+                            batch.push(Block { text: qs(&b), rich: true });
+                            if first || batch.len() >= 30 {
+                                first = false;
+                                send(std::mem::take(&mut batch), n, 0, false, None);
+                            }
+                        }
+                        return send(batch, n, 0, true, None);
+                    }
+                }
                 let text = match read_text(&p, &mode, &cancel) {
                     Ok(t) => t,
                     Err(e) => return send(vec![], 0, 0, true, Some(e)),
@@ -313,6 +333,63 @@ impl qobject::TextDoc {
 }
 
 /// The file's text (an office document's text for "office").
+/// An office document as HTML blocks (pandoc), pictures taken out to the
+/// cache. None when pandoc isn't there or can't read the format (.doc, .xls).
+fn office_html(p: &str, cancel: &AtomicBool) -> Option<Vec<String>> {
+    let lower = p.to_lowercase();
+    let from = ["docx", "odt", "rtf", "pptx", "docm", "dotx"].into_iter().find(|e| lower.ends_with(&format!(".{e}")))?;
+    let from = match from { "docm" | "dotx" => "docx", f => f };
+    let meta = std::fs::metadata(p).ok()?;
+    let key = format!("{p}|{}|{}", meta.len(), std::os::unix::fs::MetadataExt::mtime(&meta));
+    let media = grove_core::util::cache_home().join("grove/office-media").join(grove_core::thumbs::md5_hex(&key));
+    let out = std::process::Command::new("pandoc")
+        .args(["-f", from, "-t", "html5", "--wrap=none"])
+        .arg(format!("--extract-media={}", media.display()))
+        .arg(p)
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() || cancel.load(Ordering::Relaxed) {
+        return None;
+    }
+    let html = String::from_utf8_lossy(&out.stdout);
+    if html.trim().is_empty() {
+        return None;
+    }
+    // Tables get thin rules (Qt's rich text draws none by default).
+    let html = html.replace("<table>", "<table border=\"1\" cellspacing=\"0\" cellpadding=\"5\" style=\"border-color:#c8c8c8; margin-top:6px; margin-bottom:6px\">");
+    Some(html_blocks(&html))
+}
+
+/// Pandoc's HTML cut into blocks between its top-level elements (never
+/// inside a table or a list), so long documents lay out a part at a time.
+fn html_blocks(html: &str) -> Vec<String> {
+    let mut out = vec![];
+    let mut cur = String::new();
+    let mut depth: i32 = 0;
+    let mut pieces = 0;
+    for line in html.lines() {
+        let l = line.trim_start();
+        let opens = ["<table", "<ul", "<ol", "<dl", "<blockquote", "<div", "<figure"].iter().map(|t| l.matches(t).count() as i32).sum::<i32>();
+        let closes = ["</table", "</ul", "</ol", "</dl", "</blockquote", "</div", "</figure"].iter().map(|t| l.matches(t).count() as i32).sum::<i32>();
+        if depth == 0 && pieces >= 12 && (l.starts_with("<h") || l.starts_with("<p")) {
+            out.push(std::mem::take(&mut cur));
+            pieces = 0;
+        }
+        cur.push_str(line);
+        cur.push('\n');
+        depth = (depth + opens - closes).max(0);
+        if depth == 0 {
+            pieces += 1;
+        }
+    }
+    if !cur.trim().is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
 fn read_text(p: &str, mode: &str, cancel: &AtomicBool) -> Result<String, String> {
     use std::io::Read;
     let path = std::path::Path::new(p);
