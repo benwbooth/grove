@@ -289,6 +289,7 @@ Item {
             required property bool hidden
             required property string sizeText
             required property string dims
+            required property string badge
             width: grid.cellWidth
             height: grid.cellHeight
             IconCell {
@@ -298,6 +299,7 @@ Item {
                 selected: gd.selected; iconName: gd.iconName; thumb: gd.thumb; mtime: gd.mtime
                 tags: gd.tags; tagColors: gd.tagColors; git: gd.git; cut: gd.cut; hidden: gd.hidden
                 info: gd.isDir ? "" : (gd.dims !== "" ? gd.dims : gd.sizeText)
+                badge: gd.badge
             }
         }
     }

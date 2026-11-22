@@ -837,7 +837,20 @@ impl ffi::Grove {
 
     pub fn preview(&self, key: &QString, path: &QString, dark: bool) {
         let p = path.to_string();
-        self.answer(key, move || crate::preview::preview(&p, dark));
+        self.answer(key, move || {
+            let t = std::time::Instant::now();
+            let v = crate::preview::preview(&p, dark);
+            if std::env::var_os("GROVE_THUMB_LOG").is_some() {
+                eprintln!("grove quick look {} ms {}", t.elapsed().as_millis(), p);
+            }
+            v
+        });
+    }
+
+    pub fn office_pdf(&self, key: &QString, path: &QString) {
+        let p = path.to_string();
+        // One lane: LibreOffice converts one document at a time anyway.
+        self.answer_on("office", key, move || crate::preview::office_pdf(&p));
     }
 
     pub fn add_recent(&self, path: &QString) {

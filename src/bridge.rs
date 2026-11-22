@@ -203,6 +203,9 @@ pub mod ffi {
         fn complete_path(self: &Grove, key: &QString, text: &QString);
         #[qinvokable]
         fn preview(self: &Grove, key: &QString, path: &QString, dark: bool);
+        /// An office document converted to PDF (LibreOffice): {kind: "pdf", ...} or {error}.
+        #[qinvokable]
+        fn office_pdf(self: &Grove, key: &QString, path: &QString);
         #[qinvokable]
         fn add_recent(self: &Grove, path: &QString);
         #[qinvokable]

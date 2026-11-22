@@ -449,6 +449,9 @@ protected:
             startOn(inProcess ? pools().make : pools().tools);
             return true;
         }
+        // Test hook: slow every preview down (to see the spinners).
+        static const int testDelay = qEnvironmentVariableIntValue("GROVE_THUMB_DELAY");
+        for (int t = 0; t < testDelay && !m_cancelled; t += 20) QThread::msleep(20);
         make(px, rp);
         if (!m_img.isNull()) return false;
         if (!m_cancelled) grove_thumb_mark_failed(rp);

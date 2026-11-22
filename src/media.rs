@@ -14,6 +14,8 @@ pub struct Media {
     pub dims: String,
     pub duration: String,
     pub seconds: f64,
+    /// Archives: "12 items".
+    pub items: String,
 }
 
 struct Req {
@@ -36,7 +38,12 @@ fn pending() -> &'static Mutex<HashSet<String>> {
 
 /// Which files have something to read.
 pub fn wants(mime: &str, path: &str) -> bool {
-    path.starts_with('/') && (mime.starts_with("image/") || mime.starts_with("video/") || mime.starts_with("audio/"))
+    path.starts_with('/') && (mime.starts_with("image/") || mime.starts_with("video/") || mime.starts_with("audio/") || is_archive(mime, path))
+}
+
+fn is_archive(mime: &str, path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or("");
+    crate::archive::is_archive(mime, name)
 }
 
 pub fn cached(path: &str, mtime: i64) -> Option<Media> {
@@ -86,6 +93,18 @@ fn worker(rx: mpsc::Receiver<Req>) {
 
 pub fn read(path: &str, mime: &str) -> Media {
     let mut m = Media::default();
+    if is_archive(mime, path) {
+        // Compressed tarballs have no index: only count the smaller ones.
+        let size = std::fs::metadata(path).map(|x| x.len()).unwrap_or(0);
+        let indexed = mime == "application/zip" || mime == "application/x-7z-compressed" || mime == "application/java-archive" || path.to_lowercase().ends_with(".zip");
+        if indexed || size < 256 * 1024 * 1024 {
+            let names = grove_core::previews::archive_names(std::path::Path::new(path), &std::sync::atomic::AtomicBool::new(false));
+            if !names.is_empty() {
+                m.items = if names.len() == 1 { "1 item".into() } else { format!("{} items", names.len()) };
+            }
+        }
+        return m;
+    }
     if mime.starts_with("image/") {
         if let Ok(s) = imagesize::size(path) {
             m.dims = format!("{} × {}", s.width, s.height);

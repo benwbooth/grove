@@ -24,6 +24,8 @@ Item {
     property bool cut: false
     property bool hidden: false
     property string info: ""
+    // A video's length or an archive's item count, on the icon.
+    property string badge: ""
     readonly property bool renaming: pane.renamingRow === index
     readonly property bool atRight: grid.labelRight
     readonly property int icon: grid.icon
@@ -61,6 +63,35 @@ Item {
         sourceSize.height: Math.ceil(cell.icon * Screen.devicePixelRatio)
         source: cell.thumb && cell.grid.thumbs && cell.icon >= 32 ? "image://thumb/" + encodeURIComponent(cell.path) + "?m=" + cell.mtime : ""
         opacity: cell.cut || cell.hidden ? 0.5 : 1
+    }
+    // Still being made: a small spinner in the corner (the icon stands in).
+    PreviewSpinner {
+        image: th
+        size: Math.max(10, Math.round(cell.icon * 0.2))
+        x: iconBg.x + iconBg.width - width - 7
+        y: iconBg.y + iconBg.height - height - 6
+        z: 2
+    }
+    Rectangle {
+        id: badgeBox
+        visible: cell.badge !== "" && cell.icon >= 48
+        z: 2
+        readonly property real imgW: th.status === Image.Ready ? Math.min(th.paintedWidth, cell.icon) : cell.icon * 0.8
+        readonly property real imgH: th.status === Image.Ready ? Math.min(th.paintedHeight, cell.icon) : cell.icon * 0.8
+        x: Math.round(iconBg.x + (iconBg.width + imgW) / 2 - width - 3)
+        y: Math.round(iconBg.y + (iconBg.height + imgH) / 2 - height - 3)
+        width: badgeText.implicitWidth + 8
+        height: badgeText.implicitHeight + 2
+        radius: height / 2
+        color: Qt.rgba(0, 0, 0, 0.62)
+        GLabel {
+            id: badgeText
+            anchors.centerIn: parent
+            text: cell.badge
+            color: "white"
+            font.pixelSize: Math.max(9, Math.round(cell.grid.textPx * 0.8))
+            font.weight: Font.DemiBold
+        }
     }
     // Alias arrow.
     Rectangle {

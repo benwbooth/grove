@@ -59,6 +59,7 @@ Item {
             sourceSize.height: Math.ceil(Math.min(1024, stage.height) * Screen.devicePixelRatio)
             source: root.current && root.current.thumb ? "image://thumb/" + encodeURIComponent(root.current.path) + "?m=" + root.current.mtime : ""
         }
+        PreviewSpinner { image: big; size: 22; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 18 }
         MouseArea {
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton
@@ -119,6 +120,7 @@ Item {
                 sourceSize.height: Math.ceil(height * Screen.devicePixelRatio)
                 source: t.thumb ? "image://thumb/" + encodeURIComponent(t.path) + "?m=" + t.mtime : ""
             }
+            PreviewSpinner { image: th; size: 12; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 6 }
             ItemMouse { anchors.fill: parent; pane: root.pane; row: t.index; iconUrl: Theme.iconUrl(t.iconName) }
             FolderDrop { anchors.fill: parent; pane: root.pane; path: t.path; enabledFor: t.isDir }
             GTip { visible: false; text: t.name }

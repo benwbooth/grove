@@ -17,6 +17,9 @@ Window {
     property var pv: ({})
     // Editing: "" (viewing), "markup" (pictures), "trim" (video and audio).
     property string editing: ""
+    // An office document's pages are being made (LibreOffice).
+    property bool converting: false
+    readonly property string thumbSrc: item && item.path && item.path.indexOf("/") === 0 ? "image://thumb/" + encodeURIComponent(item.path) + "?m=" + (item.mtime || 0) : ""
     property bool saving: false
     // Test hook: a few marks, as if drawn.
     function markupDemo() {
@@ -55,11 +58,25 @@ Window {
     function showItem(it) {
         if (editing !== "") stopEditing()
         item = it
+        converting = false
         pv = { kind: "loading" }
         player.stop()
         const p = it.path
         if (p.indexOf("/") !== 0) { pv = { kind: "other" }; return }
-        Async.call(app.grove, k => app.grove.preview(k, p, Theme.dark), r => { if (ql.item && ql.item.path === p) ql.pv = r })
+        Async.call(app.grove, k => app.grove.preview(k, p, Theme.dark), r => {
+            if (!ql.item || ql.item.path !== p) return
+            ql.pv = r
+            // Office documents: their text at once, then the real pages
+            // once LibreOffice has made a PDF (seconds; cached after).
+            if (r.kind === "office" && r.canConvert) {
+                ql.converting = true
+                Async.call(app.grove, k => app.grove.officePdf(k, p), d => {
+                    if (!ql.item || ql.item.path !== p) return
+                    ql.converting = false
+                    if (d.kind === "pdf" && d.paged) ql.pv = Object.assign({}, d, { kindText: r.kindText, sizeText: r.sizeText, office: true })
+                })
+            }
+        })
         if (!visible) { show(); raise(); requestActivate() }
     }
     onVisibleChanged: if (!visible) { player.stop(); if (pane) pane.forceActiveFocus() }
@@ -74,7 +91,11 @@ Window {
                 else if (e.key === Qt.Key_Z && (e.modifiers & Qt.ControlModifier)) { markup.undo(); e.accepted = true }
                 return
             }
-            if (e.key === Qt.Key_Space || e.key === Qt.Key_Escape) { ql.close(); e.accepted = true }
+            if (pdfLoader.item && pdfLoader.item.next && (e.key === Qt.Key_PageDown || e.key === Qt.Key_PageUp)) {
+                if (e.key === Qt.Key_PageDown) pdfLoader.item.next(); else pdfLoader.item.prev()
+                e.accepted = true
+            }
+            else if (e.key === Qt.Key_Space || e.key === Qt.Key_Escape) { ql.close(); e.accepted = true }
             else if (e.key === Qt.Key_Right || e.key === Qt.Key_Down) { ql.pane.step(1, false); e.accepted = true }
             else if (e.key === Qt.Key_Left || e.key === Qt.Key_Up) { ql.pane.step(-1, false); e.accepted = true }
             else if (e.key === Qt.Key_Return) { ql.pane.openSelected(false); ql.close(); e.accepted = true }
@@ -239,7 +260,21 @@ Window {
                     onSourceChanged: if (source != "") play()
                 }
                 VideoOutput { id: video; anchors.fill: parent; anchors.bottomMargin: ql.editing === "trim" ? 80 : 44; visible: !!ql.pv.video }
-                GIcon { anchors.centerIn: parent; size: 128; name: ql.item ? ql.item.icon : ""; visible: !ql.pv.video }
+                // Recordings: their cover art (or waveform), else the icon.
+                Image {
+                    id: cover
+                    visible: !ql.pv.video && status === Image.Ready
+                    anchors.centerIn: parent
+                    anchors.verticalCenterOffset: -22
+                    width: Math.min(parent.width - 40, parent.height - 100, 420)
+                    height: width
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    sourceSize.width: 512; sourceSize.height: 512
+                    source: ql.pv.kind === "media" && !ql.pv.video ? ql.thumbSrc : ""
+                }
+                PreviewSpinner { visible: shown && !ql.pv.video; image: cover; size: 22; anchors.centerIn: parent }
+                GIcon { anchors.centerIn: parent; size: 128; name: ql.item ? ql.item.icon : ""; visible: !ql.pv.video && cover.status !== Image.Ready && cover.status !== Image.Loading }
                 // Trim: the part to keep, between the two handles.
                 Column {
                     visible: ql.editing === "trim"
@@ -311,11 +346,116 @@ Window {
                 }
             }
 
+            // PDFs (and office documents LibreOffice turned into PDFs):
+            // pages drawn by pdftoppm; QtPdf's own view without it.
             Loader {
+                id: pdfLoader
                 anchors.fill: parent
                 active: ql.pv.kind === "pdf"
-                sourceComponent: PdfMultiPageView {
-                    document: PdfDocument { source: "file://" + encodeURI(ql.item.path).replace(/#/g, "%23") }
+                // (Never QtPdf by accident while switching: its first use
+                // reads every system font, seconds on the UI thread.)
+                sourceComponent: ql.pv.kind !== "pdf" ? null : ql.pv.paged ? pagedPdf : qtPdf
+            }
+            Component {
+                id: pagedPdf
+                PdfPages { src: ql.pv.src || ""; pages: ql.pv.pages || 0; sizes: ql.pv.sizes || []; mtime: ql.item ? ql.item.mtime || 0 : 0 }
+            }
+            Component {
+                id: qtPdf
+                PdfMultiPageView {
+                    document: PdfDocument { source: "file://" + encodeURI(ql.pv.src || ql.item.path).replace(/#/g, "%23") }
+                }
+            }
+
+            // Pictures Qt can't read, book and comic covers, 3D models:
+            // a big thumbnail.
+            Item {
+                anchors.fill: parent
+                visible: ql.pv.kind === "thumb"
+                Image {
+                    id: bigThumb
+                    anchors.fill: parent
+                    anchors.bottomMargin: ql.pv.pages ? 30 : 0
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    smooth: true
+                    sourceSize.width: 1024; sourceSize.height: 1024
+                    source: ql.pv.kind === "thumb" ? ql.thumbSrc : ""
+                }
+                PreviewSpinner { image: bigThumb; size: 24; anchors.centerIn: parent }
+                GLabel {
+                    visible: !!ql.pv.pages
+                    anchors.bottom: parent.bottom
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: ql.pv.pages + " pages"
+                    color: Theme.fgSecondary
+                }
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 10
+                    visible: bigThumb.status === Image.Error
+                    GIcon { anchors.horizontalCenter: parent.horizontalCenter; size: 160; name: ql.item ? ql.item.icon : "" }
+                    GLabel { anchors.horizontalCenter: parent.horizontalCenter; text: "No preview of this file"; color: Theme.fgSecondary }
+                }
+            }
+
+            // Fonts: a specimen.
+            Image {
+                id: specimen
+                anchors.fill: parent
+                visible: ql.pv.kind === "font"
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                smooth: true
+                sourceSize.width: Math.ceil(Math.min(body.width, 1600) * Screen.devicePixelRatio / 200) * 200
+                source: ql.pv.kind === "font" ? "image://specimen/" + encodeURIComponent(ql.item.path) + "?m=" + (ql.item.mtime || 0) : ""
+            }
+            PreviewSpinner { image: specimen; size: 24; anchors.centerIn: parent }
+
+            // Office documents: their text (or embedded preview) while
+            // LibreOffice makes the pages, or for good without it.
+            Item {
+                anchors.fill: parent
+                visible: ql.pv.kind === "office"
+                Row {
+                    id: convRow
+                    visible: ql.converting
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+                    height: visible ? 28 : 0
+                    PreviewSpinner { pending: ql.converting; delay: 0; size: 14; backdrop: false; anchors.verticalCenter: parent.verticalCenter }
+                    GLabel { text: "Making a preview of the pages with LibreOffice…"; color: Theme.fgSecondary; anchors.verticalCenter: parent.verticalCenter }
+                }
+                KineticWheel { flickable: officeView.contentItem; visible: officeView.visible }
+                ScrollView {
+                    id: officeView
+                    anchors.fill: parent
+                    anchors.topMargin: convRow.height
+                    visible: !!ql.pv.text
+                    ScrollBar.vertical: GScrollBar { parent: officeView; x: officeView.width - width; y: officeView.topPadding; height: officeView.availableHeight }
+                    TextEdit {
+                        width: officeView.width - 24
+                        readOnly: true
+                        selectByMouse: true
+                        textFormat: TextEdit.PlainText
+                        wrapMode: TextEdit.Wrap
+                        text: ql.pv.kind === "office" ? (ql.pv.text || "") : ""
+                        font.family: Theme.family
+                        font.pixelSize: Theme.body
+                        renderType: Text.NativeRendering
+                        color: Theme.fg
+                        selectionColor: Theme.accent
+                        padding: 16
+                    }
+                }
+                Image {
+                    anchors.fill: parent
+                    anchors.topMargin: convRow.height
+                    visible: !ql.pv.text
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    sourceSize.width: 1024; sourceSize.height: 1024
+                    source: ql.pv.kind === "office" && !ql.pv.text ? ql.thumbSrc : ""
                 }
             }
 

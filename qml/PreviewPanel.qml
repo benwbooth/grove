@@ -51,6 +51,7 @@ Item {
                 sourceSize.height: Math.ceil(p.big * Screen.devicePixelRatio)
                 source: p.item && p.item.thumb ? "image://thumb/" + encodeURIComponent(p.item.path) + "?m=" + p.item.mtime : ""
             }
+            PreviewSpinner { image: th; size: 18; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 6 }
         }
         GLabel {
             visible: !p.compact

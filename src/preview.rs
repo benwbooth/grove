@@ -135,30 +135,37 @@ pub fn preview(path: &str, dark: bool) -> Value {
         }
         v
     };
-    if m.name.starts_with("image/") {
-        if crate::bridge::ffi::grove_can_read_image(&crate::bridge::ffi::QString::from(path)) {
-            return with(json!({"kind": "image", "src": path}));
-        }
-        // HEIC/AVIF/RAW...: a big thumbnail from the system's thumbnailers.
-        if let Some(t) = grove_core::thumbs::lookup(p, 1024) {
-            return with(json!({"kind": "image", "src": t}));
-        }
-        let mimes = parents.clone();
-        if let Some(th) = grove_core::thumbs::find_thumbnailer(grove_core::thumbs::thumbnailers(), &mimes) {
-            let c = std::sync::atomic::AtomicBool::new(false);
-            if let Some(t) = grove_core::thumbs::generate_external(th, p, 1024, &m.name, &c) {
-                return with(json!({"kind": "image", "src": t}));
+    use grove_core::previews::{self, Kind};
+    let never = std::sync::atomic::AtomicBool::new(false);
+    match previews::kind_of(&parents, &name) {
+        Kind::Picture => {
+            if crate::bridge::ffi::grove_can_read_image(&crate::bridge::ffi::QString::from(path)) {
+                return with(json!({"kind": "image", "src": path}));
             }
+            // HEIC/AVIF/RAW/PSD...: a big thumbnail (system thumbnailers,
+            // vips or ImageMagick), made by the thumbnail provider.
+            return with(json!({"kind": "thumb"}));
         }
-        return with(json!({"kind": "other", "note": "grove can't show this kind of picture. Installing libheif or a RAW thumbnailer adds support."}));
-    }
-    if m.name.starts_with("video/") || m.name.starts_with("audio/") {
-        // The length (for trimming before the player knows it).
-        let secs = crate::media::probe(path).map(|x| x.2).unwrap_or(0.0);
-        return with(json!({"kind": "media", "video": m.name.starts_with("video/"), "seconds": secs}));
-    }
-    if m.name == "application/pdf" {
-        return with(json!({"kind": "pdf"}));
+        Kind::Video | Kind::Audio => {
+            // The length (for trimming before the player knows it).
+            let secs = crate::media::probe(path).map(|x| x.2).unwrap_or(0.0);
+            return with(json!({"kind": "media", "video": m.name.starts_with("video/"), "seconds": secs}));
+        }
+        Kind::Pdf => return with(pdf_json(p, &never)),
+        Kind::Epub | Kind::Comic | Kind::Model => {
+            let count = if previews::kind_of(&parents, &name) == Kind::Comic {
+                previews::archive_names(p, &never).iter().filter(|n| previews::is_picture_name(n)).count()
+            } else {
+                0
+            };
+            return with(json!({"kind": "thumb", "pages": count}));
+        }
+        Kind::Font => return with(json!({"kind": "font"})),
+        Kind::Office => {
+            let text = previews::office_text(p, 200_000, &never).unwrap_or_default();
+            return with(json!({"kind": "office", "text": text, "canConvert": previews::has_libreoffice()}));
+        }
+        _ => {}
     }
     if crate::archive::is_archive(&m.name, &name) {
         let entries = crate::archive::list(path).unwrap_or_default();
@@ -178,6 +185,28 @@ pub fn preview(path: &str, dark: bool) -> Value {
         }
     }
     with(json!({"kind": "other"}))
+}
+
+/// A PDF for Quick Look's page view: page count and sizes (or, without
+/// pdftoppm/pdfinfo, QtPdf's own view).
+pub fn pdf_json(p: &Path, cancel: &std::sync::atomic::AtomicBool) -> Value {
+    use grove_core::previews;
+    if previews::can_draw_pdf() {
+        if let Some(info) = previews::pdf_info(p, 3000, cancel) {
+            let sizes: Vec<Value> = info.sizes.iter().map(|(w, h)| json!([w, h])).collect();
+            return json!({"kind": "pdf", "paged": true, "src": p, "pages": info.pages, "sizes": sizes, "title": info.title});
+        }
+    }
+    json!({"kind": "pdf", "paged": false, "src": p})
+}
+
+/// An office document as a PDF (LibreOffice), for Quick Look.
+pub fn office_pdf(path: &str) -> Value {
+    let never = std::sync::atomic::AtomicBool::new(false);
+    match grove_core::previews::office_pdf(Path::new(path), &never) {
+        Some(pdf) => pdf_json(&pdf, &never),
+        None => json!({"error": "LibreOffice couldn't convert it"}),
+    }
 }
 
 #[cfg(test)]

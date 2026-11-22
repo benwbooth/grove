@@ -278,6 +278,7 @@ const ROLES: &[&str] = &[
     "name", "path", "isDir", "isLink", "size", "sizeText", "mtime", "dateText", "kind", "mime", "iconName", "hidden", "selected", "depth",
     "expanded", "tags", "tagColors", "note", "git", "cut", "thumb", "row", "broken", "ext", "created", "createdText",
     "rating", "addedText", "openedText", "permissions", "owner", "group", "fullPath", "section", "dims", "duration",
+    "badge",
 ];
 
 fn qs(s: &str) -> QString {
@@ -438,6 +439,11 @@ impl qobject::FolderModel {
             "ext" => QVariant::from(&qs(it.e.ext())),
             "dims" => QVariant::from(&qs(&self.media_of(&it, false).dims)),
             "duration" => QVariant::from(&qs(&self.media_of(&it, true).duration)),
+            // On the icon: a video's or recording's length, an archive's item count.
+            "badge" => {
+                let m = self.media_of(&it, true);
+                QVariant::from(&qs(if m.items.is_empty() { &m.duration } else { &m.items }))
+            }
             _ => QVariant::default(),
         }
     }

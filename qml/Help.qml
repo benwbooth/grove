@@ -91,6 +91,7 @@ QtObject {
         { id: "customizetoolbar", group: "Other", action: "Customize Toolbar…", defaults: [], fixed: "", note: "Finder: right-click the toolbar" },
         { id: "burn", group: "Other", action: "Burn to Disc…", defaults: [], fixed: "", note: "Finder: File › Burn to Disc" },
         { id: "markup", group: "View", action: "Markup (in Quick Look)", defaults: [], fixed: "", note: "Finder: pen, highlighter, shapes, text, crop, rotate" },
+        { id: "qlpages", group: "View", action: "Previous / next page (PDFs in Quick Look)", defaults: [], fixed: "Page Up / Page Down", note: "Preview: the page counter's arrows do the same" },
         { id: "help", group: "Other", action: "Help and shortcuts", defaults: ["F1", "Ctrl+?", "Ctrl+Shift+/"], fixed: "", note: "Dolphin: F1  ·  Finder: ⇧⌘?" }
     ]
 
