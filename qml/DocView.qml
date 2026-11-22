@@ -14,10 +14,10 @@ Item {
     property bool active: false
     // Viewing choices, remembered: soft wrap for text and code, and
     // Markdown as its coloured source instead of the rendered page.
-    Settings { id: prefs; category: "viewer"; property bool wrapText: false; property bool markdownSource: false }
+    Settings { id: prefs; category: "viewer"; property bool wrapText: false; property bool markdownSource: false; property bool wrapMarkdown: true }
     readonly property bool rendered: mode === "markdown" && !prefs.markdownSource
     readonly property string shownMode: mode === "markdown" && prefs.markdownSource ? "code" : mode
-    readonly property bool wrap: rendered || prefs.wrapText
+    readonly property bool wrap: rendered ? prefs.wrapMarkdown : prefs.wrapText
     readonly property alias lines: doc.lines
     readonly property alias loading: doc.loading
     readonly property real charWidth: fm.averageCharacterWidth
@@ -38,11 +38,12 @@ Item {
     FontMetrics { id: fm; font.family: Theme.mono; font.pixelSize: Theme.body * 0.95 }
 
     // Momentum both ways (unwrapped text pans sideways too).
-    PanWheel { id: wheel; flickable: list; sideways: !dv.wrap }
+    PanWheel { id: wheel; anchors.fill: list; flickable: list; sideways: !dv.wrap }
 
     ListView {
         id: list
         anchors.fill: parent
+        anchors.topMargin: opts.height
         clip: true
         interactive: false
         model: doc
@@ -78,22 +79,28 @@ Item {
         }
     }
 
-    // View options, top right: Rendered / Source for Markdown, Wrap.
-    Row {
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.margins: 8
-        spacing: 4
-        z: 2
-        opacity: optsHover.hovered ? 1 : 0.75
-        HoverHandler { id: optsHover }
-        GButton { visible: dv.mode === "markdown"; flat: false; capsule: true; text: "Rendered"; checked: !prefs.markdownSource
-            tip: "Show the Markdown as a formatted page"; onClicked: prefs.markdownSource = false }
-        GButton { visible: dv.mode === "markdown"; flat: false; capsule: true; text: "Source"; checked: prefs.markdownSource
-            tip: "Show the Markdown text itself, coloured"; onClicked: prefs.markdownSource = true }
-        GButton { visible: !dv.rendered; flat: false; capsule: true; text: "Wrap"; checked: prefs.wrapText
-            tip: prefs.wrapText ? "Long lines wrap to the window; click to keep them on one line (scroll sideways)" : "Long lines stay on one line (scroll sideways, Shift+wheel); click to wrap them"
-            onClicked: prefs.wrapText = !prefs.wrapText }
+    // View options in a strip above the text: Rendered / Source for
+    // Markdown, and Wrap.
+    Rectangle {
+        id: opts
+        width: parent.width
+        height: Math.round(34 * Theme.pt)
+        color: "transparent"
+        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.separator }
+        Row {
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            anchors.rightMargin: 10
+            spacing: 4
+            GButton { visible: dv.mode === "markdown"; flat: false; capsule: true; text: "Rendered"; checked: !prefs.markdownSource
+                tip: "Show the Markdown as a formatted page"; onClicked: prefs.markdownSource = false }
+            GButton { visible: dv.mode === "markdown"; flat: false; capsule: true; text: "Source"; checked: prefs.markdownSource
+                tip: "Show the Markdown text itself, coloured"; onClicked: prefs.markdownSource = true }
+            Item { visible: dv.mode === "markdown"; width: 8; height: 1 }
+            GButton { flat: false; capsule: true; text: "Wrap"; checked: dv.wrap
+                tip: dv.wrap ? "Long lines wrap to the window; click to keep them on one line (scroll sideways, Shift+wheel)" : "Long lines stay on one line (scroll sideways, Shift+wheel); click to wrap them"
+                onClicked: { if (dv.rendered) prefs.wrapMarkdown = !prefs.wrapMarkdown; else prefs.wrapText = !prefs.wrapText } }
+        }
     }
 
     GLabel {
