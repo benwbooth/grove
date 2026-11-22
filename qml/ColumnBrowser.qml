@@ -42,6 +42,7 @@ Item {
     // columns and scrolling a list. Shift+wheel scrolls sideways.
     property bool wheelHoriz: false
     property real wheelLast: 0
+    property int routeLogLeft: 60
     function routeWheel(e, colKinetic) {
         if (e.modifiers & Qt.ControlModifier) return
         const shift = (e.modifiers & Qt.ShiftModifier) !== 0
@@ -54,6 +55,11 @@ Item {
         if (dx + dy > 0) {
             if (now - wheelLast > 200) wheelHoriz = shift || dx > dy
             wheelLast = now
+        }
+        if (routeLogLeft > 0) {
+            routeLogLeft--
+            console.warn("grove column wheel: angle", e.angleDelta.x, e.angleDelta.y, "pixel", e.pixelDelta.x, e.pixelDelta.y,
+                         "->", wheelHoriz ? "sideways" : "up/down", "strip", strip.contentX.toFixed(0), "/", (strip.contentWidth - strip.width).toFixed(0))
         }
         const ev = { device: e.device, isEndEvent: e.isEndEvent, modifiers: e.modifiers,
                      angleDelta: wheelHoriz ? Qt.point(shift ? e.angleDelta.y : e.angleDelta.x, 0) : Qt.point(0, e.angleDelta.y),
