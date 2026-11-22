@@ -81,6 +81,23 @@ contexts:
       scope: punctuation.separator.tessh
 
   strings:
+    # re'…', re"…": a regex, raw, with Perl's flags after it (re'abc'i).
+    - match: "re'"
+      push:
+        - meta_scope: string.regexp.tessh
+        - match: "'([imsxa]*)"
+          captures:
+            1: storage.modifier.flag.regexp.tessh
+          pop: true
+    - match: 're"'
+      push:
+        - meta_scope: string.regexp.tessh
+        - match: '\\.'
+          scope: constant.character.escape.regexp.tessh
+        - match: '"([imsxa]*)'
+          captures:
+            1: storage.modifier.flag.regexp.tessh
+          pop: true
     - match: '[bBrR]{1,2}"""'
       push:
         - meta_scope: string.quoted.triple.tessh
