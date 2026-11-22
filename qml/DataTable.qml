@@ -380,8 +380,7 @@ Item {
         }
     }
 
-    Kinetic { id: kv; target: list; notch: Theme.rowHeight * 3 }
-    Kinetic { id: kh; target: list; horizontal: true; notch: 80 }
+    PanWheel { anchors.fill: list; flickable: list; notch: Theme.rowHeight * 3 }
 
     ListView {
         id: list
@@ -395,11 +394,6 @@ Item {
         flickableDirection: Flickable.HorizontalAndVerticalFlick
         contentWidth: Math.max(width, dt.totalWidth)
         reuseItems: true
-        WheelHandler {
-            target: null
-            acceptedDevices: PointerDevice.AllDevices
-            onWheel: (e) => { kv.wheel(e); kh.wheel(e) }
-        }
         ScrollBar.vertical: GScrollBar { parent: list; x: list.width - width; height: list.height }
         ScrollBar.horizontal: GScrollBar { parent: list; y: list.height - height; width: list.width }
         delegate: Rectangle {

@@ -13,7 +13,11 @@ Item {
     readonly property int current: Math.max(1, Math.min(pages, list.indexAt(list.width / 2, list.contentY + list.height / 3) + 1))
     // Width the pages are drawn at, in steps so resizing doesn't redraw
     // on every pixel.
-    readonly property int drawWidth: Math.ceil(Math.min(list.width - 48, 1400) * Screen.devicePixelRatio / 160) * 160
+    // Zoom (1 = the page fits the width); zoomed pages pan in every direction.
+    property real zoom: 1
+    readonly property real pageW: Math.max(120, Math.min(list.width - 48, 1400) * zoom)
+    function zoomBy(f) { const cx = (list.contentX + list.width / 2) / Math.max(1, list.contentWidth); zoom = Math.max(0.25, Math.min(6, zoom * f)); Qt.callLater(() => list.contentX = Math.max(0, cx * list.contentWidth - list.width / 2)) }
+    readonly property int drawWidth: Math.ceil(Math.min(pageW, 4000) * Screen.devicePixelRatio / 160) * 160
 
     function pageSize(i) {
         const s = sizes.length ? sizes[Math.min(i, sizes.length - 1)] : [612, 792]
@@ -23,7 +27,16 @@ Item {
     function next() { go(current + 1) }
     function prev() { go(current - 1) }
 
-    KineticWheel { flickable: list }
+    PanWheel { flickable: list }
+    // Ctrl+wheel zooms.
+    WheelHandler {
+        acceptedModifiers: Qt.ControlModifier
+        acceptedDevices: PointerDevice.AllDevices
+        onWheel: (e) => pp.zoomBy(e.angleDelta.y > 0 || e.pixelDelta.y > 0 ? 1.15 : 1 / 1.15)
+    }
+    Shortcut { sequences: [StandardKey.ZoomIn, "Ctrl+="]; enabled: pp.visible; onActivated: pp.zoomBy(1.25) }
+    Shortcut { sequence: StandardKey.ZoomOut; enabled: pp.visible; onActivated: pp.zoomBy(0.8) }
+    Shortcut { sequence: "Ctrl+0"; enabled: pp.visible; onActivated: pp.zoom = 1 }
     ListView {
         id: list
         anchors.fill: parent
@@ -35,17 +48,20 @@ Item {
         topMargin: 12
         bottomMargin: 12
         boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.HorizontalAndVerticalFlick
+        contentWidth: Math.max(width, pp.pageW + 48)
         ScrollBar.vertical: GScrollBar {}
+        ScrollBar.horizontal: GScrollBar {}
         delegate: Item {
             id: pg
             required property int index
             readonly property var size: pp.pageSize(index)
-            width: list.width
-            height: Math.round((Math.min(list.width - 48, 1400)) * size[1] / Math.max(1, size[0]))
+            width: list.contentWidth
+            height: Math.round(pp.pageW * size[1] / Math.max(1, size[0]))
             Rectangle {
                 id: paper
                 anchors.horizontalCenter: parent.horizontalCenter
-                width: Math.min(list.width - 48, 1400)
+                width: pp.pageW
                 height: parent.height
                 color: "white"
                 border.width: 1
@@ -88,6 +104,11 @@ Item {
                 font.pixelSize: Theme.small
             }
             GButton { iconName: Theme.glyph("go-down"); iconSize: 14; enabled: pp.current < pp.pages; tip: "Next page (Page Down)"; onClicked: pp.next(); anchors.verticalCenter: parent.verticalCenter }
+            Rectangle { width: 1; height: 16; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
+            GButton { iconName: "zoom-out"; iconSize: 14; tip: "Zoom out (Ctrl+−, Ctrl+wheel)"; onClicked: pp.zoomBy(0.8); anchors.verticalCenter: parent.verticalCenter }
+            GLabel { anchors.verticalCenter: parent.verticalCenter; text: Math.round(pp.zoom * 100) + "%"; color: Theme.fgSecondary; font.pixelSize: Theme.small
+                MouseArea { anchors.fill: parent; onClicked: pp.zoom = 1 } }
+            GButton { iconName: "zoom-in"; iconSize: 14; tip: "Zoom in (Ctrl+=, Ctrl+wheel); click the percentage to fit the width"; onClicked: pp.zoomBy(1.25); anchors.verticalCenter: parent.verticalCenter }
         }
     }
 }
