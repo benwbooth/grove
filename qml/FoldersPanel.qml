@@ -6,6 +6,8 @@ import Grove
 // computer; click to go there, the triangles open folders in place.
 Item {
     id: fp
+    Kinetic { id: fpKinetic; target: lv; notch: 60 }
+    WheelHandler { acceptedModifiers: Qt.NoModifier; onWheel: (e) => fpKinetic.wheel(e) }
     property var win
     property string currentPath: win.activePane ? win.activePane.path : ""
     FolderModel {
@@ -24,8 +26,7 @@ Item {
         reuseItems: true
         interactive: false
         ScrollBar.vertical: GScrollBar {}
-        Kinetic { id: fpKinetic; target: lv; notch: 60 }
-        WheelHandler { acceptedModifiers: Qt.NoModifier; onWheel: (e) => fpKinetic.wheel(e) }
+
         delegate: Item {
             id: r
             required property int index

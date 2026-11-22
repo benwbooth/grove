@@ -74,6 +74,10 @@ Item {
         delegate: Item {
             id: column
             required property int index
+            // Wheel on the column (not inside the list, whose own scrolling is
+            // off): smooth scrolling with momentum, as in the other views.
+            Kinetic { id: colKinetic; target: lv; notch: 66 }
+            WheelHandler { acceptedModifiers: Qt.NoModifier; enabled: !column.isPreview; onWheel: (e) => colKinetic.wheel(e) }
             readonly property bool isPreview: index === root.chain.length
             readonly property bool isLast: index === root.chain.length - 1
             readonly property string folder: isPreview ? "" : root.chain[index]
@@ -120,8 +124,6 @@ Item {
                 ScrollBar.vertical: GScrollBar {}
                 // Scrolling is the handler's (with momentum), not the list's own.
                 interactive: false
-                Kinetic { id: colKinetic; target: lv; notch: 66 }
-                WheelHandler { acceptedModifiers: Qt.NoModifier; onWheel: (e) => colKinetic.wheel(e) }
                 delegate: Item {
                     id: r
                     required property int index
