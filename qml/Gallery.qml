@@ -134,7 +134,7 @@ Item {
         }
         WheelHandler {
             acceptedDevices: PointerDevice.AllDevices
-            onWheel: (e) => kinetic.wheel({ device: e.device, isEndEvent: e.isEndEvent, modifiers: e.modifiers,
+            onWheel: (e) => kinetic.wheel({ device: e.device, isEndEvent: e.isEndEvent, phase: e.phase, modifiers: e.modifiers,
                 angleDelta: Qt.point(e.angleDelta.x || e.angleDelta.y, 0), pixelDelta: Qt.point(e.pixelDelta.x || e.pixelDelta.y, 0) })
         }
     }

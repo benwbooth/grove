@@ -28,11 +28,13 @@ Item {
             let acc = ""
             for (const r of inner.split("/").filter(x => x)) { acc += (acc ? "/" : "") + r; out.push("archive://" + file + "#" + acc) }
             chain = out
+            autoGlide()
             syncCols()
             return
         }
         if (!p || p.indexOf("/") !== 0) { chain = p ? [p] : []; syncCols(); return }
         chain = folderChain(p)
+        autoGlide()
         syncCols()
     }
     function folderChain(p) {
@@ -75,7 +77,9 @@ Item {
         // Trackpad gestures start (and pause) with events that move nothing;
         // those mustn't pick the direction, or a sideways swipe locks to
         // up/down. They still go to the current direction's handler.
-        if (dx + dy > 0) {
+        // A new trackpad gesture (fingers down) picks the direction afresh.
+        if (e.phase === Qt.ScrollBegin) wheelLast = 0
+        if (dx + dy > 0 && e.phase !== Qt.ScrollMomentum) {
             if (now - wheelLast > 200) wheelHoriz = shift || dx > dy
             wheelLast = now
         }
@@ -84,10 +88,10 @@ Item {
             console.warn("grove column wheel: angle", e.angleDelta.x, e.angleDelta.y, "pixel", e.pixelDelta.x, e.pixelDelta.y,
                          "->", wheelHoriz ? "sideways" : "up/down", "strip", strip.contentX.toFixed(0), "/", (strip.contentWidth - strip.width).toFixed(0))
         }
-        const ev = { device: e.device, isEndEvent: e.isEndEvent, modifiers: e.modifiers,
+        const ev = { device: e.device, isEndEvent: e.isEndEvent, phase: e.phase, modifiers: e.modifiers,
                      angleDelta: wheelHoriz ? Qt.point(shift ? e.angleDelta.y : e.angleDelta.x, 0) : Qt.point(0, e.angleDelta.y),
                      pixelDelta: wheelHoriz ? Qt.point(shift ? e.pixelDelta.y : e.pixelDelta.x, 0) : Qt.point(0, e.pixelDelta.y) }
-        if (wheelHoriz) stripKinetic.wheel(ev)
+        if (wheelHoriz) { autoGlideUntil = 0; glide.stop(); stripKinetic.wheel(ev) }
         else if (colKinetic) colKinetic.wheel(ev)
     }
     // Over the preview column (no list to scroll): sideways only.
@@ -97,6 +101,7 @@ Item {
     // reach the vertical handler, so this one only takes pure sideways ones.
     WheelHandler { acceptedDevices: PointerDevice.AllDevices; acceptedModifiers: Qt.KeyboardModifierMask; orientation: Qt.Horizontal
                    onWheel: (e) => { if (e.angleDelta.y === 0 && e.pixelDelta.y === 0) root.routeWheel(e, null) } }
+    readonly property real stripX: strip.contentX
     function syncCols() {
         // The preview column ("") stays put at the end; folder columns are
         // removed and inserted in front of it, so nothing is recreated that
@@ -118,7 +123,12 @@ Item {
         function onCurrentRowChanged() { root.updateCurrent() }
         function onSelectionCountChanged() { root.updateCurrent() }
     }
+    // Until when layout changes may still slide the strip to the current
+    // column (set on navigation, cleared when you scroll it yourself).
+    property real autoGlideUntil: 0
+    function autoGlide() { autoGlideUntil = Date.now() + 700 }
     function updateCurrent() {
+        autoGlide()
         const r = fm.currentRow
         current = r >= 0 && fm.selectionCount === 1 ? pane.itemAt(r) : null
         Qt.callLater(() => strip.glideToEnd())
@@ -171,11 +181,16 @@ Item {
             if (last && !root.current)
                 end = Math.max(originX, Math.min(end, last.x + last.width - width))
             if (Math.abs(contentX - end) < 1) return
-            glide.stop(); glide.from = contentX; glide.to = end; glide.start()
+            stripKinetic.stop(); glide.stop(); glide.from = contentX; glide.to = end; glide.start()
         }
-        onCountChanged: Qt.callLater(glideToEnd)
-        // Column widths settle after layout: aim again so the current column ends at the edge.
-        onContentWidthChanged: Qt.callLater(glideToEnd)
+        onCountChanged: { root.autoGlide(); Qt.callLater(glideToEnd) }
+        // Column widths settle after layout: aim again so the current column
+        // ends at the edge, but only just after opening something. (The
+        // width also changes while you scroll, as columns are made; aiming
+        // then pulled a swipe back: "stutter and reverse".)
+        onContentWidthChanged: if (Date.now() < root.autoGlideUntil) Qt.callLater(glideToEnd)
+        // Keep every column made, so the width is exact while scrolling.
+        cacheBuffer: 100000
 
         delegate: Item {
             id: column
