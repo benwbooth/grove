@@ -38,6 +38,7 @@ GMenu {
     }
     GMenuItem { text: "Quick Look"; iconName: "quickview"; shortcutText: Help.shown("Space"); onTriggered: m.pane.quickLook() }
     GMenuItem { text: "Get Info"; iconName: "documentinfo"; shortcutText: Help.shown("Alt+Return"); onTriggered: m.pane.win.showInfo(m.sel) }
+    GMenuItem { text: "Analyze Disk Usage"; iconName: "filelight|baobab|drive-harddisk"; visible: m.one && !!m.target.isDir && (m.target.path || "").indexOf("/") === 0; height: visible ? implicitHeight : 0; tip: "What takes the room in this folder"; onTriggered: m.pane.win.showDiskUsage(m.target.path) }
     GMenuItem { text: "Show Enclosing Folder"; iconName: "folder-open"; visible: m.pane.searching || m.pane.path.indexOf("recent:") === 0; height: visible ? implicitHeight : 0; onTriggered: m.pane.showEnclosing() }
     GMenuSeparator {}
     GMenuItem { text: "Put Back"; iconName: "edit-undo"; visible: m.trash; height: visible ? implicitHeight : 0; onTriggered: m.pane.putBack() }

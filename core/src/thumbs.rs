@@ -15,7 +15,9 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 pub const FLAVORS: [(&str, u32); 4] = [("normal", 128), ("large", 256), ("x-large", 512), ("xx-large", 1024)];
-const FAIL_DIR: &str = "fail/grove-1.0";
+// Bump the version when grove learns to make more thumbnails, so files
+// that failed before are tried again.
+const FAIL_DIR: &str = "fail/grove-1.1";
 
 pub fn root() -> PathBuf {
     util::cache_home().join("thumbnails")

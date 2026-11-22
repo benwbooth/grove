@@ -49,6 +49,7 @@ pub mod ffi {
         fn grove_thumb_cancel_all();
         fn grove_thumb_done(token: u64);
         fn grove_pdf_page(path: &str, page: u32, width: u32, token: u64) -> String;
+        fn grove_du_treemap(scan: i32, node: u32, w: u32, h: u32, apparent: bool) -> Vec<u8>;
     }
 
     extern "RustQt" {
@@ -259,6 +260,37 @@ pub mod ffi {
         fn discover_network(self: &Grove, key: &QString);
         #[qinvokable]
         fn archive_list(self: &Grove, key: &QString, archive: &QString);
+        /// Disk Usage (KDirStat-like): start a scan, poll it, read its tree
+        /// (all in memory once scanned), types, treemap hit-testing.
+        #[qinvokable]
+        fn du_start(self: &Grove, path: &QString) -> i32;
+        #[qinvokable]
+        fn du_progress(self: &Grove, scan: i32) -> QString;
+        #[qinvokable]
+        fn du_cancel(self: &Grove, scan: i32);
+        #[qinvokable]
+        fn du_forget(self: &Grove, scan: i32);
+        #[qinvokable]
+        fn du_rows(self: &Grove, key: &QString, scan: i32, expanded: &QString, apparent: bool, sort: &QString);
+        #[qinvokable]
+        fn du_types(self: &Grove, key: &QString, scan: i32, node: i32, apparent: bool);
+        #[qinvokable]
+        fn du_path(self: &Grove, scan: i32, node: i32) -> QString;
+        #[qinvokable]
+        fn du_ancestors(self: &Grove, scan: i32, node: i32) -> QString;
+        #[qinvokable]
+        fn du_parent(self: &Grove, scan: i32, node: i32) -> i32;
+        #[qinvokable]
+        fn du_find(self: &Grove, scan: i32, path: &QString) -> i32;
+        #[qinvokable]
+        fn du_removed(self: &Grove, scan: i32, node: i32);
+        #[qinvokable]
+        fn du_hit(self: &Grove, scan: i32, x: f64, y: f64) -> i32;
+        #[qinvokable]
+        fn du_rect(self: &Grove, scan: i32, node: i32) -> QString;
+        /// Compressed and uncompressed sizes of an archive (async_reply).
+        #[qinvokable]
+        fn archive_sizes(self: &Grove, key: &QString, archive: &QString);
         #[qinvokable]
         fn extract(self: Pin<&mut Grove>, archive: &QString, dest: &QString) -> i32;
         #[qinvokable]
@@ -361,6 +393,10 @@ fn grove_thumb_cancel_all() {
 
 fn grove_thumb_done(token: u64) {
     crate::thumbgen::done(token)
+}
+
+fn grove_du_treemap(scan: i32, node: u32, w: u32, h: u32, apparent: bool) -> Vec<u8> {
+    crate::du::treemap(scan, node, w, h, apparent)
 }
 
 fn grove_pdf_page(path: &str, page: u32, width: u32, token: u64) -> String {

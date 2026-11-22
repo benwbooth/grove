@@ -944,6 +944,54 @@ impl ffi::Grove {
         self.answer(key, crate::remote::discover);
     }
 
+    pub fn du_start(&self, path: &QString) -> i32 {
+        crate::du::start(&path.to_string())
+    }
+    pub fn du_progress(&self, scan: i32) -> QString {
+        qs(&crate::du::progress(scan).to_string())
+    }
+    pub fn du_cancel(&self, scan: i32) {
+        crate::du::cancel(scan)
+    }
+    pub fn du_forget(&self, scan: i32) {
+        crate::du::forget(scan)
+    }
+    pub fn du_rows(&self, key: &QString, scan: i32, expanded: &QString, apparent: bool, sort: &QString) {
+        let (e, s) = (expanded.to_string(), sort.to_string());
+        self.answer(key, move || crate::du::rows(scan, &e, apparent, &s));
+    }
+    pub fn du_types(&self, key: &QString, scan: i32, node: i32, apparent: bool) {
+        self.answer(key, move || crate::du::types(scan, node.max(0) as u32, apparent));
+    }
+    pub fn du_path(&self, scan: i32, node: i32) -> QString {
+        qs(&crate::du::path_of(scan, node.max(0) as u32))
+    }
+    pub fn du_ancestors(&self, scan: i32, node: i32) -> QString {
+        qs(&crate::du::ancestors(scan, node.max(0) as u32).to_string())
+    }
+    pub fn du_parent(&self, scan: i32, node: i32) -> i32 {
+        crate::du::parent_of(scan, node.max(0) as u32) as i32
+    }
+    pub fn du_find(&self, scan: i32, path: &QString) -> i32 {
+        crate::du::find(scan, &path.to_string()) as i32
+    }
+    pub fn du_removed(&self, scan: i32, node: i32) {
+        if node > 0 {
+            crate::du::removed(scan, node as u32)
+        }
+    }
+    pub fn du_hit(&self, scan: i32, x: f64, y: f64) -> i32 {
+        crate::du::hit(scan, x, y) as i32
+    }
+    pub fn du_rect(&self, scan: i32, node: i32) -> QString {
+        qs(&crate::du::rect(scan, node.max(0) as u32).to_string())
+    }
+
+    pub fn archive_sizes(&self, key: &QString, archive: &QString) {
+        let a = archive.to_string();
+        self.answer(key, move || crate::archive::sizes_json(&a));
+    }
+
     pub fn archive_list(&self, key: &QString, archive: &QString) {
         let a = archive.to_string();
         self.answer(key, move || crate::archive::list_json(&a));

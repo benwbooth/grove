@@ -594,6 +594,40 @@ public:
     }
 };
 
+// image://treemap/<scan>/<node>/<apparent 0|1>/<rev>: the Disk Usage
+// window's cushion treemap at the requested size (drawn by Rust).
+class TreemapResponse : public JobResponse {
+public:
+    TreemapResponse(int scan, uint32_t node, bool apparent, const QSize& size) : m_scan(scan), m_node(node), m_apparent(apparent), m_size(size) { m_what = QStringLiteral("treemap"); }
+
+protected:
+    bool work() override
+    {
+        const int w = qMax(1, m_size.width()), h = qMax(1, m_size.height());
+        const rust::Vec<uint8_t> px = grove_du_treemap(m_scan, m_node, uint32_t(w), uint32_t(h), m_apparent);
+        if (px.size() == size_t(w) * size_t(h) * 4)
+            m_img = QImage(px.data(), w, h, w * 4, QImage::Format_RGBA8888).copy();
+        return false;
+    }
+
+private:
+    int m_scan;
+    uint32_t m_node;
+    bool m_apparent;
+    QSize m_size;
+};
+
+class TreemapProvider : public QQuickAsyncImageProvider {
+public:
+    QQuickImageResponse* requestImageResponse(const QString& id, const QSize& req) override
+    {
+        const QStringList p = id.split(QLatin1Char('/'));
+        auto* r = new TreemapResponse(p.value(0).toInt(), p.value(1).toUInt(), p.value(2) == QLatin1String("1"), req.isValid() ? req : QSize(800, 400));
+        r->startOn(pools().make);
+        return r;
+    }
+};
+
 }  // namespace
 
 // ---- theme icons: image://icon/name|fallback|fallback ----
@@ -731,6 +765,7 @@ int grove_run(const QString& url, const QString& importPath)
     engine->addImageProvider(QStringLiteral("thumb"), new ThumbProvider);
     engine->addImageProvider(QStringLiteral("pdfpage"), new PdfPageProvider);
     engine->addImageProvider(QStringLiteral("specimen"), new SpecimenProvider);
+    engine->addImageProvider(QStringLiteral("treemap"), new TreemapProvider);
     engine->addImageProvider(QStringLiteral("icon"), new IconProvider);
     if (!importPath.isEmpty()) engine->addImportPath(importPath);
     engine->load(QUrl(url));

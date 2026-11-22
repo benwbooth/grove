@@ -1,4 +1,5 @@
 import QtQuick
+import QtCore
 import QtQuick.Controls.Basic
 import QtQuick.Window
 import QtQuick.Layouts
@@ -245,6 +246,18 @@ ApplicationWindow {
     function showHelp(search) { helpWin.query = search || ""; helpWin.show(); helpWin.raise(); helpWin.requestActivate() }
 
     Component { id: infoComp; InfoWindow {} }
+    Component { id: duComp; DiskUsageWindow {} }
+    // Disk Usage for a folder (default: the selected folder, else this one).
+    function showDiskUsage(path) {
+        let p = path
+        if (!p) {
+            const it = activePane.currentItem ? activePane.currentItem() : null
+            p = it && it.isDir && activePane.selectedPaths().length === 1 ? it.path : activePane.path
+        }
+        if (!p || p.indexOf("/") !== 0) p = StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "")
+        const w = duComp.createObject(null, { app: app, win: bw, path: p })
+        w.show(); w.raise(); w.requestActivate()
+    }
     Component { id: chooserComp; FileChooser {} }
     // grove's own open/save dialog for grove itself: fn(paths).
     function chooseFiles(title, opts, fn) {
@@ -740,6 +753,7 @@ ApplicationWindow {
         GMenuItem { text: "Split View"; iconName: "view-split-left-right|view-dual"; checkable: true; checked: bw.currentTab && bw.currentTab.split; shortcutText: Help.shown("F3"); onTriggered: bw.currentTab.toggleSplit() }
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: Help.shown("Ctrl+Alt+T"); onTriggered: bw.app.grove.openTerminal(bw.activePane.path) }
         GMenuItem { text: "Connect to Server…"; iconName: "network-connect"; shortcutText: Help.shown("Ctrl+K"); onTriggered: bw.connectServer() }
+        GMenuItem { text: "Disk Usage…"; iconName: "filelight|baobab|drive-harddisk"; tip: "See what takes the room in this folder: a tree with percentages and a treemap of every file"; shortcutText: Help.shown("Ctrl+Shift+U"); onTriggered: bw.showDiskUsage() }
         GMenuSeparator {}
         GMenuItem { text: "Burn to Disc…"; iconName: "media-optical-burn|media-optical"; tip: "Burn the selection (or this folder) to a CD, DVD or Blu-ray, or save a disc image"; onTriggered: bw.burnSelection() }
         GMenuItem { text: "Empty Trash…"; iconName: "trash-empty"; enabled: bw.app.trashCount > 0; onTriggered: bw.emptyTrash() }
@@ -881,6 +895,7 @@ ApplicationWindow {
     Key { act: "computer"; onActivated: bw.go("/") }
     Key { act: "trash"; onActivated: bw.go("trash:///") }
     Key { act: "connect"; onActivated: bw.connectServer() }
+    Key { act: "diskusage"; onActivated: bw.showDiskUsage() }
     Key { act: "reload"; onActivated: bw.activePane.reload() }
     Key { act: "viewicons"; onActivated: bw.activePane.setView("icons") }
     Key { act: "viewlist"; onActivated: bw.activePane.setView("list") }
@@ -981,6 +996,7 @@ ApplicationWindow {
         else if (cmd === "wheel") { const v = p.viewLoaderItem(); if (v && v.testWheel) v.testWheel(Number(arg)) }
         else if (cmd === "pxwheel") { const v = p.viewLoaderItem(); if (v && v.testPixelWheel) v.testPixelWheel(Number(arg)) }
         else if (cmd === "swipe") { const v = p.viewLoaderItem(); if (v && v.testSwipe) v.testSwipe(Number(arg)) }
+        else if (cmd === "du") bw.showDiskUsage(arg || p.path)
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")
         else if (cmd === "split") currentTab.toggleSplit()

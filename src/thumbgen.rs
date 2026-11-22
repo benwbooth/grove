@@ -94,7 +94,8 @@ pub fn make(path: &str, mimes: &[String], px: u32, token: u64) -> String {
         Kind::Comic => image(previews::comic_cover(p, cancel)).or_else(|| system_thumbnailer(p, mimes, px, cancel)),
         Kind::Office => image(previews::office_thumbnail(p, cancel))
             .or_else(|| system_thumbnailer(p, mimes, px, cancel))
-            .or_else(|| previews::office_text(p, 6000, cancel).map(|t| format!("page:{}", prose_page(&t)))),
+            .or_else(|| previews::office_text(p, 6000, cancel).map(|t| format!("page:{}", prose_page(&t))))
+            .or_else(|| image(previews::office_picture(p, cancel))),
         Kind::Text => text_page(p).map(|j| format!("page:{j}")),
         Kind::Picture => system_thumbnailer(p, mimes, px, cancel).or_else(|| image(previews::picture(p, px, cancel))),
         Kind::Video => system_thumbnailer(p, mimes, px, cancel).or_else(|| image(previews::video_frame(p, px, cancel))),

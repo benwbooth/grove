@@ -121,13 +121,70 @@ fn nth_field_start(line: &str, n: usize) -> Option<usize> {
 
 pub fn list(path: &str) -> Result<Vec<ArchEntry>, String> {
     if let Some(inner) = single_of(path) {
-        return Ok(vec![ArchEntry { path: inner, size: 0, is_dir: false, mtime_text: String::new() }]);
+        let size = single_uncompressed(path).unwrap_or(0);
+        return Ok(vec![ArchEntry { path: inner, size, is_dir: false, mtime_text: String::new() }]);
     }
     let o = std::process::Command::new("bsdtar").args(["-tvf", path]).output().map_err(|_| "Archives need bsdtar (libarchive), which isn't installed.".to_string())?;
     if !o.status.success() {
         return Err(format!("This archive can't be read: {}", String::from_utf8_lossy(&o.stderr).trim()));
     }
     Ok(parse_listing(&String::from_utf8_lossy(&o.stdout)))
+}
+
+/// The decompressed size of a lone compressed file. gzip records it (mod
+/// 4 GiB) in its last four bytes; anything else is decompressed and
+/// counted, up to 512 MB compressed (bigger: unknown).
+pub fn single_uncompressed(path: &str) -> Option<u64> {
+    use std::io::{Read, Seek, SeekFrom};
+    let len = std::fs::metadata(path).ok()?.len();
+    if path.to_lowercase().ends_with(".gz") && len >= 18 && len < (1u64 << 32) {
+        let mut f = std::fs::File::open(path).ok()?;
+        let mut magic = [0u8; 2];
+        f.read_exact(&mut magic).ok()?;
+        if magic == [0x1f, 0x8b] {
+            f.seek(SeekFrom::End(-4)).ok()?;
+            let mut b = [0u8; 4];
+            f.read_exact(&mut b).ok()?;
+            let n = u32::from_le_bytes(b) as u64;
+            // A multi-member or odd file can lie; only trust a plausible size.
+            if n >= len / 4 || len < 1024 {
+                return Some(n);
+            }
+        }
+    }
+    if len > 512 << 20 {
+        return None;
+    }
+    let mut child = std::process::Command::new("bsdcat")
+        .arg(path)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+    let n = std::io::copy(&mut child.stdout.take()?, &mut std::io::sink()).ok();
+    let ok = child.wait().map(|s| s.success()).unwrap_or(false);
+    if ok { n } else { None }
+}
+
+/// Compressed (on disk) and uncompressed sizes of an archive or lone
+/// compressed file, plus how many files it holds.
+pub fn sizes_json(path: &str) -> Value {
+    let compressed = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let entries = match list(path) {
+        Ok(v) => v,
+        Err(e) => return json!({"error": e}),
+    };
+    let files = entries.iter().filter(|e| !e.is_dir).count();
+    let known = single_of(path).is_none() || entries.iter().any(|e| e.size > 0);
+    let uncompressed: u64 = entries.iter().map(|e| e.size).sum();
+    let hs = grove_core::util::human_size;
+    json!({
+        "compressed": compressed, "compressedText": hs(compressed),
+        "uncompressed": if known { json!(uncompressed) } else { Value::Null },
+        "uncompressedText": if known { hs(uncompressed) } else { "unknown".to_string() },
+        "ratio": if known && uncompressed > 0 { json!(compressed as f64 / uncompressed as f64) } else { Value::Null },
+        "files": files,
+    })
 }
 
 pub fn list_json(path: &str) -> Value {

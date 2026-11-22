@@ -2,6 +2,7 @@
 
 pub mod apps;
 pub mod checksum;
+pub mod du;
 pub mod versions;
 pub mod listing;
 pub mod mounts;

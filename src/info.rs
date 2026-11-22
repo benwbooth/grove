@@ -71,6 +71,7 @@ pub fn info(path: &str) -> Value {
         "isLink": lm.file_type().is_symlink(),
         "target": std::fs::read_link(p).map(|t| t.display().to_string()).unwrap_or_default(),
         "mime": mime.name, "kind": mime.comment, "icon": icon,
+        "isArchive": !m.is_dir() && crate::archive::is_archive(&mime.name, &p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()),
         "size": m.len(), "sizeText": grove_core::util::human_size(m.len()),
         "blocks": m.blocks() * 512,
         "items": items,

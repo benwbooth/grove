@@ -9,13 +9,18 @@ Item {
     property var item: null
     property bool compact: false
     property var info: ({})
+    // Archives and compressed files: sizes packed and unpacked.
+    property var arch: null
     onItemChanged: load()
     Component.onCompleted: load()
     function load() {
         info = {}
+        arch = null
         if (!item || !item.path || item.path.indexOf("/") !== 0) return
         const path = item.path
         Async.call(pane.grove, k => pane.grove.info(k, path), r => { if (p.item && p.item.path === path) p.info = r })
+        if (item.isArchive)
+            Async.call(pane.grove, k => pane.grove.archiveSizes(k, path), r => { if (p.item && p.item.path === path && !r.error) p.arch = r })
     }
     readonly property int big: Math.max(64, Math.min(width - 40, compact ? height - 20 : height * 0.55, 512))
 
@@ -76,6 +81,11 @@ Item {
             columns: 2
             columnSpacing: 10
             rowSpacing: 4
+            GLabel { text: "Compressed"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90; visible: !!p.arch }
+            GLabel { text: p.arch ? p.arch.compressedText : ""; visible: !!p.arch }
+            GLabel { text: "Uncompressed"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90; visible: !!p.arch }
+            GLabel { visible: !!p.arch
+                text: !p.arch ? "" : p.arch.uncompressedText + (p.arch.ratio ? " (" + Math.round(p.arch.ratio * 100) + "% packed)" : "") + (p.arch.files > 1 ? ", " + p.arch.files + " files" : "") }
             GLabel { text: "Created"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90 }
             GLabel { text: p.info.btime ? new Date(p.info.btime * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat) : "--" }
             GLabel { text: "Modified"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90 }

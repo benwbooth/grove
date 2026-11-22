@@ -388,15 +388,53 @@ pub fn comic_cover(path: &Path, cancel: &AtomicBool) -> Option<PathBuf> {
     archive_member(path, &n, &ext_of(&n), cancel)
 }
 
+/// True when a picture is one flat colour (Word for Mac's "Save preview
+/// picture" stores an all-white page). Needs ImageMagick; without it
+/// every picture counts as having something on it.
+pub fn is_blank_picture(p: &Path, cancel: &AtomicBool) -> bool {
+    if which("magick").is_none() {
+        return false;
+    }
+    let out = temp_file("txt");
+    let argv = vec!["magick".into(), format!("{}[0]", s(p)), "-format".into(), "%[fx:standard_deviation]".into(), "info:".into()];
+    let ok = run(&argv, Some(&out), cancel, Duration::from_secs(10));
+    let sd = std::fs::read_to_string(&out).ok().and_then(|t| t.trim().parse::<f64>().ok());
+    let _ = std::fs::remove_file(&out);
+    ok && sd.is_some_and(|sd| sd < 0.004)
+}
+
 /// The preview picture an office document carries (OpenDocument's
-/// Thumbnails/thumbnail.png, Office Open XML's docProps/thumbnail.*).
+/// Thumbnails/thumbnail.png, Office Open XML's docProps/thumbnail.*),
+/// unless it's blank.
 pub fn office_thumbnail(path: &Path, cancel: &AtomicBool) -> Option<PathBuf> {
     let names = archive_names(path, cancel);
     let n = names.iter().find(|n| {
         let l = n.to_lowercase();
         l == "thumbnails/thumbnail.png" || (l.starts_with("docprops/thumbnail.") && is_picture_name(&l))
     })?;
-    archive_member(path, n, &ext_of(n), cancel)
+    let f = archive_member(path, n, &ext_of(n), cancel)?;
+    if is_blank_picture(&f, cancel) {
+        let _ = std::fs::remove_file(&f);
+        return None;
+    }
+    Some(f)
+}
+
+/// The first picture inside an office document (word/media, ppt/media,
+/// xl/media, OpenDocument's Pictures/), for documents with no text.
+pub fn office_media_name(names: &[String]) -> Option<String> {
+    let mut pics: Vec<&String> = names
+        .iter()
+        .filter(|n| ["word/media/", "ppt/media/", "xl/media/", "Pictures/"].iter().any(|d| n.starts_with(d)) && is_picture_name(n))
+        .collect();
+    pics.sort_by(|a, b| crate::util::natural_cmp(a, b));
+    pics.first().map(|s| s.to_string())
+}
+
+pub fn office_picture(path: &Path, cancel: &AtomicBool) -> Option<PathBuf> {
+    let names = archive_names(path, cancel);
+    let n = office_media_name(&names)?;
+    archive_member(path, &n, &ext_of(&n), cancel)
 }
 
 /// Which XML part holds an office document's text.
@@ -620,6 +658,9 @@ mod tests {
         assert_eq!(office_text_part(&docx).unwrap(), "word/document.xml");
         let pptx: Vec<String> = ["ppt/slides/slide10.xml", "ppt/slides/slide2.xml", "ppt/slides/slide1.xml"].iter().map(|s| s.to_string()).collect();
         assert_eq!(office_text_part(&pptx).unwrap(), "ppt/slides/slide1.xml");
+        let pics: Vec<String> = ["word/document.xml", "word/media/image10.png", "word/media/image2.jpeg", "word/media/image3.emf"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(office_media_name(&pics).unwrap(), "word/media/image2.jpeg");
+        assert_eq!(office_media_name(&docx), None);
     }
 
     #[test]

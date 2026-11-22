@@ -33,9 +33,11 @@ Window {
                 sizeKey = Async.call(app.grove, k => { iw.sizeKey = k; app.grove.folderSize(k, iw.path) }, null)
             }
             if (!r.isDir) Async.call(app.grove, k => app.grove.appsFor(k, iw.path), a => iw.apps = a.apps || [])
+            if (!r.isDir && r.isArchive) Async.call(app.grove, k => app.grove.archiveSizes(k, iw.path), a => { if (!a.error) iw.arch = a })
         })
     }
     property string sizeKey: ""
+    property var arch: null
     Connections {
         target: iw.app.grove
         function onSizeReady(key, bytes, items, done) {
@@ -174,6 +176,8 @@ Window {
                 title: "General"
                 Fact { k: "Kind"; v: iw.info.kind || "" }
                 Fact { k: "Size"; v: iw.info.isDir ? (iw.folderBytes >= 0 ? iw.app.size(iw.folderBytes) + " on disk, " + iw.folderItems + " items" + (iw.counting ? " (counting…)" : "") : "Counting…") : (iw.info.size || 0).toLocaleString(Qt.locale(), "f", 0) + " bytes (" + (iw.info.sizeText || "") + ")" }
+                Fact { k: "Uncompressed"; visible: !!iw.arch
+                       v: !iw.arch ? "" : iw.arch.uncompressedText + (iw.arch.ratio ? " — packed to " + Math.round(iw.arch.ratio * 100) + "%" : "") + (iw.arch.files > 1 ? ", " + iw.arch.files + " files" : "") }
                 Fact { k: "Where"; v: iw.info.parent || "" }
                 Fact { k: "Created"; v: iw.fmt(iw.info.btime) }
                 Fact { k: "Modified"; v: iw.fmt(iw.info.mtime) }

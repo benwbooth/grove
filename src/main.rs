@@ -15,6 +15,7 @@ mod burn;
 mod bridge;
 mod controller;
 mod dbus;
+mod du;
 mod gitstatus;
 mod info;
 mod localsend;
