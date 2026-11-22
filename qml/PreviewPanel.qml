@@ -46,28 +46,39 @@ Item {
     Column {
         id: pcol
         x: 16
-        y: Math.max(12, (pflick.height - height) / 2)
+        y: viewer.rich && !p.compact ? 12 : Math.max(12, (pflick.height - height) / 2)
         width: pflick.width - 32
         spacing: 10
+        // The file itself, readable in full (text, Markdown, tables, every
+        // page, a player, the picture); compact panels keep the thumbnail.
         Item {
             width: parent.width
-            height: p.big
+            height: viewer.rich && !p.compact ? Math.max(p.big, pflick.height - 230) : p.big
+            FileViewer {
+                id: viewer
+                anchors.fill: parent
+                visible: !p.compact
+                app: p.pane ? p.pane.app : null
+                item: p.compact ? null : p.item
+                active: !p.compact && p.visible
+            }
             GIcon {
                 anchors.centerIn: parent
+                visible: p.compact && (th.status !== Image.Ready || th.implicitWidth <= 1)
                 size: Math.min(p.big, 256)
                 name: p.item ? p.item.icon : ""
-                visible: th.status !== Image.Ready || th.implicitWidth <= 1
             }
             Image {
                 id: th
                 anchors.fill: parent
+                visible: p.compact
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 sourceSize.width: Math.ceil(p.big * Screen.devicePixelRatio)
                 sourceSize.height: Math.ceil(p.big * Screen.devicePixelRatio)
-                source: p.item && p.item.thumb ? "image://thumb/" + encodeURIComponent(p.item.path) + "?m=" + p.item.mtime : ""
+                source: p.compact && p.item && p.item.thumb ? "image://thumb/" + encodeURIComponent(p.item.path) + "?m=" + p.item.mtime : ""
             }
-            PreviewSpinner { image: th; size: 18; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 6 }
+            PreviewSpinner { visible: p.compact; image: th; size: 18; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 6 }
         }
         GLabel {
             visible: !p.compact

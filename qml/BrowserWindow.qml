@@ -1007,6 +1007,7 @@ ApplicationWindow {
         else if (cmd === "clouddefaults") cloudSheet.send(cloudSheet.answer, { defaults: true })
         else if (cmd === "openrow") { console.warn("grove test item", p.model.get(Number(arg))); p.openRow(Number(arg), false) }
         else if (cmd === "dumpx") { const v = p.viewLoaderItem(); console.warn("grove test x", arg || "", v && v.stripX !== undefined ? v.stripX.toFixed(1) : "?") }
+        else if (cmd === "media") console.warn("grove test media", arg || "", ql.mediaState())
         else if (cmd === "dumppath") console.warn("grove test path", p.path, p.viewMode)
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")

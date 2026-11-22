@@ -31,6 +31,8 @@ Window {
         m.addOp({ t: "arrow", c: "#ffffff", w: 5, x1: 260, y1: 480, x2: 410, y2: 430 })
         m.addOp({ t: "text", c: "#ffffff", s: 36, x1: 90, y1: 440, text: "grove markup" })
     }
+    // Test hook: how playback is going.
+    function mediaState() { return player.mediaStatus + " pos " + player.position + "/" + player.duration + (player.error ? " ERROR " + player.errorString : "") + " video " + player.hasVideo + " audio " + player.hasAudio }
     function trimFrom(a, b) { trimRange.setValues(a, b) }
     function stopEditing() { editing = ""; markup.reset() }
     function saveEdit(mode) {
@@ -282,7 +284,11 @@ Window {
                     audioOutput: AudioOutput {}
                     onSourceChanged: if (source != "") play()
                 }
-                VideoOutput { id: video; anchors.fill: parent; anchors.bottomMargin: ql.editing === "trim" ? 80 : 44; visible: !!ql.pv.video }
+                VideoOutput { id: video; anchors.fill: parent; anchors.bottomMargin: ql.editing === "trim" ? 80 : 44; visible: !!ql.pv.video
+                    // Double-click: full screen (again: back).
+                    MouseArea { anchors.fill: parent; enabled: ql.editing === ""
+                        onClicked: player.playbackState === MediaPlayer.PlayingState ? player.pause() : player.play()
+                        onDoubleClicked: ql.visibility === Window.FullScreen ? ql.showNormal() : ql.showFullScreen() } }
                 // Recordings: their cover art (or waveform), else the icon.
                 Image {
                     id: cover

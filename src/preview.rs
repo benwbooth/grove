@@ -263,6 +263,13 @@ pub fn preview(path: &str, dark: bool) -> Value {
             }
         }
     }
+    // Anything else FFmpeg can play (game music, tracker modules, odd
+    // containers): the player, as VLC would.
+    if let Some((w, _h, secs)) = crate::media::probe(path) {
+        if secs > 0.0 {
+            return with(json!({"kind": "media", "video": w > 0, "seconds": secs}));
+        }
+    }
     with(json!({"kind": "other"}))
 }
 

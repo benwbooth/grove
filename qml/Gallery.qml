@@ -44,24 +44,16 @@ Item {
         anchors.right: parent.right
         anchors.bottom: strip.top
         anchors.margins: 16
-        GIcon {
-            anchors.centerIn: parent
-            size: Math.min(256, Math.min(stage.width, stage.height))
-            name: root.current ? root.current.icon : ""
-            visible: big.status !== Image.Ready
-        }
-        Image {
-            id: big
+        // The current file in full: text, tables, pages, a player, the picture.
+        FileViewer {
             anchors.fill: parent
-            fillMode: Image.PreserveAspectFit
-            asynchronous: true
-            sourceSize.width: Math.ceil(Math.min(1024, stage.width) * Screen.devicePixelRatio)
-            sourceSize.height: Math.ceil(Math.min(1024, stage.height) * Screen.devicePixelRatio)
-            source: root.current && root.current.thumb ? "image://thumb/" + encodeURIComponent(root.current.path) + "?m=" + root.current.mtime : ""
+            app: root.pane ? root.pane.app : null
+            item: root.current
+            active: root.visible
         }
-        PreviewSpinner { image: big; size: 22; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 18 }
         MouseArea {
             anchors.fill: parent
+            z: -1     // under the viewer: scrolling text or a table stays the viewer's
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             onDoubleClicked: if (root.fm.currentRow >= 0) root.pane.openRow(root.fm.currentRow, false)
             onPressed: (m) => { root.pane.forceActiveFocus(); if (m.button === Qt.RightButton && root.fm.currentRow >= 0) root.pane.showItemMenu(root.fm.currentRow, m.x, m.y) }
