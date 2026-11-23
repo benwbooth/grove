@@ -257,10 +257,16 @@ Item {
                 ownLoaded = true
                 own.applyShowHidden(root.fm.showHidden)
                 own.applyFoldersFirst(root.fm.foldersFirst)
-                own.applySort("name", false)
+                own.applySort(root.fm.sortKey || "name", root.fm.descending)
                 own.loadPath(folder)
             }
             Component.onCompleted: { loadOwn(); swapModel() }
+            // Sorted as the current folder is (the toolbar's Sort, View > Sort By).
+            Connections {
+                target: root.fm
+                function onSortKeyChanged() { if (column.ownLoaded) own.applySort(root.fm.sortKey || "name", root.fm.descending) }
+                function onDescendingChanged() { if (column.ownLoaded) own.applySort(root.fm.sortKey || "name", root.fm.descending) }
+            }
             // The list changes model when the column stops (or starts) being
             // the last one: the same folder from another copy. A new model
             // scrolls a ListView back to the top (clicking an archive jumped

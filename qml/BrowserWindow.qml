@@ -695,9 +695,9 @@ ApplicationWindow {
 
 
     // ---------- toolbar items ----------
-    readonly property var toolbarDefaults: ["nav", "sidebar", "path", "view", "split", "selection", "action", "jobs", "search"]
+    readonly property var toolbarDefaults: ["nav", "sidebar", "path", "view", "sort", "split", "selection", "action", "jobs", "search"]
     readonly property var toolbarItems: app.settings.toolbar && app.settings.toolbar.length ? app.settings.toolbar : toolbarDefaults
-    readonly property var toolbarAll: ["nav", "sidebar", "path", "view", "split", "selection", "action", "jobs", "search", "newfolder", "trash", "info", "share", "quicklook", "terminal", "hidden", "viewopts", "connect", "eject", "burn", "space", "flexspace"]
+    readonly property var toolbarAll: ["nav", "sidebar", "path", "view", "sort", "split", "selection", "action", "jobs", "search", "newfolder", "trash", "info", "share", "quicklook", "terminal", "hidden", "viewopts", "connect", "eject", "burn", "space", "flexspace"]
     readonly property var toolbarCatalog: ({
         nav: { label: "Back/Forward", icon: "go-previous", tip: "Back, forward and the enclosing folder" },
         sidebar: { label: "Sidebar", icon: "sidebar-show-symbolic|view-split-left-right", tip: "Show or hide the sidebar" },
@@ -716,6 +716,7 @@ ApplicationWindow {
         terminal: { label: "Terminal", icon: "utilities-terminal", tip: "Open a terminal here" },
         hidden: { label: "Hidden Files", icon: "view-hidden|visibility", tip: "Show or hide hidden files" },
         viewopts: { label: "View Options", icon: "configure|preferences-system", tip: "Spacing, text size, background" },
+        sort: { label: "Sort", icon: "view-sort|view-sort-ascending", tip: "Sort and group the items (in every view)" },
         connect: { label: "Connect", icon: "network-connect|network-server", tip: "Connect to a server" },
         eject: { label: "Eject", icon: "media-eject", tip: "Eject the disk you're in" },
         burn: { label: "Burn", icon: "media-optical-burn|media-optical", tip: "Burn the selection or this folder to a disc" },
@@ -736,7 +737,7 @@ ApplicationWindow {
     function toolComponent(k) {
         return ({ nav: tcNav, sidebar: tcSidebar, path: tcPath, view: tcView, split: tcSplit, selection: tcSelection, action: tcAction,
                   jobs: tcJobs, search: tcSearch, newfolder: tcNewFolder, trash: tcTrash, info: tcInfo, share: tcShare, quicklook: tcQuickLook,
-                  terminal: tcTerminal, hidden: tcHidden, viewopts: tcViewOpts, connect: tcConnect, eject: tcEject, burn: tcBurn,
+                  terminal: tcTerminal, hidden: tcHidden, viewopts: tcViewOpts, sort: tcSort, connect: tcConnect, eject: tcEject, burn: tcBurn,
                   space: tcSpace, flexspace: tcSpace })[k] || tcSpace
     }
     function ejectCurrent() {
@@ -796,6 +797,41 @@ ApplicationWindow {
             onClicked: bw.toggleAppMenu(ab)
             Component.onCompleted: bw.actionButton = this
             Component.onDestruction: if (bw.actionButton === this) bw.actionButton = null
+        }
+    }
+    // Sort and group, in every view (Finder's toolbar Group button).
+    Component {
+        id: tcSort
+        GButton {
+            id: sortBtn
+            iconName: "view-sort|view-sort-ascending"
+            tip: Help.tip("Sort and group the items in this folder", "Sort By")
+            onClicked: sortMenu.visible ? sortMenu.close() : sortMenu.popup(sortBtn, 0, sortBtn.height + 4)
+            GMenu {
+                id: sortMenu
+                readonly property var p: bw.activePane
+                readonly property var m: p ? p.model : null
+                GMenuItem { text: "Name"; iconName: "view-sort-ascending-name|view-sort-ascending|view-sort"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "name"; onTriggered: sortMenu.p.sortBy("name") }
+                GMenuItem { text: "Kind"; iconName: "view-categories|folder-documents|view-list-tree"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "kind"; onTriggered: sortMenu.p.sortBy("kind") }
+                GMenuItem { text: "Date Modified"; iconName: "document-edit|x-office-calendar"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "modified"; onTriggered: sortMenu.p.sortBy("modified") }
+                GMenuItem { text: "Date Created"; iconName: "document-new|x-office-calendar"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "created"; onTriggered: sortMenu.p.sortBy("created") }
+                GMenuItem { text: "Date Added"; iconName: "list-add"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "added"; onTriggered: sortMenu.p.sortBy("added") }
+                GMenuItem { text: "Last Opened"; iconName: "document-open-recent"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "accessed"; onTriggered: sortMenu.p.sortBy("accessed") }
+                GMenuItem { text: "Size"; iconName: "drive-harddisk|view-sort"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "size"; onTriggered: sortMenu.p.sortBy("size") }
+                GMenuSeparator {}
+                GMenuItem { text: "Descending"; iconName: "view-sort-descending|go-down"; checkable: true; checked: !!sortMenu.m && sortMenu.m.descending; onTriggered: { sortMenu.m.applySort(sortMenu.m.sortKey, !sortMenu.m.descending); sortMenu.p.rememberView() } }
+                GMenuItem { text: "Folders First"; iconName: "folder"; checkable: true; checked: !!sortMenu.m && sortMenu.m.foldersFirst; onTriggered: bw.setSetting("folders_first", !sortMenu.m.foldersFirst) }
+                GMenuSeparator {}
+                GMenu {
+                    title: "Group By"
+                    GMenuItem { text: "None"; checkable: true; checked: !!sortMenu.p && sortMenu.p.groupBy === ""; onTriggered: sortMenu.p.setGroupBy("") }
+                    GMenuItem { text: "Kind"; checkable: true; checked: !!sortMenu.p && sortMenu.p.groupBy === "kind"; onTriggered: sortMenu.p.setGroupBy("kind") }
+                    GMenuItem { text: "Date Modified"; checkable: true; checked: !!sortMenu.p && sortMenu.p.groupBy === "date"; onTriggered: sortMenu.p.setGroupBy("date") }
+                    GMenuItem { text: "Size"; checkable: true; checked: !!sortMenu.p && sortMenu.p.groupBy === "size"; onTriggered: sortMenu.p.setGroupBy("size") }
+                    GMenuItem { text: "Name"; checkable: true; checked: !!sortMenu.p && sortMenu.p.groupBy === "name"; onTriggered: sortMenu.p.setGroupBy("name") }
+                    GMenuItem { text: "Tags"; checkable: true; checked: !!sortMenu.p && sortMenu.p.groupBy === "tags"; onTriggered: sortMenu.p.setGroupBy("tags") }
+                }
+            }
         }
     }
     Component { id: tcJobs; JobsButton { app: bw.app; win: bw } }
@@ -1426,6 +1462,7 @@ ApplicationWindow {
         else if (cmd === "viewscroll") { const v = p.viewLoaderItem(); if (v && v.restoreScroll) v.restoreScroll({ y: Number(arg), x: Number(arg) }) }
         else if (cmd === "previewscroll") { const pv = p.previewViewer(); if (pv && pv.item) pv.restoreView({ path: pv.item.path, doc: { y: Number(arg) }, pdf: { y: Number(arg) } }) }
         else if (cmd === "savesession") app.saveSession()
+        else if (cmd === "sort") { const [k, d] = arg.split(","); p.model.applySort(k, d === "desc"); p.rememberView() }
         else if (cmd === "dumpstate") console.warn("grove test state", JSON.stringify(bw.windowState()))
         else if (cmd === "makeiso") app.grove.burn(JSON.stringify({ paths: [p.path], iso: arg }))
         else if (cmd === "compress") p.compress(arg || "zip")
