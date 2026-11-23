@@ -507,10 +507,10 @@ Window {
             DocView {
                 id: codeDoc
                 anchors.fill: parent
-                visible: ql.pv.kind === "code" || ql.pv.kind === "markdown" || (ql.pv.kind === "other" && ql.textAsked)
+                visible: ql.pv.kind === "code" || ql.pv.kind === "markdown" || ql.pv.kind === "html" || (ql.pv.kind === "other" && ql.textAsked)
                 active: visible && ql.visible
                 path: visible && ql.item ? ql.item.path : ""
-                mode: ql.pv.kind === "markdown" ? "markdown" : "code"
+                mode: ql.pv.kind === "markdown" ? "markdown" : ql.pv.kind === "html" ? "html" : "code"
             }
 
             // CSV, TSV and spreadsheets: a table to sort, filter and query.

@@ -283,6 +283,10 @@ pub fn preview(path: &str, dark: bool) -> Value {
             if m.name == "text/markdown" || m.name == "text/x-markdown" || is_markdown_name(&lower) {
                 return with(json!({"kind": "markdown"}));
             }
+            // Web pages: rendered, or their source (DocView's switch).
+            if m.name == "text/html" || m.name == "application/xhtml+xml" || lower.ends_with(".html") || lower.ends_with(".htm") || lower.ends_with(".xhtml") {
+                return with(json!({"kind": "html"}));
+            }
             if is_texty(&m.name, &parents) || !text.is_empty() {
                 // A language worked out from the content says so in the footer.
                 let mut v = with(json!({"kind": "code"}));

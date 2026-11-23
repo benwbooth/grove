@@ -23,7 +23,7 @@ Item {
     property bool textAsked: false
     onPvChanged: { hexAsked = false; textAsked = false }
     // Whether there's more to show than a thumbnail.
-    readonly property bool rich: ["code", "markdown", "office", "table", "pdf", "media", "image"].indexOf(pv.kind) >= 0 || hexAsked || textAsked || !!pv.convert
+    readonly property bool rich: ["code", "markdown", "html", "office", "table", "pdf", "media", "image"].indexOf(pv.kind) >= 0 || hexAsked || textAsked || !!pv.convert
     readonly property string thumbSrc: item && item.thumb && path ? "image://thumb/" + encodeURIComponent(path) + "?m=" + (item.mtime || 0) : ""
 
     onItemChanged: Qt.callLater(load)
@@ -104,11 +104,11 @@ Item {
 
     DocView {
         anchors.fill: parent
-        visible: fv.pv.kind === "code" || fv.pv.kind === "markdown" || (fv.pv.kind === "office" && !!fv.pv.hasText) || (fv.pv.kind === "other" && fv.textAsked)
+        visible: fv.pv.kind === "code" || fv.pv.kind === "markdown" || fv.pv.kind === "html" || (fv.pv.kind === "office" && !!fv.pv.hasText) || (fv.pv.kind === "other" && fv.textAsked)
         active: visible && fv.active
         slim: fv.slim
         path: visible ? fv.path : ""
-        mode: fv.pv.kind === "markdown" ? "markdown" : fv.pv.kind === "office" ? "office" : "code"
+        mode: fv.pv.kind === "markdown" ? "markdown" : fv.pv.kind === "html" ? "html" : fv.pv.kind === "office" ? "office" : "code"
     }
     Row {
         visible: fv.pv.kind === "other" && !fv.hexAsked && !fv.textAsked && !!fv.item && !fv.item.isDir

@@ -10,16 +10,19 @@ import Grove
 Item {
     id: dv
     property string path: ""
-    property string mode: ""        // code, markdown, office, plain
+    property string mode: ""        // code, markdown, html, office, plain
     property bool active: false
     // Small panes (the preview column, the list's preview strip): a light
     // toolbar with smaller controls, no bar of its own.
     property bool slim: false
     // Viewing choices, remembered: soft wrap for text and code, and
     // Markdown as its coloured source instead of the rendered page.
-    Settings { id: prefs; category: "viewer"; property bool wrapText: false; property bool markdownSource: false; property bool wrapMarkdown: true; property real textZoom: 1 }
-    readonly property bool rendered: mode === "markdown" && !prefs.markdownSource
-    readonly property string shownMode: mode === "markdown" && prefs.markdownSource ? "code" : mode
+    Settings { id: prefs; category: "viewer"; property bool wrapText: false; property bool markdownSource: false; property bool htmlSource: false; property bool wrapMarkdown: true; property real textZoom: 1 }
+    // Markdown and web pages: rendered, or their coloured source (each remembered).
+    readonly property bool renderable: mode === "markdown" || mode === "html"
+    readonly property bool showSource: mode === "html" ? prefs.htmlSource : prefs.markdownSource
+    readonly property bool rendered: renderable && !showSource
+    readonly property string shownMode: renderable && showSource ? "code" : mode
     // Office documents read as a page: white paper at letter width, margins.
     readonly property bool paper: mode === "office"
     readonly property real paperW: Math.max(240, Math.min(list.width - 32, 816 * prefs.textZoom))
@@ -103,7 +106,7 @@ Item {
             wrapMode: dv.wrap ? TextEdit.Wrap : TextEdit.NoWrap
             onImplicitWidthChanged: if (!dv.wrap && implicitWidth > dv.widest) dv.widest = implicitWidth
             // Pictures in Markdown next to the file.
-            baseUrl: dv.mode === "markdown" ? "file://" + dv.path.substring(0, dv.path.lastIndexOf("/") + 1) : dv.paper ? "file:///" : ""
+            baseUrl: dv.renderable ? "file://" + dv.path.substring(0, dv.path.lastIndexOf("/") + 1) : dv.paper ? "file:///" : ""
             font.family: dv.shownMode === "code" ? Theme.mono : Theme.family
             font.pixelSize: (dv.shownMode === "code" ? Theme.body * 0.95 : Theme.body) * prefs.textZoom
             renderType: Text.NativeRendering
@@ -143,17 +146,17 @@ Item {
             anchors.rightMargin: dv.slim ? 4 : 8
             spacing: dv.slim ? 2 : 6
             Segmented {
-                visible: dv.mode === "markdown"
+                visible: dv.renderable
                 height: Math.round((dv.slim ? 22 : 28) * Theme.pt)
                 anchors.verticalCenter: parent.verticalCenter
                 items: [
-                    { icon: "view-preview|document-preview", tip: "Rendered: the Markdown as a formatted page", value: "rendered" },
-                    { icon: "format-text-code|text-x-script", tip: "Source: the Markdown text itself, coloured", value: "source" }
+                    { icon: "view-preview|document-preview", tip: dv.mode === "html" ? "Rendered: the web page as a page" : "Rendered: the Markdown as a formatted page", value: "rendered" },
+                    { icon: "format-text-code|text-x-script", tip: dv.mode === "html" ? "Source: the page's HTML, coloured" : "Source: the Markdown text itself, coloured", value: "source" }
                 ]
-                current: prefs.markdownSource ? "source" : "rendered"
-                onPicked: (v) => prefs.markdownSource = v === "source"
+                current: dv.showSource ? "source" : "rendered"
+                onPicked: (v) => { if (dv.mode === "html") prefs.htmlSource = v === "source"; else prefs.markdownSource = v === "source" }
             }
-            Rectangle { visible: dv.mode === "markdown"; width: 1; height: dv.slim ? 14 : 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
+            Rectangle { visible: dv.renderable; width: 1; height: dv.slim ? 14 : 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
             GButton { iconName: "zoom-out"; iconSize: dv.slim ? 14 : 16; enabled: prefs.textZoom > 0.6; tip: "Smaller text"; anchors.verticalCenter: parent.verticalCenter
                 onClicked: prefs.textZoom = Math.max(0.6, Math.round((prefs.textZoom - 0.1) * 10) / 10) }
             GButton { iconName: "zoom-in"; iconSize: dv.slim ? 14 : 16; enabled: prefs.textZoom < 2.5; tip: "Larger text"; anchors.verticalCenter: parent.verticalCenter

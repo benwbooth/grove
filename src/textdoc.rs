@@ -5,7 +5,8 @@
 //!
 //! Modes: "code" (syntax-coloured HTML for the first lines, plain text
 //! after), "markdown" (rendered with QTextDocument's reader, styled by
-//! grove_markdown_html), "office" (an office document's text), "plain".
+//! grove_markdown_html), "html" (a web page's body as rich text), "office"
+//! (an office document's text), "plain".
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QVariant};
@@ -216,7 +217,7 @@ impl qobject::TextDoc {
         self.as_mut().set_max_cols(0);
         let p = path.to_string();
         let mode = mode.to_string();
-        self.as_mut().set_rich_all(mode == "markdown");
+        self.as_mut().set_rich_all(mode == "markdown" || mode == "html");
         if p.is_empty() {
             self.as_mut().set_loading(false);
             return;
@@ -313,6 +314,23 @@ fn whole_file(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, mo
                             batch.push(Block { text: html, rich: true });
                             if first || batch.len() >= 20 {
                                 first = false;
+                                send(std::mem::take(&mut batch), total_lines, 0, false, None);
+                            }
+                        }
+                        send(batch, total_lines, 0, true, None);
+                    }
+                    "html" => {
+                        let body = web_page_body(&text);
+                        // Qt's default link blue is unreadable on dark.
+                        let body = if dark { body.replace("<a ", "<a style=\"color:#4ea1ff\" ").replace("<A ", "<A style=\"color:#4ea1ff\" ") } else { body };
+                        let blocks = html_blocks(&body);
+                        let mut batch = vec![];
+                        for b in blocks {
+                            if cancel.load(Ordering::Relaxed) {
+                                return;
+                            }
+                            batch.push(Block { text: b.into(), rich: true });
+                            if batch.len() >= 20 {
                                 send(std::mem::take(&mut batch), total_lines, 0, false, None);
                             }
                         }
@@ -429,6 +447,42 @@ fn office_html(p: &str, cancel: &AtomicBool) -> Option<Vec<String>> {
     // Tables get thin rules (Qt's rich text draws none by default).
     let html = html.replace("<table>", "<table border=\"1\" cellspacing=\"0\" cellpadding=\"5\" style=\"border-color:#c8c8c8; margin-top:6px; margin-bottom:6px\">");
     Some(html_blocks(&html))
+}
+
+/// A web page's body for Qt's rich text: scripts, styles, comments and the
+/// head dropped (they'd show as text or do nothing), and a line break
+/// before each block-level tag so it can be cut into blocks.
+pub fn web_page_body(html: &str) -> String {
+    let lower = html.to_ascii_lowercase();
+    let mut out = String::with_capacity(html.len());
+    let mut i = 0;
+    // Only what's inside <body> when there is one.
+    let (start, end) = match lower.find("<body") {
+        Some(b) => (lower[b..].find('>').map(|g| b + g + 1).unwrap_or(b), lower.rfind("</body>").unwrap_or(html.len())),
+        None => (0, html.len()),
+    };
+    let (lower, html) = (&lower[start..end.max(start)], &html[start..end.max(start)]);
+    while i < html.len() {
+        let rest = &lower[i..];
+        let skip_to = |open: &str, close: &str| -> Option<usize> {
+            if rest.starts_with(open) {
+                Some(rest.find(close).map(|e| i + e + close.len()).unwrap_or(html.len()))
+            } else {
+                None
+            }
+        };
+        if let Some(n) = skip_to("<script", "</script>").or_else(|| skip_to("<style", "</style>")).or_else(|| skip_to("<!--", "-->")).or_else(|| skip_to("<head", "</head>")) {
+            i = n;
+            continue;
+        }
+        let ch = html[i..].chars().next().unwrap();
+        if ch == '<' && ["<p", "<h1", "<h2", "<h3", "<h4", "<h5", "<h6", "<div", "<table", "<ul", "<ol", "<pre", "<blockquote", "<section", "<article", "<figure", "<hr"].iter().any(|t| rest.starts_with(t)) {
+            out.push('\n');
+        }
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
 }
 
 /// Pandoc's HTML cut into blocks between its top-level elements (never
