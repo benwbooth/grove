@@ -14,7 +14,8 @@ Rectangle {
     width: repo ? Math.max(14, mark.implicitWidth + 7) : 14
     height: 14
     radius: 7
-    color: repo ? ({ "git": "#f05032", "jj": "#7c3aed", "hg": "#999999", "svn": "#3b6fb6", "fossil": "#548c9c", "bzr": "#c8a400" })[kind] || "#8e8e93"
+    // Repository marks in calm colours (not alarm red): git green.
+    color: repo ? ({ "git": "#2ea043", "jj": "#6e5bd6", "hg": "#7a8a99", "svn": "#3b78c4", "fossil": "#4f9a94", "bzr": "#a08a3c" })[kind] || "#8e8e93"
          : code === "M" ? "#ff9f0a" : code === "A" ? "#30d158" : code === "?" ? "#8e8e93" : code === "D" ? "#ff453a" : code === "U" ? "#ff375f"
          : code === "C" ? "#28a745" : code === "I" ? "#5a5a5e" : "#64d2ff"
     border.width: 1.5
