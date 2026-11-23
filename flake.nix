@@ -16,7 +16,7 @@
       # places, devices, git status). All optional at run time.
       # Libraries grove links instead of running their command-line tools
       # (docs/NO_EXTERNAL_TOOLS.md).
-      linkedFor = pkgs: with pkgs; [ libarchive libgit2 libssh2 openssl zlib ];
+      linkedFor = pkgs: with pkgs; [ libarchive libgit2 libssh2 openssl zlib ffmpeg-headless vips glib ];
       runtimeFor = pkgs: with pkgs; [
         ffmpegthumbnailer libheif git sshfs rclone simple-mtpfs
         poppler-utils vips imagemagick djvulibre mupdf ghostscript magika-cli pandoc
@@ -71,11 +71,15 @@
             pname = "grove";
             version = (pkgs.lib.importTOML ./Cargo.toml).package.version;
             inherit src cargoDeps;
-            nativeBuildInputs = [ pkgs.pkg-config pkgs.qt6.wrapQtAppsHook pkgs.qt6.qtbase pkgs.rsync pkgs.makeWrapper ];
+            # bindgenHook: libclang for ffmpeg-sys-next's bindings.
+            nativeBuildInputs = [ pkgs.pkg-config pkgs.qt6.wrapQtAppsHook pkgs.qt6.qtbase pkgs.rsync pkgs.makeWrapper pkgs.rustPlatform.bindgenHook ];
             # Linked libraries (grove runs no external tools for these).
             buildInputs = qtFor pkgs ++ [ qtEnv pkgs.libGL ] ++ linkedFor pkgs;
             # cxx-qt wants every Qt module under one prefix.
             env.QMAKE = "${qtEnv}/bin/qmake";
+            # dmgwiz turns on openssl's "vendored" feature (OpenSSL built from
+            # source, which needs perl): link the system openssl instead.
+            env.OPENSSL_NO_VENDOR = "1";
             preBuild = ''
               # (Qt's setup hook sets QMAKE to qtbase's alone.)
               export QMAKE=${qtEnv}/bin/qmake
@@ -125,7 +129,7 @@
         let qtEnv = qtEnvFor pkgs; in
         {
           default = pkgs.mkShell {
-            packages = [ pkgs.cargo pkgs.rustc pkgs.clippy pkgs.rustfmt pkgs.pkg-config qtEnv pkgs.libGL pkgs.git pkgs.imagemagick pkgs.xvfb-run ] ++ runtimeFor pkgs;
+            packages = [ pkgs.cargo pkgs.rustc pkgs.clippy pkgs.rustfmt pkgs.pkg-config qtEnv pkgs.libGL pkgs.git pkgs.imagemagick pkgs.xvfb-run pkgs.rustPlatform.bindgenHook ] ++ runtimeFor pkgs;
             buildInputs = linkedFor pkgs;
             QMAKE = "${qtEnv}/bin/qmake";
             # Link with this shell's compiler (a system clang links against the
