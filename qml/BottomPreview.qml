@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 
-// The list view's preview pane, under the list: the selected file itself
+// The list and grid views' preview pane, under the files: the selected file itself
 // on the left (text, tables, pages, a player, the picture: FileViewer) and
 // its details on the right. Drag the top edge to make it taller or
 // shorter; double-click the edge to hide it (View Options brings it back).
@@ -13,7 +13,7 @@ Rectangle {
     // Height while dragging (saved when the drag ends).
     property real dragH: 0
     readonly property real savedH: pane && pane.app && pane.app.settings.list_preview_height > 0 ? pane.app.settings.list_preview_height : 260
-    height: dragH > 0 ? dragH : savedH
+    implicitHeight: dragH > 0 ? dragH : savedH
     color: Theme.content
 
     // The selected file, once the selection has settled (one file only).
@@ -56,7 +56,7 @@ Rectangle {
             cursorShape: Qt.SizeVerCursor
             property real startY: 0
             property real startH: 0
-            onPressed: (m) => { startY = mapToItem(null, 0, m.y).y; startH = bp.height }
+            onPressed: (m) => { startY = mapToItem(null, 0, m.y).y; startH = bp.implicitHeight }
             onPositionChanged: (m) => {
                 if (!pressed) return
                 const y = mapToItem(null, 0, m.y).y

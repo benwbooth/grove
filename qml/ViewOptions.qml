@@ -169,10 +169,10 @@ Popup {
             }
         }
         GCheck {
-            text: "Preview pane under the list"
-            visible: vo.pane && vo.pane.viewMode === "list"
+            text: "Preview pane under the files"
+            visible: vo.pane && (vo.pane.viewMode === "list" || vo.pane.viewMode === "icons")
             checked: vo.pane && vo.pane.app && vo.pane.app.settings.list_preview !== false
-            tip: "List view: the selected file's preview and details under the list (drag its top edge to resize)"
+            tip: "List and icon views: the selected file's preview and details under the list (drag its top edge to resize)"
             onToggled: vo.pane.win.setSetting("list_preview", checked)
         }
         GCheck {

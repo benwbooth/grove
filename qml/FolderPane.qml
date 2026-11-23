@@ -747,18 +747,22 @@ FocusScope {
         focus: true
         sourceComponent: pane.viewMode === "list" ? listComp : pane.viewMode === "columns" ? columnComp : pane.viewMode === "gallery" ? galleryComp : iconComp
     }
-    // The list view's preview pane (Settings: list_preview, its height).
+    // The list and grid views' preview pane (Settings: list_preview, its height).
     Loader {
         id: listPreview
-        active: pane.viewMode === "list" && !!pane.app && pane.app.settings.list_preview !== false && !(pane.win && pane.win.chooserMode)
+        active: (pane.viewMode === "list" || pane.viewMode === "icons") && !!pane.app && pane.app.settings.list_preview !== false && !(pane.win && pane.win.chooserMode)
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: selectBar.top
-        height: item ? item.height : 0
+        // implicitHeight, not height: a Loader writes its own height back into
+        // the item, which replaced the pane's binding (drags did nothing).
+        height: item ? item.implicitHeight : 0
         // (Not "pane: pane" inside the component: that binds to itself.)
         sourceComponent: BottomPreview {}
         onLoaded: item.pane = pane
     }
+    // Tests (GROVE_TEST previewdrag=H): as if its edge were dragged to H.
+    function previewDrag(h) { if (listPreview.item) listPreview.item.dragH = h }
     // Dolphin's selection mode bar: what's ticked and what to do with it.
     Rectangle {
         id: selectBar

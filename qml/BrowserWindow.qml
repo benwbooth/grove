@@ -1310,6 +1310,7 @@ ApplicationWindow {
         else if (cmd === "frames") { frameGrab.left = Number(arg) || 30; frameGrab.n = 0; frameGrab.start() }
         else if (cmd === "dumppath") console.warn("grove test path", p.path, p.viewMode)
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
+        else if (cmd === "previewdrag") p.previewDrag(Number(arg))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")
         else if (cmd === "split") currentTab.toggleSplit()
         else if (cmd === "tab") newTab(arg, [])
