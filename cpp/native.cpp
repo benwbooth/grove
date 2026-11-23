@@ -27,6 +27,7 @@
 #include <QtGui/QFontDatabase>
 #include <QtCore/QDir>
 #include <QtGui/QGuiApplication>
+#include <QtQuickControls2/QQuickStyle>
 #include <QtGui/QIcon>
 #include <QtGui/QImageReader>
 #include <QtGui/QImageWriter>
@@ -913,6 +914,12 @@ void grove_create_app()
     static char name[] = "grove";
     static char* argv[] = { name, nullptr };
     new QGuiApplication(argc, argv);
+    // grove's own controls style, whatever the desktop says: a KDE
+    // platform theme (XDG_CURRENT_DESKTOP containing KDE) switches Qt
+    // Controls to Breeze, which needs Kirigami; without it QtPdf's viewer
+    // (its ToolTip) failed to load and grove didn't start. Set after the
+    // application (and its platform theme) exists, so it wins.
+    QQuickStyle::setStyle(QStringLiteral("Basic"));
     QGuiApplication::setApplicationName(QStringLiteral("grove"));
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Grove"));
     QGuiApplication::setApplicationVersion(QStringLiteral(GROVE_VERSION));
