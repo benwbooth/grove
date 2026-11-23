@@ -242,6 +242,13 @@ ApplicationWindow {
         if (sel.length) app.grove.runJob(move ? "move" : "copy", JSON.stringify(sel), o.path)
     }
     function setPanel(name, on) { setSetting(name, on) }
+    // List and icon views show the preview under the files; the others at the side.
+    readonly property bool bottomPreviewView: !!activePane && (activePane.viewMode === "list" || activePane.viewMode === "icons") && !chooserMode
+    readonly property bool infoShown: bottomPreviewView ? app.settings.list_preview !== false : !!app.settings.info_panel
+    function toggleInfo() {
+        if (bottomPreviewView) setSetting("list_preview", app.settings.list_preview === false)
+        else setPanel("info_panel", !app.settings.info_panel)
+    }
     function askCommit(dir, paths) { commitSheet.dir = dir; commitSheet.paths = paths; commitSheet.open() }
 
     function showSettings() { settingsWin.show(); settingsWin.raise(); settingsWin.requestActivate() }
@@ -411,13 +418,35 @@ ApplicationWindow {
             // Dolphin's Information panel / Finder's preview pane (F11, Ctrl+Shift+P).
             Item {
                 id: infoPanel
-                visible: !!bw.app.settings.info_panel
+                visible: !!bw.app.settings.info_panel && !bw.bottomPreviewView
                 anchors.top: tabBar.bottom
                 anchors.bottom: statusBar.top
                 anchors.right: parent.right
-                width: Math.round(260 * Theme.pt)
+                // Drag the left edge to resize (remembered: info_panel_width).
+                property real dragW: 0
+                readonly property real savedW: bw.app.settings.info_panel_width > 0 ? bw.app.settings.info_panel_width : Math.round(260 * Theme.pt)
+                onSavedWChanged: dragW = 0
+                width: dragW > 0 ? dragW : savedW
                 property var item: null
-                Rectangle { width: 1; height: parent.height; color: Theme.separator }
+                Rectangle { width: 1; height: parent.height; color: infoEdge.containsMouse || infoEdge.pressed ? Theme.accent : Theme.separator }
+                MouseArea {
+                    id: infoEdge
+                    z: 5
+                    x: -3; width: 7; height: parent.height
+                    hoverEnabled: true
+                    cursorShape: Qt.SizeHorCursor
+                    property real startX: 0
+                    property real startW: 0
+                    onPressed: (m) => { startX = mapToItem(null, m.x, 0).x; startW = infoPanel.width }
+                    onPositionChanged: (m) => {
+                        if (!pressed) return
+                        const x = mapToItem(null, m.x, 0).x
+                        infoPanel.dragW = Math.max(200, Math.min(bw.width * 0.6, startW - (x - startX)))
+                    }
+                    onReleased: if (infoPanel.dragW > 0) bw.setSetting("info_panel_width", Math.round(infoPanel.dragW))
+                    onDoubleClicked: { infoPanel.dragW = 0; bw.setSetting("info_panel_width", 0) }
+                    GTip { visible: infoEdge.containsMouse && !infoEdge.pressed; text: "Drag to resize the panel; double-click for its usual width" }
+                }
                 Connections {
                     target: bw.activePane ? bw.activePane.model : null
                     function onCurrentRowChanged() { infoPanel.refresh() }
@@ -865,7 +894,7 @@ ApplicationWindow {
                 { separator: true },
                 { id: "sidebar", icon: "sidebar-expand-left", text: "Sidebar", shortcut: k("sidebar"), checkable: true, checked: sidebarShown },
                 { id: "folderspanel", icon: "view-list-tree", text: "Folders Panel", shortcut: k("folderspanel"), checkable: true, checked: !!st.folders_panel },
-                { id: "infopanel", icon: "dialog-information", text: "Information Panel", shortcut: k("infopanel"), checkable: true, checked: !!st.info_panel },
+                { id: "infopanel", icon: "dialog-information", text: "Information Panel", shortcut: k("infopanel"), checkable: true, checked: infoShown },
                 { id: "terminalpanel", icon: "utilities-terminal", text: "Terminal Panel", shortcut: k("terminalpanel"), checkable: true, checked: !!st.terminal_panel },
                 { id: "split", icon: "view-split-left-right", text: "Split View", shortcut: k("split"), checkable: true, checked: split, enabled: !!currentTab },
                 { id: "statusbar", icon: "kt-show-statusbar", text: "Status Bar", checkable: true, checked: st.show_status_bar !== false },
@@ -950,7 +979,7 @@ ApplicationWindow {
         case "closewindow": bw.close(); break
         case "sidebar": sidebarShown = !sidebarShown; break
         case "folderspanel": setPanel("folders_panel", !app.settings.folders_panel); break
-        case "infopanel": setPanel("info_panel", !app.settings.info_panel); break
+        case "infopanel": toggleInfo(); break
         case "terminalpanel": setPanel("terminal_panel", !app.settings.terminal_panel); break
         case "statusbar": setSetting("show_status_bar", app.settings.show_status_bar === false); break
         case "hidden": toggleHidden(); break
@@ -1228,7 +1257,7 @@ ApplicationWindow {
     Key { act: "settings"; onActivated: bw.showSettings() }
     Key { act: "terminalpanel"; onActivated: { bw.setPanel("terminal_panel", !bw.app.settings.terminal_panel); if (bw.app.settings.terminal_panel) bw.activePane.forceActiveFocus() } }
     Key { act: "folderspanel"; onActivated: bw.setPanel("folders_panel", !bw.app.settings.folders_panel) }
-    Key { act: "infopanel"; onActivated: bw.setPanel("info_panel", !bw.app.settings.info_panel) }
+    Key { act: "infopanel"; onActivated: bw.toggleInfo() }
     Key { act: "copyother"; onActivated: bw.toOtherPane(false) }
     Key { act: "moveother"; onActivated: bw.toOtherPane(true) }
     Key { act: "help"; onActivated: bw.showHelp("") }
@@ -1311,6 +1340,8 @@ ApplicationWindow {
         else if (cmd === "dumppath") console.warn("grove test path", p.path, p.viewMode)
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "previewdrag") p.previewDrag(Number(arg))
+        else if (cmd === "extract") p.extract()
+        else if (cmd === "expandrow") p.model.toggleExpanded(Number(arg))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")
         else if (cmd === "split") currentTab.toggleSplit()
         else if (cmd === "tab") newTab(arg, [])

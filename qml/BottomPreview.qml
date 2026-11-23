@@ -4,7 +4,8 @@ import QtQuick.Controls.Basic
 // The list and grid views' preview pane, under the files: the selected file itself
 // on the left (text, tables, pages, a player, the picture: FileViewer) and
 // its details on the right. Drag the top edge to make it taller or
-// shorter; double-click the edge to hide it (View Options brings it back).
+// shorter; double-click the edge for the usual height. F11 / View > Information
+// Panel hides and shows it.
 Rectangle {
     id: bp
     property var pane
@@ -65,9 +66,9 @@ Rectangle {
                 bp.dragH = Math.max(120, Math.min(maxH, startH - (y - startY)))
             }
             onReleased: { if (bp.dragH > 0) { bp.pane.win.setSetting("list_preview_height", Math.round(bp.dragH)); } }
-            onDoubleClicked: bp.pane.win.setSetting("list_preview", false)
+            onDoubleClicked: { bp.dragH = 0; bp.pane.win.setSetting("list_preview_height", 0) }
         }
-        GTip { visible: edgeMouse.containsMouse && !edgeMouse.pressed; text: "Drag to resize the preview; double-click to hide it (View Options shows it again)" }
+        GTip { visible: edgeMouse.containsMouse && !edgeMouse.pressed; text: "Drag to resize the preview; double-click for its usual height (F11 hides it)" }
     }
     // Back to the saved height once the setting has it (no jump on release).
     onSavedHChanged: dragH = 0

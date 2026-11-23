@@ -902,7 +902,13 @@ impl qobject::FolderModel {
 
     fn toggle_expanded(mut self: Pin<&mut Self>, row: i32) {
         let Some(it) = self.rust().vis.get(row as usize).cloned() else { return };
-        if !it.borrow().e.is_dir {
+        // Folders, folders inside archives, and archives themselves (their
+        // members listed under them, like a folder's).
+        let (is_dir, is_archive) = {
+            let b = it.borrow();
+            (b.e.is_dir, !b.e.is_dir && crate::archive::is_archive(&b.mime.name, &b.e.name))
+        };
+        if !is_dir && !is_archive {
             return;
         }
         let path = it.borrow().e.path.clone();
@@ -916,7 +922,7 @@ impl qobject::FolderModel {
                 .iter()
                 .filter(|i| {
                     let b = i.borrow();
-                    !(b.parent == path || b.parent.starts_with(&format!("{path}/")))
+                    !(b.parent == path || b.parent.starts_with(&format!("{path}/")) || b.parent.starts_with(&format!("archive://{path}#")))
                 })
                 .cloned()
                 .collect();
@@ -932,13 +938,32 @@ impl qobject::FolderModel {
         let qt = self.qt_thread();
         let dir = PathBuf::from(&path);
         std::thread::spawn(move || {
-            let items: Vec<RawItem> = listing::list(&dir).unwrap_or_default().into_iter().map(raw_from_entry).collect();
+            let items: Vec<RawItem> = if is_archive {
+                special_list(&format!("archive://{path}"))
+            } else if path.starts_with("archive://") {
+                special_list(&path)
+            } else {
+                listing::list(&dir).unwrap_or_default().into_iter().map(raw_from_entry).collect()
+            };
             let _ = qt.queue(move |m| m.merge_dir(gen, Some(dir), items));
         });
-        // Watch it too.
-        let mut dirs: Vec<PathBuf> = vec![PathBuf::from(self.rust().path.to_string())];
-        dirs.extend(self.rust().expanded.iter().map(PathBuf::from));
-        self.start_watch(dirs);
+        // Watch real folders too (not archives or what's inside them).
+        let root = self.rust().path.to_string();
+        if root.starts_with('/') {
+            let mut dirs: Vec<PathBuf> = vec![PathBuf::from(&root)];
+            let real: Vec<PathBuf> = self
+                .rust()
+                .all
+                .iter()
+                .filter(|i| {
+                    let b = i.borrow();
+                    b.expanded && b.e.is_dir && b.e.path.starts_with('/')
+                })
+                .map(|i| PathBuf::from(&i.borrow().e.path))
+                .collect();
+            dirs.extend(real);
+            self.start_watch(dirs);
+        }
     }
 
     fn collapse_all(mut self: Pin<&mut Self>) {

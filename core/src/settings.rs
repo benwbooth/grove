@@ -105,6 +105,9 @@ pub struct Settings {
     pub list_preview: bool,
     #[serde(default)]
     pub list_preview_height: u32,
+    /// Width of the side Information panel (0 = default).
+    #[serde(default)]
+    pub info_panel_width: u32,
     /// Dolphin's Folders panel (a tree) next to the sidebar.
     #[serde(default)]
     pub folders_panel: bool,

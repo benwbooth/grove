@@ -61,10 +61,14 @@ Item {
             const r = fm.currentRow
             if (r < 0) return true
             const it = pane.itemAt(r)
-            if (e.key === Qt.Key_Right && it.isDir && !it.expanded) fm.toggleExpanded(r)
-            else if (e.key === Qt.Key_Left && it.isDir && it.expanded) fm.toggleExpanded(r)
+            const opens = (it.isDir || it.isArchive) && (!pane.special || pane.path.indexOf("archive://") === 0)
+            if (e.key === Qt.Key_Right && opens && !it.expanded) fm.toggleExpanded(r)
+            else if (e.key === Qt.Key_Left && opens && it.expanded) fm.toggleExpanded(r)
             else if (e.key === Qt.Key_Left && it.depth > 0) {
-                const parent = it.path.substring(0, it.path.lastIndexOf("/"))
+                let parent = it.path.substring(0, it.path.lastIndexOf("/"))
+                // An archive's own members: the archive is their parent.
+                const h = it.path.indexOf("#")
+                if (it.path.indexOf("archive://") === 0 && h > 0 && it.path.indexOf("/", h) < 0) parent = it.path.substring(10, h)
                 const pr = fm.rowOf(parent)
                 if (pr >= 0) { fm.select(pr, "set"); positionAt(pr) }
             }
@@ -217,6 +221,9 @@ Item {
             required property string name
             required property string path
             required property bool isDir
+            required property bool isArchive
+            // Folders and archives open in place (archives' members too).
+            readonly property bool expandable: (isDir || isArchive) && (!root.pane.special || root.pane.path.indexOf("archive://") === 0)
             required property bool isLink
             required property bool selected
             required property bool expanded
@@ -297,7 +304,7 @@ Item {
                         width: 16; height: parent.height
                         GLabel {
                             anchors.centerIn: parent
-                            visible: rowItem.isDir && !root.pane.special
+                            visible: rowItem.expandable
                             text: "›"
                             rotation: rowItem.expanded ? 90 : 0
                             font.pixelSize: Theme.title
@@ -306,7 +313,7 @@ Item {
                         }
                         MouseArea {
                             anchors.fill: parent
-                            enabled: rowItem.isDir && !root.pane.special
+                            enabled: rowItem.expandable
                             onClicked: root.fm.toggleExpanded(rowItem.index)
                         }
                     }
