@@ -32,6 +32,11 @@ contexts:
     - match: '^[ \t]*((?:True|False|None)){{word_end}}'
       captures:
         1: constant.language.tessh
+    # name=value first on a line: an assignment, as name = value (before a
+    # program, its environment).
+    - match: '^[ \t]*({{ident}})(?==)(?!==)'
+      captures:
+        1: variable.other.readwrite.tessh
     - match: '^[ \t]*({{ident}}(?:[.\-][A-Za-z0-9_]+)*)(?![=A-Za-z0-9_]){{word_end}}'
       captures:
         1: entity.name.function.tessh variable.function.tessh
