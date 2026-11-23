@@ -50,11 +50,21 @@ MenuItem {
             border.color: Qt.rgba(0, 0, 0, 0.2)
         }
         GIcon {
+            id: rowIcon
             visible: mi.iconName !== "" && mi.swatch.a === 0
             name: mi.iconName
             size: 16
-            x: 2
+            crisp: true
+            x: 2 + (16 - width) / 2
             anchors.verticalCenter: parent.verticalCenter
+            // Placed again whenever the menu opens or moves (it opens at a
+            // new spot, then is moved to stay inside the window).
+            Connections {
+                target: mi.menu
+                function onOpened() { Qt.callLater(rowIcon.snap) }
+                function onXChanged() { Qt.callLater(rowIcon.snap) }
+                function onYChanged() { Qt.callLater(rowIcon.snap) }
+            }
         }
         GLabel {
             id: lbl

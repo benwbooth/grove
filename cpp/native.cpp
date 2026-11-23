@@ -816,11 +816,15 @@ public:
         QIcon icon;
         QString key = id;
         QColor tint;
-        const int q = key.lastIndexOf(QLatin1Char('?'));  // ?r=<rev> busts caches; &tint=rrggbb recolours
+        bool exact = false;
+        // ?r=<rev> busts caches; &tint=rrggbb recolours; &exact=1 draws the
+        // theme's own art at exactly the size asked (GIcon's crisp menus).
+        const int q = key.lastIndexOf(QLatin1Char('?'));
         if (q >= 0) {
             const QUrlQuery query(key.mid(q + 1));
             if (query.hasQueryItem(QStringLiteral("tint")))
                 tint = QColor(QLatin1Char('#') + query.queryItemValue(QStringLiteral("tint")));
+            exact = query.hasQueryItem(QStringLiteral("exact"));
             key.truncate(q);
         }
         const QString decoded = QUrl::fromPercentEncoding(key.toUtf8());
@@ -849,7 +853,10 @@ public:
         // size: QML already asks for size × the screen scale, and letting
         // QIcon apply the fractional scale (4/3) again smeared the art.
         QImage pm;
-        if (fileIcon && !tint.isValid() && s < 32) {
+        if (exact) {
+            // A design size of the theme (16/22/24/32 px): drawn 1:1.
+            pm = icon.pixmap(QSize(s, s), 1.0).toImage();
+        } else if (fileIcon && !tint.isValid() && s < 32) {
             pm = icon.pixmap(QSize(32, 32), 1.0).toImage();
             if (!pm.isNull() && pm.width() > s)
                 pm = pm.scaled(s, s, Qt::KeepAspectRatio, Qt::SmoothTransformation);
