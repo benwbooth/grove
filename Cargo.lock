@@ -1361,6 +1361,7 @@ dependencies = [
  "anyhow",
  "apfs",
  "cab",
+ "cc",
  "crc32fast",
  "dmgwiz",
  "ffmpeg-next",

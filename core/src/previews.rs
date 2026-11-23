@@ -6,7 +6,6 @@
 //! installed). Every call blocks: run them on a worker. Each one gives up
 //! when `cancel` is set (the item scrolled away) or after a timeout.
 
-use crate::thumbs::which;
 use quick_xml::events::Event;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -61,15 +60,6 @@ fn nonempty(p: &Path) -> bool {
     std::fs::metadata(p).map(|m| m.len() > 0).unwrap_or(false)
 }
 
-/// The output file if the tool made one, else clean up.
-fn made(ok: bool, out: PathBuf) -> Option<PathBuf> {
-    if ok && nonempty(&out) {
-        Some(out)
-    } else {
-        let _ = std::fs::remove_file(&out);
-        None
-    }
-}
 
 // ---------- pictures ----------
 
@@ -82,102 +72,41 @@ pub fn picture(path: &Path, px: u32, cancel: &AtomicBool) -> Option<PathBuf> {
     crate::vips::thumbnail(path, px)
 }
 
-// ---------- PDF ----------
+// ---------- PDF (MuPDF linked: crate::docs) ----------
 
-/// Page `page` (1-based) of a PDF as a PNG. `px`: the longer side; with
-/// `width_only`, the width (for reading at a given column width).
-/// pdftoppm, or mutool when that's what's installed.
+/// Page `page` (1-based) of a PDF (or EPUB, XPS...) as a PNG. `px`: the
+/// longer side; with `width_only`, the width.
 pub fn pdf_page(path: &Path, page: u32, px: u32, width_only: bool, cancel: &AtomicBool) -> Option<PathBuf> {
-    let page = page.max(1);
-    if which("pdftoppm").is_some() {
-        let out = temp_file("png");
-        let prefix = out.with_extension("");
-        let mut argv = vec!["pdftoppm".into(), "-f".into(), page.to_string(), "-l".into(), page.to_string()];
-        if width_only {
-            argv.extend(["-scale-to-x".into(), px.to_string(), "-scale-to-y".into(), "-1".into()]);
-        } else {
-            argv.extend(["-scale-to".into(), px.to_string()]);
-        }
-        argv.extend(["-png".into(), "-singlefile".into(), "-aa".into(), "yes".into(), "-aaVector".into(), "yes".into(), s(path), s(&prefix)]);
-        return made(run(&argv, None, cancel, Duration::from_secs(40)), out);
+    if cancel.load(Ordering::Relaxed) {
+        return None;
     }
-    if which("mutool").is_some() {
-        let out = temp_file("png");
-        let mut argv = vec!["mutool".into(), "draw".into(), "-q".into(), "-w".into(), px.to_string()];
-        if !width_only {
-            argv.extend(["-h".into(), px.to_string()]);
+    let out = temp_file("png");
+    match crate::docs::render(path, page.max(1) - 1, px, width_only, &out) {
+        Ok(()) if nonempty(&out) => Some(out),
+        _ => {
+            let _ = std::fs::remove_file(&out);
+            None
         }
-        argv.extend(["-o".into(), s(&out), s(path), page.to_string()]);
-        return made(run(&argv, None, cancel, Duration::from_secs(40)), out);
     }
-    None
 }
 
-/// Whether PDFs can be drawn with a tool (else the caller falls back to
-/// QtPdf, whose first use reads every system font and can stall).
+/// PDFs are always drawn here (MuPDF is linked).
 pub fn can_draw_pdf() -> bool {
-    which("pdftoppm").is_some() || which("mutool").is_some()
+    true
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct PdfInfo {
     pub pages: u32,
-    /// Each page's size in points (as many as were reported).
+    /// Each page's size in points (as many as were asked for).
     pub sizes: Vec<(f64, f64)>,
     pub title: String,
 }
 
-/// Parse `pdfinfo -f 1 -l N` output.
-pub fn parse_pdfinfo(text: &str) -> PdfInfo {
-    let mut info = PdfInfo::default();
-    let mut single: Option<(f64, f64)> = None;
-    for line in text.lines() {
-        let Some((k, v)) = line.split_once(':') else { continue };
-        let v = v.trim();
-        let size = || -> Option<(f64, f64)> {
-            let mut it = v.split_whitespace();
-            let w = it.next()?.parse().ok()?;
-            let _x = it.next()?;
-            let h = it.next()?.parse().ok()?;
-            Some((w, h))
-        };
-        if k == "Pages" {
-            info.pages = v.parse().unwrap_or(0);
-        } else if k == "Title" {
-            info.title = v.to_string();
-        } else if k == "Page size" {
-            single = size();
-        } else if k.starts_with("Page ") && k.ends_with(" size") {
-            if let Some(sz) = size() {
-                info.sizes.push(sz);
-            }
-        } else if k.starts_with("Page ") && k.ends_with(" rot") {
-            // Rotated by 90/270: swap the last page's size.
-            if matches!(v.parse::<i32>().unwrap_or(0).rem_euclid(360), 90 | 270) {
-                if let Some(last) = info.sizes.last_mut() {
-                    *last = (last.1, last.0);
-                }
-            }
-        }
-    }
-    if info.sizes.is_empty() {
-        if let Some(sz) = single {
-            info.sizes.push(sz);
-        }
-    }
-    info
-}
-
-/// Page count and page sizes (pdfinfo; up to `max_pages` sizes).
-pub fn pdf_info(path: &Path, max_pages: u32, cancel: &AtomicBool) -> Option<PdfInfo> {
-    which("pdfinfo")?;
-    let out = temp_file("txt");
-    let argv = vec!["pdfinfo".into(), "-f".into(), "1".into(), "-l".into(), max_pages.to_string(), s(path)];
-    let ok = run(&argv, Some(&out), cancel, Duration::from_secs(20));
-    let text = std::fs::read_to_string(&out).unwrap_or_default();
-    let _ = std::fs::remove_file(&out);
-    let info = parse_pdfinfo(&text);
-    (ok && info.pages > 0).then_some(info)
+/// Page count and page sizes (up to `max_pages` sizes).
+pub fn pdf_info(path: &Path, max_pages: u32, _cancel: &AtomicBool) -> Option<PdfInfo> {
+    let i = crate::docs::info(path, max_pages).ok()?;
+    (i.pages > 0).then_some(PdfInfo { pages: i.pages, sizes: i.sizes, title: i.title })
 }
 
 // ---------- video and audio (FFmpeg linked: crate::av) ----------
@@ -466,17 +395,18 @@ pub fn office_text(path: &Path, limit: usize, cancel: &AtomicBool) -> Option<Str
 // ---------- LibreOffice ----------
 
 pub fn has_libreoffice() -> bool {
-    which("soffice").is_some() || which("libreoffice").is_some()
+    crate::docs::libreoffice_dir().is_some()
 }
 
-/// An office document converted to PDF by LibreOffice (headless, with its
-/// own profile so it doesn't touch a running LibreOffice), cached in
+/// An office document converted to PDF by LibreOffice (LibreOfficeKit, in
+/// `grove --office-pdf`: grove's own process, not soffice; with its own
+/// profile so it doesn't touch a running LibreOffice), cached in
 /// ~/.cache/grove/office by path and modification time. Slow (seconds):
 /// one at a time.
 pub fn office_pdf(path: &Path, cancel: &AtomicBool) -> Option<PathBuf> {
     static ONE: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
-    let exe = if which("soffice").is_some() { "soffice" } else { "libreoffice" };
-    which(exe)?;
+    crate::docs::libreoffice_dir()?;
+    let exe = std::env::current_exe().ok()?;
     let meta = std::fs::metadata(path).ok()?;
     let key = crate::thumbs::md5_hex(&format!("{}:{}", crate::util::file_uri(path), std::os::unix::fs::MetadataExt::mtime(&meta)));
     let cache = crate::util::cache_home().join("grove/office");
@@ -489,27 +419,12 @@ pub fn office_pdf(path: &Path, cancel: &AtomicBool) -> Option<PathBuf> {
         return Some(target);
     }
     std::fs::create_dir_all(&cache).ok()?;
-    let work = temp_file("lo");
-    std::fs::create_dir_all(&work).ok()?;
     let profile = std::env::temp_dir().join(format!("grove-lo-profile-{}", unsafe { libc::getuid() }));
-    let argv = vec![
-        exe.to_string(),
-        format!("-env:UserInstallation={}", crate::util::file_uri(&profile)),
-        "--headless".into(),
-        "--norestore".into(),
-        "--convert-to".into(),
-        "pdf".into(),
-        "--outdir".into(),
-        s(&work),
-        s(path),
-    ];
+    let part = cache.join(format!("{key}.part.pdf"));
+    let argv = vec![s(&exe), "--office-pdf".into(), s(path), s(&part), s(&profile)];
     let ok = run(&argv, None, cancel, Duration::from_secs(120));
-    let made = std::fs::read_dir(&work).ok().and_then(|rd| rd.flatten().map(|e| e.path()).find(|p| p.extension().map(|e| e == "pdf").unwrap_or(false)));
-    let result = match made {
-        Some(p) if ok => std::fs::rename(&p, &target).or_else(|_| std::fs::copy(&p, &target).map(|_| ())).ok().map(|_| target),
-        _ => None,
-    };
-    let _ = std::fs::remove_dir_all(&work);
+    let result = if ok && nonempty(&part) { std::fs::rename(&part, &target).ok().map(|_| target) } else { None };
+    let _ = std::fs::remove_file(&part);
     result
 }
 
@@ -599,17 +514,6 @@ pub fn kind_of(mimes: &[String], name: &str) -> Kind {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn pdfinfo_parsing() {
-        let t = "Title:           A Book\nPages:           3\nPage    1 size: 612 x 792 pts (letter)\nPage    1 rot:  0\nPage    2 size: 612 x 792 pts (letter)\nPage    2 rot:  90\n";
-        let i = parse_pdfinfo(t);
-        assert_eq!(i.pages, 3);
-        assert_eq!(i.title, "A Book");
-        assert_eq!(i.sizes, vec![(612.0, 792.0), (792.0, 612.0)]);
-        let j = parse_pdfinfo("Pages: 1\nPage size: 100 x 200 pts\n");
-        assert_eq!(j.sizes, vec![(100.0, 200.0)]);
-    }
 
     #[test]
     fn epub_cover_lookup() {

@@ -1,14 +1,13 @@
 //! Whole-document viewing for formats Quick Look has no viewer of its own
 //! for: each is turned into a PDF once (cached by path, size and time) with
-//! the standard tool for it, then paged through like any PDF.
-//!   DjVu                          -> ddjvu (djvulibre)
-//!   EPUB, MOBI, FB2, XPS, CBZ     -> mutool convert (MuPDF; books reflowed)
-//!   PostScript, EPS               -> ps2pdf (Ghostscript)
-//!   CBR, CB7, CBT (comics)        -> repacked as CBZ (libarchive), then mutool
+//! linked libraries (grove_core::docs), then paged through like any PDF.
+//!   DjVu                          -> djvulibre pages into a PDF (MuPDF)
+//!   EPUB, MOBI, FB2, XPS, CBZ     -> MuPDF's PDF writer (books reflowed)
+//!   PostScript, EPS               -> Ghostscript (pdfwrite)
+//!   CBR, CB7, CBT (comics)        -> repacked as CBZ (libarchive), then MuPDF
 //! Office documents go through LibreOffice (previews::office_pdf).
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Conv {
@@ -38,15 +37,6 @@ fn cache_for(path: &Path) -> Option<PathBuf> {
     Some(dir.join(format!("{}.pdf", grove_core::thumbs::md5_hex(&key))))
 }
 
-fn run(cmd: &str, args: &[&std::ffi::OsStr]) -> Result<(), String> {
-    let o = Command::new(cmd).args(args).output().map_err(|_| format!("Viewing this needs {cmd}, which isn't installed."))?;
-    if o.status.success() {
-        Ok(())
-    } else {
-        Err(format!("{cmd} couldn't read it: {}", String::from_utf8_lossy(&o.stderr).lines().last().unwrap_or("").trim()))
-    }
-}
-
 /// The document as a PDF (made now, or the cached one).
 pub fn to_pdf(path: &str) -> Result<PathBuf, String> {
     let p = Path::new(path);
@@ -63,11 +53,10 @@ pub fn to_pdf(path: &str) -> Result<PathBuf, String> {
         return Ok(out);
     }
     let part = out.with_extension("part.pdf");
-    let os = |s: &Path| s.as_os_str().to_owned();
     let r = match conv {
-        Conv::Djvu => run("ddjvu", &[std::ffi::OsStr::new("-format=pdf"), &os(p), &os(&part)]),
-        Conv::Mupdf => run("mutool", &[std::ffi::OsStr::new("convert"), std::ffi::OsStr::new("-o"), &os(&part), &os(p)]),
-        Conv::Ps => run("ps2pdf", &[&os(p), &os(&part)]),
+        Conv::Djvu => grove_core::docs::djvu_to_pdf(p, &part),
+        Conv::Mupdf => grove_core::docs::to_pdf(p, &part),
+        Conv::Ps => grove_core::docs::ps_to_pdf(p, &part),
         Conv::ComicRepack => {
             // CBR/CB7/CBT: the pages into a zip (libarchive), which MuPDF reads.
             let cbz = out.with_extension("cbz");
@@ -80,7 +69,7 @@ pub fn to_pdf(path: &str) -> Result<PathBuf, String> {
                     grove_core::libarchive::create(&cbz, &pages, grove_core::libarchive::Format::Zip, &never)
                 })
                 .map_err(|e| format!("Couldn't read the comic: {e}"))
-                .and_then(|_| run("mutool", &[std::ffi::OsStr::new("convert"), std::ffi::OsStr::new("-o"), &os(&part), &os(&cbz)]));
+                .and_then(|_| grove_core::docs::to_pdf(&cbz, &part));
             let _ = std::fs::remove_file(&cbz);
             let _ = std::fs::remove_dir_all(&tmp);
             r

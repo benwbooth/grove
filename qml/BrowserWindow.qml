@@ -1366,6 +1366,7 @@ ApplicationWindow {
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "previewdrag") p.previewDrag(Number(arg))
         else if (cmd === "extract") p.extract()
+        else if (cmd === "makeiso") app.grove.burn(JSON.stringify({ paths: [p.path], iso: arg }))
         else if (cmd === "compress") p.compress(arg || "zip")
         else if (cmd === "colscroll") { const v = p.viewLoaderItem(); if (v && v.testScroll) v.testScroll(Number(arg)) }
         else if (cmd === "dumpcols") { const v = p.viewLoaderItem(); if (v && v.testDump) v.testDump() }

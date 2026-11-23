@@ -415,29 +415,15 @@ impl qobject::TextDoc {
     }
 }
 
-/// The file's text (an office document's text for "office").
-/// An office document as HTML blocks (pandoc), pictures taken out to the
-/// cache. None when pandoc isn't there or can't read the format (.doc, .xls).
+/// An office document as HTML blocks (grove_core::officehtml: Word, ODT,
+/// PowerPoint, RTF; no pandoc), pictures taken out to the cache. None for
+/// formats it doesn't read (.doc, .xls).
 fn office_html(p: &str, cancel: &AtomicBool) -> Option<Vec<String>> {
-    let lower = p.to_lowercase();
-    let from = ["docx", "odt", "rtf", "pptx", "docm", "dotx"].into_iter().find(|e| lower.ends_with(&format!(".{e}")))?;
-    let from = match from { "docm" | "dotx" => "docx", f => f };
     let meta = std::fs::metadata(p).ok()?;
     let key = format!("{p}|{}|{}", meta.len(), std::os::unix::fs::MetadataExt::mtime(&meta));
     let media = grove_core::util::cache_home().join("grove/office-media").join(grove_core::thumbs::md5_hex(&key));
-    let out = std::process::Command::new("pandoc")
-        .args(["-f", from, "-t", "html5", "--wrap=none"])
-        .arg(format!("--extract-media={}", media.display()))
-        .arg(p)
-        .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    if !out.status.success() || cancel.load(Ordering::Relaxed) {
-        return None;
-    }
-    let html = String::from_utf8_lossy(&out.stdout);
-    if html.trim().is_empty() {
+    let html = grove_core::officehtml::convert(std::path::Path::new(p), &media, cancel)?;
+    if cancel.load(Ordering::Relaxed) || html.trim().is_empty() {
         return None;
     }
     // Tables get thin rules (Qt's rich text draws none by default).

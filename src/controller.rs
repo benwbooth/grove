@@ -1322,7 +1322,7 @@ impl ffi::Grove {
             };
             if req.dry_run {
                 jobs().lock().remove(&id);
-                let cmd = crate::burn::command(&req).map(|a| a.join(" ")).unwrap_or_else(|e| e);
+                let cmd = crate::burn::layout(&req).map(|l| l.iter().map(|(p, t)| format!("{p} -> {t}")).collect::<Vec<_>>().join(", ")).unwrap_or_else(|e| e);
                 send(json!({"id": id, "title": title, "state": "done", "totalBytes": 1, "doneBytes": 1, "current": cmd}));
                 notify_any("info", &format!("Dry run: {cmd}"));
                 return;

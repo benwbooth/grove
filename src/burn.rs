@@ -1,12 +1,10 @@
 //! Burn to Disc (Finder's File › Burn): files and folders onto a CD, DVD or
-//! Blu-ray with xorriso, or into an ISO image file. Drives come from sysfs
-//! (no device is opened to list them). Progress comes from xorriso's
-//! UPDATE lines.
+//! Blu-ray, or into an ISO image file, through libisofs + libburn
+//! (grove_core::burnlib; no xorriso). Drives come from sysfs (no device is
+//! opened to list them).
 
 use serde::Deserialize;
-use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Drive {
@@ -50,10 +48,10 @@ pub struct Request {
     pub volid: String,
     #[serde(default)]
     pub eject: bool,
-    /// The drive goes through the motions without writing (xorriso -dummy).
+    /// The drive goes through the motions without writing.
     #[serde(default)]
     pub simulate: bool,
-    /// Don't run anything: answer with the command (tests).
+    /// Don't burn: answer with what would go on the disc (tests).
     #[serde(default)]
     pub dry_run: bool,
 }
@@ -64,91 +62,39 @@ pub fn volume_id(name: &str) -> String {
     if v.trim_matches('_').is_empty() { "DISC".into() } else { v }
 }
 
-/// The xorriso command line for a request.
-pub fn command(r: &Request) -> Result<Vec<String>, String> {
+/// What goes on the disc: each item by name, or one folder's contents at
+/// the top (Finder burns a folder that way).
+pub fn layout(r: &Request) -> Result<Vec<(String, String)>, String> {
     if r.paths.is_empty() {
         return Err("There's nothing to burn.".into());
     }
-    let mut a: Vec<String> = vec!["xorriso".into(), "-abort_on".into(), "FAILURE".into(), "-report_about".into(), "UPDATE".into()];
-    if r.device.is_empty() {
-        if r.iso.is_empty() {
-            return Err("Choose a disc burner or a file to save the disc image in.".into());
-        }
-        a.extend(["-outdev".into(), format!("stdio:{}", r.iso)]);
-    } else {
-        a.extend(["-outdev".into(), r.device.clone(), "-blank".into(), "as_needed".into()]);
-        if r.simulate {
-            a.extend(["-dummy".into(), "on".into()]);
-        }
+    if r.device.is_empty() && r.iso.is_empty() {
+        return Err("Choose a disc burner or a file to save the disc image in.".into());
     }
-    let vol = if r.volid.is_empty() { volume_id(Path::new(&r.paths[0]).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default().as_str()) } else { volume_id(&r.volid) };
-    a.extend(["-volid".into(), vol, "-joliet".into(), "on".into(), "-rockridge".into(), "on".into()]);
-    // One folder: its contents at the top of the disc (Finder burns a
-    // folder that way). Otherwise each item by name.
     let single_dir = r.paths.len() == 1 && Path::new(&r.paths[0]).is_dir();
-    for p in &r.paths {
-        let target = if single_dir { "/".to_string() } else { format!("/{}", Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()) };
-        a.extend(["-map".into(), p.clone(), target]);
-    }
-    a.push("-commit".into());
-    if !r.device.is_empty() && r.eject {
-        a.extend(["-eject".into(), "all".into()]);
-    }
-    Ok(a)
+    Ok(r.paths
+        .iter()
+        .map(|p| {
+            let t = if single_dir { "/".to_string() } else { format!("/{}", Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()) };
+            (p.clone(), t)
+        })
+        .collect())
 }
 
-/// "xorriso : UPDATE :  52.38% done" -> 0.5238.
-pub fn parse_progress(line: &str) -> Option<f64> {
-    let i = line.find("% done")?;
-    let head = &line[..i];
-    let num: String = head.chars().rev().take_while(|c| c.is_ascii_digit() || *c == '.').collect::<Vec<_>>().into_iter().rev().collect();
-    num.parse::<f64>().ok().map(|p| (p / 100.0).clamp(0.0, 1.0))
-}
-
-/// Run a burn, calling `progress(fraction, line)`; Err has xorriso's reason.
+/// Run a burn, calling `progress(fraction, phase)` (fraction -1: phase only).
 pub fn run(r: &Request, cancel: &std::sync::atomic::AtomicBool, mut progress: impl FnMut(f64, &str)) -> Result<(), String> {
-    let argv = command(r)?;
+    let items = layout(r)?;
     if !r.iso.is_empty() {
         if let Some(d) = PathBuf::from(&r.iso).parent() {
             let _ = std::fs::create_dir_all(d);
         }
-        // xorriso adds to an existing image; start afresh.
-        let _ = std::fs::remove_file(&r.iso);
     }
-    let mut child = Command::new(&argv[0])
-        .args(&argv[1..])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { "Burning needs xorriso, which isn't installed.".to_string() } else { e.to_string() })?;
-    let err = child.stderr.take().unwrap();
-    let mut last_problem = String::new();
-    for line in BufReader::new(err).lines().map_while(Result::ok) {
-        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("Cancelled".into());
-        }
-        if let Some(f) = parse_progress(&line) {
-            progress(f, "");
-        } else if line.contains("FAILURE") || line.contains("SORRY") || line.contains("FATAL") {
-            last_problem = line.split(" : ").last().unwrap_or(&line).trim().to_string();
-        } else if line.contains("Blanking") || line.contains("Writing") || line.contains("Closing") {
-            progress(-1.0, line.split(" : ").last().unwrap_or("").trim());
-        }
-    }
-    let st = child.wait().map_err(|e| e.to_string())?;
-    if st.success() {
-        Ok(())
-    } else if last_problem.is_empty() {
-        Err("The burn didn't finish (xorriso stopped with an error).".into())
-    } else {
-        Err(explain(&last_problem))
-    }
+    let vol = if r.volid.is_empty() { volume_id(Path::new(&r.paths[0]).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default().as_str()) } else { volume_id(&r.volid) };
+    let job = grove_core::burnlib::Job { items, volid: &vol, device: &r.device, iso: &r.iso, simulate: r.simulate, eject: r.eject };
+    grove_core::burnlib::burn(&job, cancel, |f, phase| progress(f, phase)).map_err(|e| if e == "Cancelled" { e } else { explain(&e) })
 }
 
-/// xorriso's words, in plainer ones where it's a common case.
+/// libburn's words, in plainer ones where it's a common case.
 fn explain(p: &str) -> String {
     let l = p.to_lowercase();
     if l.contains("no media") || l.contains("no medium") {
@@ -174,21 +120,12 @@ mod tests {
         assert_eq!(volume_id(&"x".repeat(40)).len(), 32);
     }
     #[test]
-    fn progress_lines() {
-        assert_eq!(parse_progress("xorriso : UPDATE :  52.38% done"), Some(0.5238));
-        assert!(parse_progress("xorriso : UPDATE : 1 MB written").is_none());
-    }
-    #[test]
-    fn commands() {
+    fn layouts() {
         let r = Request { paths: vec!["/tmp".into()], iso: "/x/out.iso".into(), ..Default::default() };
-        let c = command(&r).unwrap();
-        assert!(c.windows(2).any(|w| w[0] == "-outdev" && w[1] == "stdio:/x/out.iso"));
-        assert!(c.windows(3).any(|w| w[0] == "-map" && w[1] == "/tmp" && w[2] == "/"));
-        let r = Request { paths: vec!["/a/b.txt".into(), "/a/c".into()], device: "/dev/sr0".into(), simulate: true, eject: true, ..Default::default() };
-        let c = command(&r).unwrap();
-        assert!(c.contains(&"-dummy".to_string()) && c.contains(&"-eject".to_string()));
-        assert!(c.windows(3).any(|w| w[0] == "-map" && w[2] == "/b.txt"));
-        assert!(command(&Request::default()).is_err());
+        assert_eq!(layout(&r).unwrap(), vec![("/tmp".to_string(), "/".to_string())]);
+        let r = Request { paths: vec!["/a/b.txt".into(), "/a/c".into()], device: "/dev/sr0".into(), ..Default::default() };
+        assert_eq!(layout(&r).unwrap()[0].1, "/b.txt");
+        assert!(layout(&Request::default()).is_err());
     }
     #[test]
     fn no_drives_in_empty_sysfs() {

@@ -48,6 +48,15 @@ fn main() {
     if args.first().map(String::as_str) == Some("--root-helper") {
         std::process::exit(roothelper::run(&args[1..]));
     }
+    // LibreOfficeKit makes a PDF in a process of its own (previews::office_pdf).
+    if args.first().map(String::as_str) == Some("--office-pdf") && args.len() >= 4 {
+        let r = grove_core::docs::office_to_pdf_here(std::path::Path::new(&args[1]), std::path::Path::new(&args[2]), std::path::Path::new(&args[3]));
+        if let Err(e) = &r {
+            eprintln!("{e}");
+        }
+        // LibreOffice's own shutdown is slow and can hang: just leave.
+        unsafe { libc::_exit(if r.is_ok() { 0 } else { 1 }) };
+    }
     roothelper::apply_env_args(&mut args);
     let mut paths: Vec<String> = Vec::new();
     let mut action = "folders";

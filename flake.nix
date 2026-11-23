@@ -16,12 +16,10 @@
       # places, devices, git status). All optional at run time.
       # Libraries grove links instead of running their command-line tools
       # (docs/NO_EXTERNAL_TOOLS.md).
-      linkedFor = pkgs: with pkgs; [ libarchive libgit2 libssh2 openssl zlib ffmpeg-headless vips glib onnxruntime ];
-      runtimeFor = pkgs: with pkgs; [
-        ffmpegthumbnailer libheif git sshfs rclone simple-mtpfs
-        poppler-utils vips imagemagick djvulibre mupdf ghostscript pandoc
-        udisks fuse3 avahi cifs-utils smbnetfs ffmpeg-headless xorriso dvdplusrwtools
-      ];
+      linkedFor = pkgs: with pkgs; [ libarchive libgit2 libssh2 openssl zlib ffmpeg-headless vips glib onnxruntime mupdf djvulibre libisofs libburn ];
+      # Programs grove still runs (docs/NO_EXTERNAL_TOOLS.md): drives are
+      # separate services (FUSE mounts, rclone), not libraries.
+      runtimeFor = pkgs: with pkgs; [ sshfs rclone simple-mtpfs fuse3 cifs-utils smbnetfs ];
     in
     {
       packages = forAll (pkgs:
@@ -82,6 +80,8 @@
             # magika's onnxruntime (ort-sys): nixpkgs' library, linked.
             env.ORT_LIB_LOCATION = "${pkgs.onnxruntime}/lib";
             env.ORT_PREFER_DYNAMIC_LINK = "1";
+            # Ghostscript, loaded privately by core/csrc/docs.c.
+            env.GROVE_LIBGS = "${pkgs.ghostscript_headless}/lib/libgs.so";
             # dmgwiz turns on openssl's "vendored" feature (OpenSSL built from
             # source, which needs perl): link the system openssl instead.
             env.OPENSSL_NO_VENDOR = "1";
@@ -111,7 +111,7 @@
               wrapQtApp $out/bin/grove \
                 --suffix PATH : ${pkgs.lib.makeBinPath (runtimeFor pkgs)} \
                 --set-default GROVE_FONT_DIR ${pkgs.inter}/share/fonts/truetype \
-                --suffix XDG_DATA_DIRS : ${pkgs.lib.concatMapStringsSep ":" (p: "${p}/share") [ pkgs.ffmpegthumbnailer pkgs.libheif pkgs.whitesur-icon-theme ]}
+                --suffix XDG_DATA_DIRS : ${pkgs.lib.concatMapStringsSep ":" (p: "${p}/share") [ pkgs.whitesur-icon-theme ]}
             '';
             meta = {
               description = "A Finder-style file manager with Dolphin's power";
@@ -139,6 +139,7 @@
             QMAKE = "${qtEnv}/bin/qmake";
             ORT_LIB_LOCATION = "${pkgs.onnxruntime}/lib";
             ORT_PREFER_DYNAMIC_LINK = "1";
+            GROVE_LIBGS = "${pkgs.ghostscript_headless}/lib/libgs.so";
             # Link with this shell's compiler (a system clang links against the
             # system glibc and the binary can't load this nixpkgs' Qt).
             "CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_LINKER" = "cc";
@@ -146,7 +147,7 @@
               ln -sfn ${qtEnv} .qt-env
               export NIX_LDFLAGS="''${NIX_LDFLAGS//"-rpath $out/lib"/}"
               export GROVE_FONT_DIR=''${GROVE_FONT_DIR:-${pkgs.inter}/share/fonts/truetype}
-              export XDG_DATA_DIRS="${pkgs.ffmpegthumbnailer}/share:${pkgs.libheif}/share:${pkgs.whitesur-icon-theme}/share:''${XDG_DATA_DIRS:-}"
+              export XDG_DATA_DIRS="${pkgs.whitesur-icon-theme}/share:''${XDG_DATA_DIRS:-}"
             '';
           };
         });
