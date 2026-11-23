@@ -322,6 +322,35 @@ pub fn preview(path: &str, dark: bool) -> Value {
     // Binary data of a type grove can't name: the hex view. A known type
     // (a Flatpak bundle, a disk image...) gets its card, hex on request.
     let unknown = matches!(m.name.as_str(), "application/octet-stream" | "application/x-zerosize" | "") || m.comment.is_empty();
+    // Nothing knew it by name or magic number: Magika (on tract) looks at
+    // the content. A picture, PDF or archive it finds is shown as one.
+    if unknown {
+        if let Some(g) = grove_core::magika::identify(p).filter(|g| !matches!(g.label, "unknown" | "empty" | "txt")) {
+            let kt = format!("{} (recognised from its contents)", g.description);
+            if g.group == "image" && crate::bridge::ffi::grove_can_read_image(&crate::bridge::ffi::QString::from(path)) {
+                let mut v = with(json!({"kind": "image", "src": path}));
+                v["kindText"] = json!(kt);
+                return v;
+            }
+            if g.mime == "application/pdf" {
+                let mut v = with(pdf_json(p, &std::sync::atomic::AtomicBool::new(false)));
+                v["kindText"] = json!(kt.clone());
+                return v;
+            }
+            if g.group == "archive" {
+                if let Ok(entries) = crate::archive::list(path) {
+                    let total = entries.len();
+                    let shown: Vec<Value> = entries.into_iter().take(500).map(|e| json!({"path": e.path, "size": e.size, "dir": e.is_dir})).collect();
+                    let mut v = with(json!({"kind": "archive", "entries": shown, "total": total}));
+                    v["kindText"] = json!(kt);
+                    return v;
+                }
+            }
+            let mut v = with(json!({"kind": "other", "hexFirst": false, "magika": g.label}));
+            v["kindText"] = json!(kt);
+            return v;
+        }
+    }
     with(json!({"kind": "other", "hexFirst": unknown}))
 }
 

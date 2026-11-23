@@ -13,6 +13,7 @@ pub mod officehtml;
 pub mod iso9660;
 pub mod textenc;
 pub mod libarchive;
+pub mod magika;
 pub mod msi;
 pub mod listing;
 pub mod mounts;

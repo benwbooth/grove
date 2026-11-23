@@ -1,0 +1,4 @@
+standard_v3_3.onnx is Magika's file-type model, by Google LLC, from the
+magika crate (https://github.com/google/magika), under the Apache License
+2.0. core/src/magika_table.rs is generated from the same crate by
+scripts/gen-magika.py. grove runs the model with tract (core/src/magika.rs).

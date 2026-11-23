@@ -94,15 +94,12 @@ fn magika(path: &str) -> Option<String> {
     if let Some(v) = cache.lock().unwrap().get(&key) {
         return v.clone();
     }
-    // Magika's model in-process (magika crate, onnxruntime linked; no
-    // magika command). One session, kept: loading the model takes a moment.
-    static SESSION: OnceLock<Option<Mutex<magika::Session>>> = OnceLock::new();
-    let session = SESSION.get_or_init(|| magika::Session::new().ok().map(Mutex::new)).as_ref()?;
-    let ft = session.lock().unwrap_or_else(|e| e.into_inner()).identify_file_sync(path).ok()?;
-    let info = ft.info();
-    let label = info.label;
-    let ext = if info.is_text && !matches!(label, "txt" | "unknown" | "empty" | "undefined") {
-        info.extensions.first().map(|e| e.to_string()).or_else(|| Some(label.to_string()))
+    // Magika's model, in-process on tract (grove_core::magika; no
+    // onnxruntime, no magika command).
+    let g = grove_core::magika::identify(std::path::Path::new(path))?;
+    let label = g.label;
+    let ext = if g.is_text && !matches!(label, "txt" | "unknown" | "empty" | "undefined") {
+        g.extensions.first().map(|e| e.to_string()).or_else(|| Some(label.to_string()))
     } else {
         None
     };

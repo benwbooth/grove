@@ -34,6 +34,7 @@ encoding_rs = "0.8.44"
 chardetng = "1.0.0"
 cfb = "0.16"
 libhlp = "0.3.0"
+tract-onnx = "0.23.10"
 
 [build-dependencies]
 cc = "1"
