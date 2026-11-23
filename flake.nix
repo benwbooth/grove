@@ -60,6 +60,8 @@
               # chmods the destination: that fails on a file left by another
               # nixbld user. The exports are regenerated every build anyway.
               rm -rf "$workDir/target/cxxqt"
+              # libsqlite3-sys copies its bindings the same way (fs::copy).
+              rm -rf "$workDir"/target/release/build/libsqlite3-sys-*/out
               CARGO_HOME="$NIX_BUILD_TOP/.cargo" CARGO_TARGET_DIR="$workDir/target" \
                 cargo build ${cargoArgs} --offline --locked -j "$NIX_BUILD_CORES"
               find "$workDir/target" -mindepth 1 -user "$(id -u)" ! -perm -o+w -exec chmod a+rwX {} + 2>/dev/null || true
