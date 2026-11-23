@@ -959,7 +959,7 @@ ApplicationWindow {
         case "desktop": go(home + "/Desktop"); break
         case "downloads": go(home + "/Downloads"); break
         case "home": go(home); break
-        case "computer": go("/"); break
+        case "computer": go("computer:///"); break
         case "trash": go("trash:///"); break
         case "gotofolder": editPath(); break
         case "connect": connectServer(); break
@@ -1180,7 +1180,7 @@ ApplicationWindow {
     Key { act: "documents"; onActivated: bw.go(bw.app.grove.home() + "/Documents") }
     Key { act: "downloads"; onActivated: bw.go(bw.app.grove.home() + "/Downloads") }
     Key { act: "recents"; onActivated: bw.go("recent:///") }
-    Key { act: "computer"; onActivated: bw.go("/") }
+    Key { act: "computer"; onActivated: bw.go("computer:///") }
     Key { act: "trash"; onActivated: bw.go("trash:///") }
     Key { act: "connect"; onActivated: bw.connectServer() }
     Key { act: "diskusage"; onActivated: bw.showDiskUsage() }
@@ -1269,6 +1269,18 @@ ApplicationWindow {
         }
         shotTimer2.start()
     }
+    Timer {
+        id: frameGrab
+        property int left: 0
+        property int n: 0
+        interval: 16; repeat: true
+        onTriggered: {
+            if (left <= 0) { stop(); return }
+            left--
+            bw.app.grove.grabWindows(bw.app.screenshot.replace(".png", "-f" + ("0" + n).slice(-2) + ".png"))
+            n++
+        }
+    }
     Timer { id: stepTimer; property var rest: []; onTriggered: bw.runSteps(rest) }
     Timer {
         id: shotTimer2
@@ -1293,6 +1305,9 @@ ApplicationWindow {
         else if (cmd === "openrow") { console.warn("grove test item", p.model.get(Number(arg))); p.openRow(Number(arg), false) }
         else if (cmd === "dumpx") { const v = p.viewLoaderItem(); console.warn("grove test x", arg || "", v && v.stripX !== undefined ? v.stripX.toFixed(1) : "?") }
         else if (cmd === "media") console.warn("grove test media", arg || "", ql.mediaState())
+        // frames=N: grab the window every 16 ms, N times (shot-f00.png...),
+        // to see every intermediate state of what the next steps do.
+        else if (cmd === "frames") { frameGrab.left = Number(arg) || 30; frameGrab.n = 0; frameGrab.start() }
         else if (cmd === "dumppath") console.warn("grove test path", p.path, p.viewMode)
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")

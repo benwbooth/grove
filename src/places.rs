@@ -88,7 +88,7 @@ pub fn devices() -> Vec<Value> {
 pub fn places(favs: &[String]) -> Value {
     let favourites: Vec<Value> = favs.iter().map(|p| json!({"name": name_of(p), "path": p, "icon": icon_of(p), "exists": Path::new(p).exists()})).collect();
     let home = grove_core::util::home().to_string_lossy().into_owned();
-    let mut locations = vec![json!({"name": "Computer", "path": "/", "icon": "computer", "kind": "root"})];
+    let mut locations = vec![json!({"name": "Computer", "path": "computer:///", "icon": "computer", "kind": "root"})];
     let devs = devices();
     let mut network = vec![];
     for m in grove_core::mounts::user_mounts() {

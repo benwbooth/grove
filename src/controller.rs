@@ -56,7 +56,19 @@ fn load_startup() -> Startup {
 
 static STARTUP: OnceLock<Startup> = OnceLock::new();
 
+/// The system's name (os-release NAME, e.g. "NixOS"): the system disk's
+/// name in Computer. Read once (at startup, off the UI thread's work).
+pub fn os_name() -> &'static str {
+    static N: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    N.get_or_init(|| {
+        std::fs::read_to_string("/etc/os-release").ok()
+            .and_then(|t| t.lines().find_map(|l| l.strip_prefix("NAME=").map(|v| v.trim_matches('"').to_string())))
+            .unwrap_or_else(|| "System".into())
+    })
+}
+
 pub fn init_startup() {
+    let _ = os_name();
     let _ = STARTUP.set(load_startup());
 }
 
@@ -217,6 +229,10 @@ impl ffi::Grove {
         } else {
             crate::dbus::serve(self.qt_thread());
         }
+    }
+
+    pub fn os_name(&self) -> QString {
+        qs(os_name())
     }
 
     pub fn home(&self) -> QString {

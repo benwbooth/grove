@@ -92,6 +92,7 @@ FocusScope {
         if (!p) return ""
         if (p.indexOf("trash:") === 0) return "Trash"
         if (p.indexOf("recent:") === 0) return "Recents"
+        if (p.indexOf("computer:") === 0) return "Computer"
         if (p.indexOf("search:") === 0) return searchText ? "Searching “" + searchText + "”" : searchTag ? "Tag: " + searchTag : "Search"
         if (p.indexOf("archive://") === 0) {
             const h = p.indexOf("#")
@@ -100,7 +101,7 @@ FocusScope {
             return inner ? inner.substring(inner.lastIndexOf("/") + 1) : a.substring(a.lastIndexOf("/") + 1)
         }
         if (grove && p === grove.home()) return grove.env("USER") || "Home"
-        if (p === "/") return "Computer"
+        if (p === "/") return grove ? grove.osName() : "/"
         return p.substring(p.lastIndexOf("/") + 1)
     }
 
@@ -108,6 +109,13 @@ FocusScope {
     function navigate(p, opts) {
         opts = opts || {}
         if (!p) return
+        // A disk in Computer that isn't mounted: mount it, then open it.
+        if (p.indexOf("mount:") === 0) {
+            Async.call(grove, k => grove.mountDevice(k, p.substring(6)), r => {
+                if (r.error) win.toast("error", r.error); else { pane.navigate(r.path); grove.placesRevision = grove.placesRevision + 1 }
+            })
+            return
+        }
         if (p.length > 1 && p.endsWith("/") && p.indexOf(":///") < 0) p = p.substring(0, p.length - 1)
         if (searching && !opts.keepSearch) endSearch(false)
         if (path && path !== p && !opts.noHistory) {
@@ -154,7 +162,9 @@ FocusScope {
             const i = inner.lastIndexOf("/")
             return p.substring(0, h + 1) + (i < 0 ? "" : inner.substring(0, i))
         }
-        if (p === "/" || p.indexOf("/") !== 0) return ""
+        // The system disk's parent is Computer, as in Finder.
+        if (p === "/") return "computer:///"
+        if (p.indexOf("/") !== 0) return ""
         const i = p.lastIndexOf("/")
         return i <= 0 ? "/" : p.substring(0, i)
     }
@@ -280,6 +290,7 @@ FocusScope {
     // archive:// listing (archives browse like folders), else "".
     function browsePath(it) {
         if (!it) return ""
+        if (it.path && it.path.indexOf("mount:") === 0) return it.path
         if (it.isDir) return it.path
         if (archiveLike(it) && it.path.indexOf("/") === 0) return "archive://" + it.path + "#"
         // An archive inside an archive: its own path lists it (nested).
@@ -732,9 +743,21 @@ FocusScope {
         anchors.top: topBars.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: selectBar.top
+        anchors.bottom: listPreview.active ? listPreview.top : selectBar.top
         focus: true
         sourceComponent: pane.viewMode === "list" ? listComp : pane.viewMode === "columns" ? columnComp : pane.viewMode === "gallery" ? galleryComp : iconComp
+    }
+    // The list view's preview pane (Settings: list_preview, its height).
+    Loader {
+        id: listPreview
+        active: pane.viewMode === "list" && !!pane.app && pane.app.settings.list_preview !== false && !(pane.win && pane.win.chooserMode)
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: selectBar.top
+        height: item ? item.height : 0
+        // (Not "pane: pane" inside the component: that binds to itself.)
+        sourceComponent: BottomPreview {}
+        onLoaded: item.pane = pane
     }
     // Dolphin's selection mode bar: what's ticked and what to do with it.
     Rectangle {

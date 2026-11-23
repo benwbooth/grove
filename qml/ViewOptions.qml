@@ -169,6 +169,13 @@ Popup {
             }
         }
         GCheck {
+            text: "Preview pane under the list"
+            visible: vo.pane && vo.pane.viewMode === "list"
+            checked: vo.pane && vo.pane.app && vo.pane.app.settings.list_preview !== false
+            tip: "List view: the selected file's preview and details under the list (drag its top edge to resize)"
+            onToggled: vo.pane.win.setSetting("list_preview", checked)
+        }
+        GCheck {
             text: "Show item info"
             checked: vo.pane && vo.pane.itemInfo
             tip: "A second line under names: picture size, or file size"

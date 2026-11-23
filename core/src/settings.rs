@@ -100,6 +100,11 @@ pub struct Settings {
     /// Dolphin's Information panel / Finder's preview pane on the right.
     #[serde(default)]
     pub info_panel: bool,
+    /// List view: a preview pane under the list, and its height (0 = default).
+    #[serde(default = "t")]
+    pub list_preview: bool,
+    #[serde(default)]
+    pub list_preview_height: u32,
     /// Dolphin's Folders panel (a tree) next to the sidebar.
     #[serde(default)]
     pub folders_panel: bool,

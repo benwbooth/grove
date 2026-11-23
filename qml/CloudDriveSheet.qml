@@ -102,6 +102,12 @@ Sheet {
         answerField.text = answer
         if (!choiceOnly && !isBool) Qt.callLater(() => answerField.forceActiveFocus())
     }
+    // rclone's help as text with its web addresses as links (opened in the
+    // browser); everything else escaped.
+    function linkify(t) {
+        const esc = String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        return esc.replace(/(https?:\/\/[^\s<>()"]+[^\s<>()".,;:!?'])/g, '<a href="$1">$1</a>').replace(/\n/g, "<br>")
+    }
     function prettyName(n) { if (n === "config_fs_advanced") return "Advanced settings"; return (n || "").replace(/^config_/, "").replace(/_/g, " ").replace(/^./, c => c.toUpperCase()) }
 
     // ---------------------------------------------------------- pick
@@ -171,7 +177,9 @@ Sheet {
         spacing: 8
         visible: cd.page === "ask"
         GLabel { width: parent.width; text: cd.prettyName(cd.opt.Name) + (cd.opt.Required ? "" : "  (optional)"); color: Theme.fgSecondary; font.pixelSize: Theme.small }
-        GLabel { width: parent.width; wrapMode: Text.Wrap; elide: Text.ElideNone; font.bold: true; text: cd.helpLines[0] || cd.prettyName(cd.opt.Name) }
+        GLabel { width: parent.width; wrapMode: Text.Wrap; elide: Text.ElideNone; font.bold: true; textFormat: Text.StyledText; linkColor: Theme.accent
+            text: cd.linkify(cd.helpLines[0] || cd.prettyName(cd.opt.Name)); onLinkActivated: (l) => Qt.openUrlExternally(l)
+            HoverHandler { cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor } }
         Item {
             width: parent.width
             height: Math.min(helpRest.implicitHeight, Math.round(120 * Theme.pt))
@@ -184,8 +192,10 @@ Sheet {
                 contentHeight: helpRest.implicitHeight
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: GScrollBar {}
-                GLabel { id: helpRest; width: helpFlick.width - 12; wrapMode: Text.Wrap; elide: Text.ElideNone; color: Theme.fgSecondary; textFormat: Text.PlainText
-                    text: cd.helpLines.slice(1).join("\n").trim() }
+                GLabel { id: helpRest; width: helpFlick.width - 12; wrapMode: Text.Wrap; elide: Text.ElideNone; color: Theme.fgSecondary; textFormat: Text.StyledText; linkColor: Theme.accent
+                    onLinkActivated: (l) => Qt.openUrlExternally(l)
+                    HoverHandler { cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor }
+                    text: cd.linkify(cd.helpLines.slice(1).join("\n").trim()) }
             }
         }
         // yes / no

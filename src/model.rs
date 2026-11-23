@@ -634,7 +634,7 @@ impl qobject::FolderModel {
             return;
         }
         let path = self.rust().path.to_string();
-        if path.starts_with("trash:") || path.starts_with("recent:") {
+        if path.starts_with("trash:") || path.starts_with("recent:") || path.starts_with("computer:") {
             let qt = self.qt_thread();
             let p = path.clone();
             std::thread::spawn(move || {
@@ -1370,9 +1370,58 @@ pub fn wild_match(p: &str, s: &str) -> bool {
     pi == p.len()
 }
 
-/// trash:/// and recent:/// listings.
+/// computer:///, like Finder's Computer: the system disk, every other
+/// disk (mounted or not: opening one that isn't mounts it), and network
+/// places, each with its disk icon and free space.
+fn computer_list() -> Vec<RawItem> {
+    let places = crate::places::places(&[]);
+    let mut out = vec![];
+    let disk = |path: &str, name: &str, icon: &str, total: u64, free: u64| -> Option<RawItem> {
+        let mut e = Entry::from_path(Path::new(path)).ok()?;
+        e.name = name.to_string();
+        e.hidden = false;
+        e.note = if total > 0 { format!("{} free of {}", grove_core::util::human_size(free), grove_core::util::human_size(total)) } else { String::new() };
+        e.size = total.saturating_sub(free);
+        let mut r = raw_from_entry(e);
+        r.icon = icon.to_string();
+        Some(r)
+    };
+    // The system disk ("Macintosh HD"): named after the system.
+    let os = crate::controller::os_name().to_string();
+    let (total, free) = grove_core::mounts::space("/").unwrap_or((0, 0));
+    out.extend(disk("/", &os, "drive-harddisk-system|drive-harddisk", total, free));
+    for group in ["locations", "network"] {
+        for d in places[group].as_array().into_iter().flatten() {
+            let path = d["path"].as_str().unwrap_or("");
+            let name = d["name"].as_str().unwrap_or("");
+            let icon = d["icon"].as_str().unwrap_or("drive-harddisk");
+            match d["kind"].as_str() {
+                Some("root") => continue,
+                Some("unmounted") => {
+                    // Not mounted: a placeholder that mounts it when opened.
+                    let dev = d["device"].as_str().unwrap_or("");
+                    let Ok(mut e) = Entry::from_path(Path::new("/")) else { continue };
+                    e.name = name.to_string();
+                    e.path = format!("mount:{dev}");
+                    e.note = "Not opened yet: open it to mount it".into();
+                    e.size = 0;
+                    let mut r = raw_from_entry(e);
+                    r.icon = icon.to_string();
+                    out.push(r);
+                }
+                _ if !path.is_empty() => out.extend(disk(path, name, icon, d["total"].as_u64().unwrap_or(0), d["free"].as_u64().unwrap_or(0))),
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
+/// trash:/// and recent:/// listings (and computer:///).
 pub fn special_list(p: &str) -> Vec<RawItem> {
-    if p.starts_with("trash:") {
+    if p.starts_with("computer:") {
+        computer_list()
+    } else if p.starts_with("trash:") {
         grove_core::trash::list()
             .into_iter()
             .filter_map(|t| {

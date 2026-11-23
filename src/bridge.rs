@@ -98,6 +98,9 @@ pub mod ffi {
         fn start(self: Pin<&mut Grove>);
         #[qinvokable]
         fn home(self: &Grove) -> QString;
+        /// The system's name (the system disk in Computer).
+        #[qinvokable]
+        fn os_name(self: &Grove) -> QString;
         #[qinvokable]
         fn env(self: &Grove, name: &QString) -> QString;
 
