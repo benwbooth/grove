@@ -30,6 +30,7 @@ mod portal;
 mod preview;
 mod compare;
 mod remote;
+mod vcs;
 mod roothelper;
 mod table;
 mod textdoc;

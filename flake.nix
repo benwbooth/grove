@@ -16,10 +16,10 @@
       # places, devices, git status). All optional at run time.
       # Libraries grove links instead of running their command-line tools
       # (docs/NO_EXTERNAL_TOOLS.md).
-      linkedFor = pkgs: with pkgs; [ libarchive libgit2 libssh2 openssl zlib ffmpeg-headless vips glib ];
+      linkedFor = pkgs: with pkgs; [ libarchive libgit2 libssh2 openssl zlib ffmpeg-headless vips glib onnxruntime ];
       runtimeFor = pkgs: with pkgs; [
         ffmpegthumbnailer libheif git sshfs rclone simple-mtpfs
-        poppler-utils vips imagemagick djvulibre mupdf ghostscript magika-cli pandoc
+        poppler-utils vips imagemagick djvulibre mupdf ghostscript pandoc
         udisks fuse3 avahi cifs-utils smbnetfs ffmpeg-headless xorriso dvdplusrwtools
       ];
     in
@@ -77,6 +77,9 @@
             buildInputs = qtFor pkgs ++ [ qtEnv pkgs.libGL ] ++ linkedFor pkgs;
             # cxx-qt wants every Qt module under one prefix.
             env.QMAKE = "${qtEnv}/bin/qmake";
+            # magika's onnxruntime (ort-sys): nixpkgs' library, linked.
+            env.ORT_LIB_LOCATION = "${pkgs.onnxruntime}/lib";
+            env.ORT_PREFER_DYNAMIC_LINK = "1";
             # dmgwiz turns on openssl's "vendored" feature (OpenSSL built from
             # source, which needs perl): link the system openssl instead.
             env.OPENSSL_NO_VENDOR = "1";
@@ -132,6 +135,8 @@
             packages = [ pkgs.cargo pkgs.rustc pkgs.clippy pkgs.rustfmt pkgs.pkg-config qtEnv pkgs.libGL pkgs.git pkgs.imagemagick pkgs.xvfb-run pkgs.rustPlatform.bindgenHook ] ++ runtimeFor pkgs;
             buildInputs = linkedFor pkgs;
             QMAKE = "${qtEnv}/bin/qmake";
+            ORT_LIB_LOCATION = "${pkgs.onnxruntime}/lib";
+            ORT_PREFER_DYNAMIC_LINK = "1";
             # Link with this shell's compiler (a system clang links against the
             # system glibc and the binary can't load this nixpkgs' Qt).
             "CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_LINKER" = "cc";

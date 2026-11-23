@@ -5,6 +5,7 @@ pub mod checksum;
 pub mod du;
 pub mod versions;
 pub mod archives;
+pub mod av;
 pub mod dmg;
 pub mod libarchive;
 pub mod msi;
@@ -20,6 +21,7 @@ pub mod tags;
 pub mod thumbs;
 pub mod trash;
 pub mod util;
+pub mod vips;
 
 /// Tests that change process-wide environment variables (XDG_*) take this.
 #[cfg(test)]

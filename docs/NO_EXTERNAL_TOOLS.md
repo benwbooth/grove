@@ -17,14 +17,15 @@ separate privileged/FUSE service is needed (drives).
 | DjVu | ddjvu | libdjvulibre (ddjvuapi FFI) | todo |
 | PostScript | ps2pdf | libgs (Ghostscript API) | todo |
 | Office pages (layout) | soffice | LibreOfficeKit (lok C API) | todo |
-| Waveform, probe, video thumbs | ffmpeg, ffprobe, ffmpegthumbnailer | FFmpeg linked (ffmpeg-next) | todo |
-| Pictures Qt can't read | magick, convert, vipsthumbnail | libheif-rs, image crate, libvips | todo |
-| File type AI | magika CLI | magika crate (ONNX) | todo |
+| Waveform, probe, video frames, cover art, trim | ffmpeg, ffprobe, ffmpegthumbnailer, system thumbnailers | FFmpeg linked (ffmpeg-next, core/src/av.rs) | done |
+| Pictures Qt can't read | magick, vipsthumbnail | libvips linked (core/src/vips.rs), image crate | done |
+| File type AI | magika CLI | magika crate, onnxruntime linked | done |
 | Git status and menu (add, commit, log, diff, pull, push) | git | git2 (libgit2), src/gitstatus.rs | done |
 | Compare files/folders | diff | similar crate (src/compare.rs) | done |
 | Network browsing | avahi-browse | mdns-sd crate | done |
 | Disk images (mount) | udisksctl | UDisks2 over D-Bus | done |
 | Permissions, owner | chmod, chown, env (as root) | std::fs; as root `pkexec grove --root-helper` (src/roothelper.rs) | done |
+| Version control badges (git, hg, svn, jj, fossil) | git | libgit2, hg dirstate, svn/fossil SQLite (src/vcs.rs) | done |
 | Burn | xorriso | libisofs/libburn FFI | todo |
 
 Stays external, by nature:

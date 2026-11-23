@@ -83,7 +83,7 @@ FocusScope {
                 pane.pendingSelect = []
             }
             if (app && app.settings.show_git_status && !pane.special && !pane.searching) {
-                Async.call(grove, k => grove.gitStatus(k, pane.path), r => { pane.gitMap = r || {}; pane.inGit = !!r && r.__repo === "1"; fm.setGitStatus(JSON.stringify(r || {})) })
+                Async.call(grove, k => grove.gitStatus(k, pane.path), r => { pane.gitMap = r || {}; pane.inGit = !!r && (r.__vcs === "git" || r.__vcs === "jj"); fm.setGitStatus(JSON.stringify(r || {})) })
             }
         }
     }

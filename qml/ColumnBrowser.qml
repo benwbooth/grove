@@ -231,7 +231,13 @@ Item {
 
             FolderModel {
                 id: own
-                onLoaded: if (column.selectedChild) selectPaths(JSON.stringify([root.rowPathOf(column.selectedChild)]))
+                onLoaded: {
+                    if (column.selectedChild) selectPaths(JSON.stringify([root.rowPathOf(column.selectedChild)]))
+                    // Version control badges for this column's folder too.
+                    const pane = root.pane, folder = column.folder
+                    if (pane.app && pane.app.settings.show_git_status && folder.indexOf("/") === 0)
+                        Async.call(pane.grove, k => pane.grove.gitStatus(k, folder), r => { if (own.path === folder) own.setGitStatus(JSON.stringify(r || {})) })
+                }
             }
             // The last column shows the pane's model, but only once it has
             // this folder loaded: until then its own (already filled) copy,
@@ -310,6 +316,7 @@ Item {
                     required property bool hidden
                     required property bool cut
                     required property string sizeText
+                    required property string git
                     width: lv.width
                     readonly property bool browsable: r.isDir || (r.isArchive && root.pane.archiveLike(r))
                     height: Theme.rowHeight
@@ -321,6 +328,7 @@ Item {
                         color: r.selected ? (column.isLast && root.pane.active ? Theme.accent : Theme.selectedInactive) : drop.hovering ? Theme.dropTarget : "transparent"
                     }
                     GIcon { id: ic; x: 12; anchors.verticalCenter: parent.verticalCenter; size: 18; name: r.iconName; opacity: r.hidden || r.cut ? 0.5 : 1 }
+                    GitBadge { status: r.git; anchors.right: ic.right; anchors.bottom: ic.bottom; anchors.margins: -5; scale: 0.7 }
                     GLabel {
                         id: colName
                         visible: !r.renaming

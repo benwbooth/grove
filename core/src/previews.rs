@@ -74,24 +74,12 @@ fn made(ok: bool, out: PathBuf) -> Option<PathBuf> {
 // ---------- pictures ----------
 
 /// A PNG of a picture Qt can't read (HEIC, AVIF, RAW, JPEG XL, PSD...),
-/// at most `px` on its longer side. vipsthumbnail first (it decodes only
-/// what it needs), ImageMagick second.
+/// at most `px` on its longer side (libvips, linked).
 pub fn picture(path: &Path, px: u32, cancel: &AtomicBool) -> Option<PathBuf> {
-    let out = temp_file("png");
-    if which("vipsthumbnail").is_some() {
-        let argv = vec!["vipsthumbnail".into(), s(path), "--size".into(), format!("{px}x{px}>"), "-o".into(), s(&out)];
-        if let Some(p) = made(run(&argv, None, cancel, Duration::from_secs(30)), out.clone()) {
-            return Some(p);
-        }
-    }
     if cancel.load(Ordering::Relaxed) {
         return None;
     }
-    if which("magick").is_some() {
-        let argv = vec!["magick".into(), format!("{}[0]", s(path)), "-auto-orient".into(), "-thumbnail".into(), format!("{px}x{px}>"), s(&out)];
-        return made(run(&argv, None, cancel, Duration::from_secs(30)), out);
-    }
-    None
+    crate::vips::thumbnail(path, px)
 }
 
 // ---------- PDF ----------
@@ -192,65 +180,31 @@ pub fn pdf_info(path: &Path, max_pages: u32, cancel: &AtomicBool) -> Option<PdfI
     (ok && info.pages > 0).then_some(info)
 }
 
-// ---------- video and audio ----------
+// ---------- video and audio (FFmpeg linked: crate::av) ----------
 
-/// A frame from a video (when no system thumbnailer did it).
+/// A frame from a video.
 pub fn video_frame(path: &Path, px: u32, cancel: &AtomicBool) -> Option<PathBuf> {
-    which("ffmpeg")?;
-    let out = temp_file("png");
-    for at in ["4", "0"] {
-        let argv: Vec<String> = [
-            "ffmpeg", "-v", "error", "-nostdin", "-y", "-ss", at, "-i", &s(path), "-frames:v", "1", "-an",
-            "-vf", &format!("thumbnail=30,scale={px}:{px}:force_original_aspect_ratio=decrease"), &s(&out),
-        ]
-        .iter()
-        .map(|x| x.to_string())
-        .collect();
-        if let Some(p) = made(run(&argv, None, cancel, Duration::from_secs(30)), out.clone()) {
-            return Some(p);
-        }
-        if cancel.load(Ordering::Relaxed) {
-            break;
-        }
-    }
-    None
+    crate::av::video_frame(path, px, cancel)
 }
 
 /// The cover art embedded in an audio file.
 pub fn audio_cover(path: &Path, px: u32, cancel: &AtomicBool) -> Option<PathBuf> {
-    which("ffmpeg")?;
-    let out = temp_file("png");
-    let argv: Vec<String> = [
-        "ffmpeg", "-v", "error", "-nostdin", "-y", "-i", &s(path), "-map", "0:v:0", "-frames:v", "1", "-an",
-        "-vf", &format!("scale={px}:{px}:force_original_aspect_ratio=decrease"), &s(&out),
-    ]
-    .iter()
-    .map(|x| x.to_string())
-    .collect();
-    made(run(&argv, None, cancel, Duration::from_secs(20)), out)
+    crate::av::audio_cover(path, px, cancel)
 }
 
 /// A waveform of (the first ten minutes of) an audio file, `w`×`h`, in
 /// `color` on transparent.
 pub fn audio_waveform(path: &Path, w: u32, h: u32, color: &str, cancel: &AtomicBool) -> Option<PathBuf> {
-    which("ffmpeg")?;
+    let (peaks, _) = crate::av::peaks(path, 600.0, cancel)?;
     let out = temp_file("png");
-    let argv: Vec<String> = [
-        "ffmpeg", "-v", "error", "-nostdin", "-y", "-t", "600", "-i", &s(path),
-        "-filter_complex", &format!("aformat=channel_layouts=mono,showwavespic=s={w}x{h}:colors={color}:scale=sqrt"),
-        "-frames:v", "1", &s(&out),
-    ]
-    .iter()
-    .map(|x| x.to_string())
-    .collect();
-    made(run(&argv, None, cancel, Duration::from_secs(30)), out)
+    crate::av::waveform_png(&peaks, w, h, color, &out)?;
+    Some(out)
 }
 
 /// A track's waveform for the player, the whole track (up to 3 hours), in
 /// two colours from one decode: [base, played]. Cached by path, size and
 /// time (~/.cache/grove/waves).
 pub fn player_waveform(path: &Path, w: u32, h: u32, base: &str, played: &str, cancel: &AtomicBool) -> Option<(PathBuf, PathBuf)> {
-    which("ffmpeg")?;
     let m = std::fs::metadata(path).ok()?;
     let key = format!("{}|{}|{}|{w}x{h}|{base}|{played}", path.display(), m.len(), std::os::unix::fs::MetadataExt::mtime(&m));
     let dir = crate::util::cache_home().join("grove/waves");
@@ -260,17 +214,8 @@ pub fn player_waveform(path: &Path, w: u32, h: u32, base: &str, played: &str, ca
     if a.is_file() && b.is_file() {
         return Some((a, b));
     }
-    let graph = format!(
-        "[0:a]aformat=channel_layouts=mono,asplit=2[x][y];[x]showwavespic=s={w}x{h}:colors={base}:scale=sqrt[a];[y]showwavespic=s={w}x{h}:colors={played}:scale=sqrt[b]"
-    );
-    let argv: Vec<String> = [
-        "ffmpeg", "-v", "error", "-nostdin", "-y", "-t", "10800", "-i", &s(path), "-filter_complex", &graph,
-        "-map", "[a]", "-frames:v", "1", &s(&a), "-map", "[b]", "-frames:v", "1", &s(&b),
-    ]
-    .iter()
-    .map(|x| x.to_string())
-    .collect();
-    if run(&argv, None, cancel, Duration::from_secs(120)) && a.is_file() && b.is_file() {
+    let (peaks, _) = crate::av::peaks(path, 10800.0, cancel)?;
+    if crate::av::waveform_png(&peaks, w, h, base, &a).is_some() && crate::av::waveform_png(&peaks, w, h, played, &b).is_some() {
         Some((a, b))
     } else {
         let _ = std::fs::remove_file(&a);
@@ -400,18 +345,15 @@ pub fn comic_cover(path: &Path, cancel: &AtomicBool) -> Option<PathBuf> {
 }
 
 /// True when a picture is one flat colour (Word for Mac's "Save preview
-/// picture" stores an all-white page). Needs ImageMagick; without it
-/// every picture counts as having something on it.
-pub fn is_blank_picture(p: &Path, cancel: &AtomicBool) -> bool {
-    if which("magick").is_none() {
-        return false;
-    }
-    let out = temp_file("txt");
-    let argv = vec!["magick".into(), format!("{}[0]", s(p)), "-format".into(), "%[fx:standard_deviation]".into(), "info:".into()];
-    let ok = run(&argv, Some(&out), cancel, Duration::from_secs(10));
-    let sd = std::fs::read_to_string(&out).ok().and_then(|t| t.trim().parse::<f64>().ok());
-    let _ = std::fs::remove_file(&out);
-    ok && sd.is_some_and(|sd| sd < 0.004)
+/// picture" stores an all-white page). PNG and JPEG are checked (image
+/// crate); anything else counts as having something on it.
+pub fn is_blank_picture(p: &Path, _cancel: &AtomicBool) -> bool {
+    let Ok(img) = image::open(p) else { return false };
+    let g = img.to_luma8();
+    let n = g.len().max(1) as f64;
+    let mean = g.iter().map(|&v| v as f64).sum::<f64>() / n;
+    let var = g.iter().map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / n;
+    var.sqrt() / 255.0 < 0.004
 }
 
 /// The preview picture an office document carries (OpenDocument's

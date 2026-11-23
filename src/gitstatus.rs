@@ -1,85 +1,8 @@
-//! Git status and Dolphin's git menu through libgit2 (no git command), in
-//! the background. Status letters: "M" modified, "A" added, "?" untracked, "D" deleted,
-//! "R" renamed, "U" conflict. A folder shows the strongest status inside.
+//! Dolphin's git menu through libgit2 (no git command), in the background:
+//! add, commit, log, diff, pull, push. (Status badges: vcs.rs.)
 
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-
-fn rank(c: &str) -> u8 {
-    match c {
-        "U" => 6,
-        "M" => 5,
-        "D" => 4,
-        "R" => 3,
-        "A" => 2,
-        "?" => 1,
-        _ => 0,
-    }
-}
-
-/// The item directly inside `dir` that `rel` (relative to the repository's
-/// top) belongs to, with `code` folded into what's there.
-fn fold(map: &mut HashMap<String, String>, top: &Path, dir: &Path, rel: &str, code: &str) {
-    let abs = top.join(rel.trim_end_matches('/'));
-    let Ok(inside) = abs.strip_prefix(dir) else { return };
-    let Some(first) = inside.components().next() else { return };
-    let key: PathBuf = dir.join(first.as_os_str());
-    let k = key.to_string_lossy().into_owned();
-    let cur = map.get(&k).cloned().unwrap_or_default();
-    if rank(code) > rank(&cur) {
-        map.insert(k, code.to_string());
-    }
-}
-
-/// A status's letter: U conflict, M modified, A added, D deleted, R renamed,
-/// ? untracked (None: clean or ignored).
-fn code_of(s: git2::Status) -> Option<&'static str> {
-    use git2::Status as S;
-    if s.contains(S::CONFLICTED) {
-        Some("U")
-    } else if s.intersects(S::WT_MODIFIED | S::INDEX_MODIFIED | S::WT_TYPECHANGE | S::INDEX_TYPECHANGE) {
-        Some("M")
-    } else if s.contains(S::INDEX_NEW) {
-        Some("A")
-    } else if s.intersects(S::INDEX_DELETED | S::WT_DELETED) {
-        Some("D")
-    } else if s.intersects(S::INDEX_RENAMED | S::WT_RENAMED) {
-        Some("R")
-    } else if s.contains(S::WT_NEW) {
-        Some("?")
-    } else {
-        None
-    }
-}
-
-/// Each item's status in `dir` (libgit2, no git command).
-pub fn status(dir: &str) -> Value {
-    let d = Path::new(dir);
-    let Ok(repo) = git2::Repository::discover(d) else { return json!({}) };
-    let Some(top) = repo.workdir().map(Path::to_path_buf) else { return json!({}) };
-    let d = d.canonicalize().unwrap_or(d.to_path_buf());
-    let top = top.canonicalize().unwrap_or(top);
-    let mut opts = git2::StatusOptions::new();
-    opts.include_untracked(true).recurse_untracked_dirs(false).include_ignored(false).renames_head_to_index(true);
-    if let Ok(rel) = d.strip_prefix(&top) {
-        if !rel.as_os_str().is_empty() {
-            opts.pathspec(rel.to_string_lossy().as_ref());
-        }
-    }
-    let Ok(sts) = repo.statuses(Some(&mut opts)) else { return json!({}) };
-    let mut map: HashMap<String, String> = HashMap::new();
-    for e in sts.iter() {
-        let Some(code) = code_of(e.status()) else { continue };
-        let Ok(rel) = e.path() else { continue };
-        fold(&mut map, &top, &d, rel, code);
-    }
-    // Paths back in the folder's own spelling (not canonicalized).
-    let orig = Path::new(dir);
-    let mut m: HashMap<String, String> = map.into_iter().map(|(k, v)| (orig.join(Path::new(&k).strip_prefix(&d).unwrap_or(Path::new(&k))).to_string_lossy().into_owned(), v)).collect();
-    m.insert("__repo".into(), "1".into());
-    json!(m)
-}
 
 /// Credentials for fetch and push: ssh-agent, then the usual key files,
 /// then git's credential helpers (https), then nothing.
@@ -317,28 +240,5 @@ pub fn action(dir: &str, action: &str, paths: &[PathBuf], arg: &str, dark: bool)
     match r {
         Ok(out) => json!({"ok": true, "output": out}),
         Err(e) => json!({"error": e}),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn folds_to_items() {
-        let mut m = HashMap::new();
-        for (rel, code) in [("src/main.rs", "M"), ("notes.txt", "?"), ("src/new.rs", "A"), ("b.txt", "R"), ("build/", "?")] {
-            fold(&mut m, Path::new("/r"), Path::new("/r"), rel, code);
-        }
-        assert_eq!(m["/r/src"], "M");
-        assert_eq!(m["/r/notes.txt"], "?");
-        assert_eq!(m["/r/b.txt"], "R");
-        assert_eq!(m["/r/build"], "?");
-        let mut m = HashMap::new();
-        for (rel, code) in [("src/main.rs", "M"), ("notes.txt", "?"), ("src/new.rs", "A")] {
-            fold(&mut m, Path::new("/r"), Path::new("/r/src"), rel, code);
-        }
-        assert_eq!(m["/r/src/main.rs"], "M");
-        assert_eq!(m["/r/src/new.rs"], "A");
-        assert_eq!(m.len(), 2);
     }
 }

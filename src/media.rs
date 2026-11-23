@@ -125,24 +125,9 @@ pub fn read(path: &str, mime: &str) -> Media {
     m
 }
 
-/// ffprobe: (width, height, seconds).
+/// (width, height, seconds), FFmpeg linked (no ffprobe).
 pub fn probe(path: &str) -> Option<(u32, u32, f64)> {
-    let out = std::process::Command::new("ffprobe")
-        .args(["-v", "error", "-show_entries", "format=duration:stream=width,height,codec_type", "-of", "json", path])
-        .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-    let secs = v["format"]["duration"].as_str().and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
-    let (mut w, mut h) = (0, 0);
-    if let Some(ss) = v["streams"].as_array() {
-        if let Some(s) = ss.iter().find(|s| s["codec_type"] == "video") {
-            w = s["width"].as_u64().unwrap_or(0) as u32;
-            h = s["height"].as_u64().unwrap_or(0) as u32;
-        }
-    }
-    Some((w, h, secs))
+    grove_core::av::probe(std::path::Path::new(path)).map(|p| (p.width, p.height, p.seconds))
 }
 
 pub fn duration_text(secs: f64) -> String {

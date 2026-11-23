@@ -75,10 +75,6 @@ fn by_rules(text: &str) -> Option<&'static str> {
     None
 }
 
-fn on_path(cmd: &str) -> Option<std::path::PathBuf> {
-    std::env::var_os("PATH").and_then(|p| std::env::split_paths(&p).map(|d| d.join(cmd)).find(|f| f.is_file()))
-}
-
 fn magika(path: &str) -> Option<String> {
     let meta = std::fs::metadata(path).ok()?;
     let key = (path.to_string(), meta.len(), std::os::unix::fs::MetadataExt::mtime(&meta));
@@ -87,19 +83,15 @@ fn magika(path: &str) -> Option<String> {
     if let Some(v) = cache.lock().unwrap().get(&key) {
         return v.clone();
     }
-    let bin = on_path("magika")?;
-    let out = std::process::Command::new(bin)
-        .args(["--json", "--no-colors"])
-        .arg(path)
-        .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-    let o = &v[0]["result"]["value"]["output"];
-    let label = o["label"].as_str().unwrap_or("");
-    let ext = if o["is_text"].as_bool() == Some(true) && !matches!(label, "txt" | "unknown" | "empty" | "undefined") {
-        o["extensions"][0].as_str().map(String::from).or_else(|| Some(label.to_string()))
+    // Magika's model in-process (magika crate, onnxruntime linked; no
+    // magika command). One session, kept: loading the model takes a moment.
+    static SESSION: OnceLock<Option<Mutex<magika::Session>>> = OnceLock::new();
+    let session = SESSION.get_or_init(|| magika::Session::new().ok().map(Mutex::new)).as_ref()?;
+    let ft = session.lock().unwrap_or_else(|e| e.into_inner()).identify_file_sync(path).ok()?;
+    let info = ft.info();
+    let label = info.label;
+    let ext = if info.is_text && !matches!(label, "txt" | "unknown" | "empty" | "undefined") {
+        info.extensions.first().map(|e| e.to_string()).or_else(|| Some(label.to_string()))
     } else {
         None
     };

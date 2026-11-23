@@ -925,7 +925,7 @@ impl ffi::Grove {
 
     pub fn git_status(&self, key: &QString, dir: &QString) {
         let d = dir.to_string();
-        self.answer(key, move || crate::gitstatus::status(&d));
+        self.answer(key, move || crate::vcs::status(&d));
     }
 
     pub fn quick_action(&self, key: &QString, action: &QString, paths: &QString, arg: &QString) {
@@ -1385,58 +1385,16 @@ impl ffi::Grove {
     }
 }
 
-/// Stream copy first (fast, lossless, cuts at keyframes); re-encode when
-/// the container won't take that.
+/// Stream copy first (fast, lossless, cuts at keyframes); re-encode the
+/// video when the start isn't on one (FFmpeg linked: grove_core::av).
 fn trim_with_ffmpeg(src: &Path, start_ms: f64, end_ms: f64, dest: &Path) -> Result<(), String> {
-    let ss = format!("{:.3}", start_ms / 1000.0);
-    let t = format!("{:.3}", (end_ms - start_ms) / 1000.0);
-    let run = |extra: &[&str]| -> Result<std::process::Output, String> {
-        let mut c = std::process::Command::new("ffmpeg");
-        c.args(["-hide_banner", "-loglevel", "error", "-y", "-ss", &ss, "-i"]).arg(src).args(["-t", &t, "-map", "0"]).args(extra).arg(dest);
-        c.stdin(std::process::Stdio::null());
-        c.output().map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { "Trimming needs ffmpeg, which isn't installed.".to_string() } else { e.to_string() })
-    };
-    // A stream copy can only start on a keyframe: use it when the start is
-    // one (or there's no video), otherwise re-encode for an exact cut.
-    if starts_on_keyframe(src, start_ms / 1000.0) {
-        let o = run(&["-c", "copy", "-avoid_negative_ts", "make_zero"])?;
-        if o.status.success() && dest.metadata().map(|m| m.len() > 0).unwrap_or(false) {
+    let (a, b) = (start_ms / 1000.0, end_ms / 1000.0);
+    if grove_core::av::keyframe_at(src, a) {
+        if grove_core::av::trim_copy(src, a, b, dest).is_ok() && dest.metadata().map(|m| m.len() > 0).unwrap_or(false) {
             return Ok(());
         }
     }
-    let o = run(&["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac", "-c:s", "copy"])?;
-    if o.status.success() {
-        return Ok(());
-    }
-    Err(format!("ffmpeg couldn't trim it: {}", String::from_utf8_lossy(&o.stderr).lines().last().unwrap_or("unknown error")))
-}
-
-fn starts_on_keyframe(src: &Path, start: f64) -> bool {
-    if start <= 0.0 {
-        return true;
-    }
-    let iv = format!("{:.3}%{:.3}", (start - 3.0).max(0.0), start + 1.0);
-    let Ok(o) = std::process::Command::new("ffprobe")
-        .args(["-v", "error", "-select_streams", "v:0", "-skip_frame", "nokey", "-show_entries", "frame=pts_time", "-of", "csv=p=0", "-read_intervals", &iv])
-        .arg(src)
-        .stdin(std::process::Stdio::null())
-        .output()
-    else {
-        return false;
-    };
-    let text = String::from_utf8_lossy(&o.stdout);
-    let times: Vec<f64> = text.lines().filter_map(|l| l.trim().trim_end_matches(',').parse().ok()).collect();
-    // No video stream: audio frames are all keyframes.
-    if times.is_empty() {
-        let has_video = std::process::Command::new("ffprobe")
-            .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=index", "-of", "csv=p=0"])
-            .arg(src)
-            .output()
-            .map(|o| !o.stdout.is_empty())
-            .unwrap_or(true);
-        return !has_video;
-    }
-    times.iter().any(|t| (t - start).abs() < 0.05)
+    grove_core::av::trim_encode(src, a, b, dest).map_err(|e| format!("Couldn't trim it: {e}"))
 }
 
 /// "photo (edited).jpg", "photo (edited 2).jpg"... next to `p`.

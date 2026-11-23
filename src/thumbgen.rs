@@ -63,12 +63,6 @@ pub fn kind_name(k: Kind) -> &'static str {
     }
 }
 
-fn system_thumbnailer(path: &Path, mimes: &[String], px: u32, cancel: &AtomicBool) -> Option<String> {
-    let t = grove_core::thumbs::find_thumbnailer(grove_core::thumbs::thumbnailers(), mimes)?;
-    let mime = mimes.first().map(String::as_str).unwrap_or("");
-    grove_core::thumbs::run_thumbnailer(t, path, px, mime, cancel).map(|p| format!("thumb:{}", p.display()))
-}
-
 fn image(p: Option<std::path::PathBuf>) -> Option<String> {
     p.map(|p| format!("image:{}", p.display()))
 }
@@ -90,22 +84,22 @@ pub fn make(path: &str, mimes: &[String], px: u32, token: u64) -> String {
                 Some("qtpdf".into())
             }
         }
-        Kind::Epub => image(previews::epub_cover(p, cancel)).or_else(|| system_thumbnailer(p, mimes, px, cancel)),
-        Kind::Comic => image(previews::comic_cover(p, cancel)).or_else(|| system_thumbnailer(p, mimes, px, cancel)),
+        Kind::Epub => image(previews::epub_cover(p, cancel)),
+        Kind::Comic => image(previews::comic_cover(p, cancel)),
         Kind::Office => image(previews::office_thumbnail(p, cancel))
             // Spreadsheets: their first rows as a table.
             .or_else(|| if crate::table::is_table_name(&path.to_lowercase()) { sheet_page(p).map(|j| format!("page:{j}")) } else { None })
-            .or_else(|| system_thumbnailer(p, mimes, px, cancel))
+            
             .or_else(|| previews::office_text(p, 6000, cancel).map(|t| format!("page:{}", prose_page(&t))))
             .or_else(|| image(previews::office_picture(p, cancel))),
         Kind::Text => text_page(p).map(|j| format!("page:{j}")),
-        Kind::Picture => system_thumbnailer(p, mimes, px, cancel).or_else(|| image(previews::picture(p, px, cancel))),
-        Kind::Video => system_thumbnailer(p, mimes, px, cancel).or_else(|| image(previews::video_frame(p, px, cancel))),
+        Kind::Picture => image(previews::picture(p, px, cancel)),
+        Kind::Video => image(previews::video_frame(p, px, cancel)),
         Kind::Audio => image(previews::audio_cover(p, px, cancel))
-            .or_else(|| system_thumbnailer(p, mimes, px, cancel))
+            
             .or_else(|| previews::audio_waveform(p, px, px / 2, "0x3b82f6", cancel).map(|w| format!("wave:{}", w.display()))),
         Kind::Font | Kind::Model => None, // drawn by the provider itself
-        Kind::Other => system_thumbnailer(p, mimes, px, cancel),
+        Kind::Other => None,
     };
     r.unwrap_or_default()
 }

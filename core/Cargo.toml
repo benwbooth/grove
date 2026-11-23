@@ -28,6 +28,8 @@ cab = "0.6.0"
 dmgwiz = "1.1.1"
 hfsplus = "0.4.0"
 apfs = "0.4.1"
+ffmpeg-next = { version = "9.1", default-features = false, features = ["codec", "format", "software-resampling", "software-scaling"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 [dev-dependencies]
 tempfile = "3"
