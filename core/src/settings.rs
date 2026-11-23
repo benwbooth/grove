@@ -145,6 +145,37 @@ pub struct Settings {
     /// Keyboard shortcuts changed from the defaults: {action id: [keys]}.
     #[serde(default)]
     pub shortcuts: serde_json::Value,
+    /// Grove Archiver, Extract Here: "beside" (next to the archive) or "ask".
+    #[serde(default = "beside_default")]
+    pub extract_location: String,
+    /// Extracting: "auto" (a folder unless it's all in one already),
+    /// "always", "never".
+    #[serde(default = "auto_default")]
+    pub extract_folder: String,
+    /// Show what was extracted (or the new archive) in grove afterwards.
+    #[serde(default = "t")]
+    pub archive_reveal: bool,
+    /// Move the archive to the Trash after extracting it all.
+    #[serde(default)]
+    pub archive_trash_after: bool,
+    /// Add to Archive's starting format and level (7-Zip's 0-9).
+    #[serde(default = "seven_default")]
+    pub archive_format: String,
+    #[serde(default = "level_default")]
+    pub archive_level: u32,
+}
+
+fn beside_default() -> String {
+    "beside".into()
+}
+fn auto_default() -> String {
+    "auto".into()
+}
+fn seven_default() -> String {
+    "7z".into()
+}
+fn level_default() -> u32 {
+    5
 }
 
 fn default_columns() -> Vec<String> {

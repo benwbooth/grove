@@ -35,6 +35,8 @@ chardetng = "1.0.0"
 cfb = "0.16"
 libhlp = "0.3.0"
 tract-onnx = "0.23.10"
+sevenz-rust2 = { version = "0.25", default-features = false, features = ["aes256", "compress", "bzip2", "ppmd"] }
+zip = { version = "9", default-features = false }
 
 [build-dependencies]
 cc = "1"
