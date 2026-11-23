@@ -253,6 +253,7 @@ ApplicationWindow {
         else setSetting("info_panel", true)
     }
     function toggleInfo() {
+        if (activePane && activePane.viewMode === "columns") return
         if (bottomPreviewView) setSetting("list_preview", app.settings.list_preview === false)
         else setPanel("info_panel", !app.settings.info_panel)
     }
@@ -425,7 +426,8 @@ ApplicationWindow {
             // Dolphin's Information panel / Finder's preview pane (F11, Ctrl+Shift+P).
             Item {
                 id: infoPanel
-                visible: !!bw.app.settings.info_panel && !bw.bottomPreviewView
+                // Not in column view: its own preview column shows the same.
+                visible: !!bw.app.settings.info_panel && !bw.bottomPreviewView && !(bw.activePane && bw.activePane.viewMode === "columns")
                 anchors.top: tabBar.bottom
                 anchors.bottom: statusBar.top
                 anchors.right: parent.right
@@ -915,7 +917,7 @@ ApplicationWindow {
                 { separator: true },
                 { id: "sidebar", icon: "sidebar-expand-left", text: "Sidebar", shortcut: k("sidebar"), checkable: true, checked: sidebarShown },
                 { id: "folderspanel", icon: "view-list-tree", text: "Folders Panel", shortcut: k("folderspanel"), checkable: true, checked: !!st.folders_panel },
-                { id: "infopanel", icon: "dialog-information", text: "Information Panel", shortcut: k("infopanel"), checkable: true, checked: infoShown },
+                { id: "infopanel", icon: "dialog-information", text: "Information Panel", shortcut: k("infopanel"), checkable: true, checked: infoShown, enabled: !(activePane && activePane.viewMode === "columns") },
                 { id: "infobottom", icon: "view-split-top-bottom", text: "Information Panel Below Files", checkable: true, checked: st.info_bottom !== false },
                 { id: "terminalpanel", icon: "utilities-terminal", text: "Terminal Panel", shortcut: k("terminalpanel"), checkable: true, checked: !!st.terminal_panel },
                 { id: "split", icon: "view-split-left-right", text: "Split View", shortcut: k("split"), checkable: true, checked: split, enabled: !!currentTab },

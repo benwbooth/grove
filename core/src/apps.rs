@@ -341,16 +341,23 @@ pub fn apps_for(mimes: &[String], all_apps: &[App]) -> Vec<App> {
     ids.into_iter().filter_map(|id| all_apps.iter().find(|a| a.id == id).cloned().or_else(|| by_id(&id))).collect()
 }
 
+/// The app that opens `mimes`: each type in turn (the type itself, then its
+/// parents), its default and else the apps that say they open it. A parent's
+/// default never beats an app for the type itself (a .docx is a zip, but
+/// Ark, the zip default, isn't what opens it).
 pub fn default_for(mimes: &[String], all_apps: &[App]) -> Option<App> {
     let m = mimeapps();
-    for t in mimes {
+    for (i, t) in mimes.iter().enumerate() {
         for id in m.defaults.get(t).into_iter().flatten() {
             if let Some(a) = all_apps.iter().find(|a| &a.id == id).cloned().or_else(|| by_id(id)) {
                 return Some(a);
             }
         }
+        if let Some(a) = apps_for(&mimes[i..=i], all_apps).into_iter().next() {
+            return Some(a);
+        }
     }
-    apps_for(mimes, all_apps).into_iter().next()
+    None
 }
 
 /// Make `app_id` the default for `mime` in ~/.config/mimeapps.list,
