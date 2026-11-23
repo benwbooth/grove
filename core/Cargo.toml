@@ -23,6 +23,11 @@ grep-matcher = "0.1"
 regex = "1"
 quick-xml = "0.37"
 parking_lot = "0.12"
+msi = "0.11.1"
+cab = "0.6.0"
+dmgwiz = "1.1.1"
+hfsplus = "0.4.0"
+apfs = "0.4.1"
 
 [dev-dependencies]
 tempfile = "3"

@@ -9,8 +9,8 @@ separate privileged/FUSE service is needed (drives).
 |---|---|---|---|
 | Archives: list, extract, members | bsdtar, bsdcat | libarchive linked (core/src/libarchive.rs) | done |
 | Compress (zip, tar.zst) | bsdtar | libarchive linked | done |
-| .msi / .cab | 7zz | msi + cab crates | todo |
-| .dmg (HFS+, APFS) | 7zz | dmgwiz + hfsplus + apfs crates | todo |
+| .msi | 7zz | msi + cab crates (core/src/msi.rs) | done |
+| .dmg (HFS+, APFS) | 7zz | dmgwiz + hfsplus + apfs crates (core/src/dmg.rs) | done |
 | Office text, docx/odt pages | pandoc | own OOXML/ODF reader (quick-xml + zip) to HTML | todo |
 | PDF pages, info, thumbnails | pdftoppm, pdfinfo, mutool | MuPDF linked (mupdf crate) | todo |
 | EPUB, XPS, comics to PDF | mutool, bsdtar | MuPDF linked | todo |

@@ -1,7 +1,6 @@
-//! Archives through libarchive, linked (zip, tar.*, 7z, rar, iso...), and
-//! 7-Zip for what libarchive can't read (disk images: .dmg, .vhd, .wim;
-//! Windows installers: .msi): list them (browse as folders, Quick Look),
-//! extract, compress.
+//! Archives, read in-process (grove_core::archives: libarchive for zip,
+//! tar.*, 7z, rar, iso...; Rust readers for .msi and .dmg): list them
+//! (browse as folders, Quick Look), extract, compress.
 
 use crate::bridge::ffi::{self, QString};
 use cxx_qt::CxxQtThread;
@@ -41,82 +40,6 @@ fn decompress_to(archive: &str, out: &Path) -> Result<(), String> {
     grove_core::libarchive::decompress(Path::new(archive), out, &std::sync::atomic::AtomicBool::new(false)).map_err(|e| format!("Couldn't decompress: {e}"))
 }
 
-/// Formats only 7-Zip reads (libarchive doesn't): Apple disk images,
-/// Windows installers and updates, virtual disks, WIM, SquashFS, HFS, CHM.
-const SEVENZ_EXTS: &[&str] = &[
-    ".dmg", ".msi", ".msp", ".msu", ".wim", ".swm", ".esd", ".vhd", ".vhdx", ".vmdk", ".vdi", ".qcow2", ".squashfs",
-    ".sfs", ".hfs", ".hfsx", ".chm",
-];
-
-fn needs_7z(path: &str) -> bool {
-    let n = path.to_lowercase();
-    SEVENZ_EXTS.iter().any(|e| n.ends_with(e))
-}
-
-/// 7-Zip's command: 7zz (7-Zip itself) or 7z (p7zip).
-fn sevenzip() -> Option<&'static str> {
-    static FOUND: std::sync::OnceLock<Option<&'static str>> = std::sync::OnceLock::new();
-    *FOUND.get_or_init(|| {
-        ["7zz", "7z"].into_iter().find(|c| std::process::Command::new(c).arg("i").stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().is_ok())
-    })
-}
-
-const NO_7Z: &str = "Disk images and installers need 7-Zip (7zz), which isn't installed.";
-
-/// Parse `7z l -slt -ba` (blocks of "Key = value" lines).
-pub fn parse_7z_listing(text: &str) -> Vec<ArchEntry> {
-    let mut v = Vec::new();
-    let mut cur: Option<ArchEntry> = None;
-    let flush = |e: Option<ArchEntry>, v: &mut Vec<ArchEntry>| {
-        if let Some(e) = e {
-            if !e.path.is_empty() {
-                v.push(e);
-            }
-        }
-    };
-    for line in text.lines() {
-        let Some((k, val)) = line.split_once(" = ").or_else(|| line.strip_suffix(" =").map(|k| (k, ""))) else { continue };
-        match k {
-            "Path" => {
-                flush(cur.take(), &mut v);
-                cur = Some(ArchEntry { path: val.replace('\\', "/").trim_matches('/').to_string(), size: 0, is_dir: false, mtime_text: String::new() });
-            }
-            "Size" => if let Some(e) = cur.as_mut() { e.size = val.parse().unwrap_or(0) },
-            "Folder" => if let Some(e) = cur.as_mut() { e.is_dir |= val == "+" },
-            "Attributes" => if let Some(e) = cur.as_mut() { e.is_dir |= val.starts_with('D') },
-            "Modified" => if let Some(e) = cur.as_mut() { e.mtime_text = val.split('.').next().unwrap_or(val).to_string() },
-            _ => {}
-        }
-    }
-    flush(cur.take(), &mut v);
-    v
-}
-
-fn list_7z(path: &str) -> Result<Vec<ArchEntry>, String> {
-    let z = sevenzip().ok_or_else(|| NO_7Z.to_string())?;
-    let o = std::process::Command::new(z).args(["l", "-slt", "-ba", "-sccUTF-8", "--", path]).output().map_err(|_| NO_7Z.to_string())?;
-    let v = parse_7z_listing(&String::from_utf8_lossy(&o.stdout));
-    if !o.status.success() && v.is_empty() {
-        return Err(format!("This archive can't be read: {}", String::from_utf8_lossy(&o.stderr).trim()));
-    }
-    Ok(v)
-}
-
-/// Extract with 7-Zip into `dir` (everything, or the members named).
-fn extract_7z(archive: &str, dir: &Path, members: &[&str]) -> Result<(), String> {
-    let z = sevenzip().ok_or_else(|| NO_7Z.to_string())?;
-    let mut cmd = std::process::Command::new(z);
-    cmd.arg("x").arg("-y").arg("-bd").arg("-sccUTF-8").arg(format!("-o{}", dir.display())).arg("--").arg(archive);
-    for m in members {
-        cmd.arg(m);
-    }
-    let o = cmd.output().map_err(|_| NO_7Z.to_string())?;
-    if !o.status.success() {
-        return Err(format!("Couldn't extract: {}", String::from_utf8_lossy(&o.stderr).trim()));
-    }
-    Ok(())
-}
-
 /// Every container libarchive can list and extract: zip and its
 /// relatives, tar with any compression, 7z, rar, cab, iso/udf, cpio, ar/deb,
 /// rpm, xar/pkg, lha, warc, comic book archives. Documents that happen to be
@@ -142,7 +65,7 @@ pub fn is_archive(mime: &str, name: &str) -> bool {
         ".war", ".ear", ".apk", ".aar", ".xpi", ".crx", ".whl", ".nupkg", ".vsix", ".deb", ".udeb", ".ipk", ".rpm",
         ".ar", ".a", ".cab", ".xar", ".pkg", ".lha", ".lzh", ".cbz", ".cbr", ".cb7", ".cbt", ".warc",
     ];
-    MIMES.contains(&mime) || EXTS.iter().any(|e| n.ends_with(e)) || SEVENZ_EXTS.iter().any(|e| n.ends_with(e)) || single_compressed(name).is_some()
+    MIMES.contains(&mime) || EXTS.iter().any(|e| n.ends_with(e)) || grove_core::archives::EXTRA_EXTS.iter().any(|e| n.ends_with(e)) || single_compressed(name).is_some()
 }
 
 /// Listing, remembered while the archive file is unchanged (browsing a big
@@ -202,11 +125,8 @@ fn list_uncached(path: &str) -> Result<Vec<ArchEntry>, String> {
         let size = single_uncompressed(path).unwrap_or(0);
         return Ok(vec![ArchEntry { path: inner, size, is_dir: false, mtime_text: String::new() }]);
     }
-    if needs_7z(path) {
-        return list_7z(path);
-    }
     let never = std::sync::atomic::AtomicBool::new(false);
-    let v = grove_core::libarchive::list(Path::new(path), &never)?;
+    let v = grove_core::archives::list(Path::new(path), &never)?;
     Ok(v.into_iter().map(|m| ArchEntry { path: m.path, size: m.size, is_dir: m.is_dir, mtime_text: when(m.mtime) }).collect())
 }
 
@@ -352,19 +272,7 @@ pub fn extract_job(qt: CxxQtThread<ffi::Grove>, id: i32, archive: String, dest: 
             (d.clone(), d)
         };
         let _ = std::fs::create_dir_all(&target);
-        if needs_7z(&archive) {
-            match extract_7z(&archive, &target, &[]) {
-                Ok(()) => {
-                    crate::controller::push_history_any("Extract", grove_core::ops::Action::Exists { paths: vec![created.clone()] });
-                    job_msg(&qt, id, json!({"id": id, "title": title, "state": "done", "results": [created], "dest": dest_dir}));
-                }
-                Err(e) => job_msg(&qt, id, json!({"id": id, "title": title, "state": "failed", "errors": [e]})),
-            }
-            let s = serde_json::to_string(&vec![dest_dir.to_string_lossy()]).unwrap();
-            let _ = qt.queue(move |g| g.folders_touched(QString::from(s.as_str())));
-            return;
-        }
-        match grove_core::libarchive::extract(Path::new(&archive), &target, &[], &std::sync::atomic::AtomicBool::new(false)) {
+        match grove_core::archives::extract(Path::new(&archive), &target, &[], &std::sync::atomic::AtomicBool::new(false)) {
             Ok(()) => {
                 crate::controller::push_history_any("Extract", grove_core::ops::Action::Exists { paths: vec![created.clone()] });
                 job_msg(&qt, id, json!({"id": id, "title": title, "state": "done", "results": [created], "dest": dest_dir}));
@@ -454,11 +362,7 @@ pub fn extract_member(archive: &str, inner: &str) -> Result<PathBuf, String> {
         decompress_to(archive, &out)?;
         return Ok(out);
     }
-    if needs_7z(archive) {
-        extract_7z(archive, &dir, &[inner]).map_err(|e| format!("Couldn't take “{inner}” out of the archive: {e}"))?;
-        return Ok(dir.join(inner));
-    }
-    grove_core::libarchive::extract(Path::new(archive), &dir, &[inner], &std::sync::atomic::AtomicBool::new(false))
+    grove_core::archives::extract(Path::new(archive), &dir, &[inner], &std::sync::atomic::AtomicBool::new(false))
         .map_err(|e| format!("Couldn't take “{inner}” out of the archive: {e}"))?;
     Ok(dir.join(inner))
 }
@@ -466,17 +370,6 @@ pub fn extract_member(archive: &str, inner: &str) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn parses_7z() {
-        let t = "Path = docs\nFolder = +\nSize = 0\n\nPath = docs\\a.txt\nSize = 12\nModified = 2026-10-15 19:43:40.1234567\nAttributes = A\n\nPath = top.dll\nSize = 5\nAttributes = A\n";
-        let e = parse_7z_listing(t);
-        assert_eq!(e.len(), 3);
-        assert!(e[0].is_dir);
-        assert_eq!(e[1].path, "docs/a.txt");
-        assert_eq!(e[1].size, 12);
-        assert_eq!(e[1].mtime_text, "2026-10-15 19:43:40");
-        assert_eq!(children(&e, "").len(), 2);
-    }
     #[test]
     fn children_of() {
         let ent = |p: &str, d: bool| ArchEntry { path: p.into(), size: 1, is_dir: d, mtime_text: String::new() };

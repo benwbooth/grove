@@ -283,19 +283,19 @@ pub fn player_waveform(path: &Path, w: u32, h: u32, base: &str, played: &str, ca
 
 /// The names inside an archive (files only; libarchive, linked).
 pub fn archive_names(path: &Path, cancel: &AtomicBool) -> Vec<String> {
-    crate::libarchive::names(path, cancel)
+    crate::archives::names(path, cancel)
 }
 
 /// One member of an archive, written to a temporary file (with `ext`).
 pub fn archive_member(path: &Path, name: &str, ext: &str, cancel: &AtomicBool) -> Option<PathBuf> {
-    let bytes = crate::libarchive::read_member(path, name, 512 << 20, cancel)?;
+    let bytes = crate::archives::read_member(path, name, 512 << 20, cancel)?;
     let out = temp_file(ext);
     std::fs::write(&out, bytes).ok()?;
     Some(out)
 }
 
 fn archive_text(path: &Path, name: &str, cancel: &AtomicBool) -> Option<String> {
-    crate::libarchive::read_member(path, name, 64 << 20, cancel).map(|b| String::from_utf8_lossy(&b).into_owned())
+    crate::archives::read_member(path, name, 64 << 20, cancel).map(|b| String::from_utf8_lossy(&b).into_owned())
 }
 
 pub fn is_picture_name(n: &str) -> bool {

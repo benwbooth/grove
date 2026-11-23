@@ -19,7 +19,7 @@
       linkedFor = pkgs: with pkgs; [ libarchive ];
       runtimeFor = pkgs: with pkgs; [
         ffmpegthumbnailer libheif git sshfs rclone simple-mtpfs
-        poppler-utils vips imagemagick djvulibre mupdf ghostscript magika-cli pandoc _7zz
+        poppler-utils vips imagemagick djvulibre mupdf ghostscript magika-cli pandoc
         udisks fuse3 avahi cifs-utils smbnetfs ffmpeg-headless xorriso dvdplusrwtools
       ];
     in
