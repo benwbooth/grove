@@ -29,6 +29,7 @@ mod places;
 mod portal;
 mod preview;
 mod compare;
+mod google;
 mod remote;
 mod vcs;
 mod roothelper;

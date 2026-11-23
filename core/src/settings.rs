@@ -108,6 +108,14 @@ pub struct Settings {
     /// List and icon views: the Information panel under the files (else at the side).
     #[serde(default = "t")]
     pub info_bottom: bool,
+    /// Google sign-in (grove's own OAuth client, from the user's Google
+    /// Cloud project) and the accounts signed in (tokens in the keyring).
+    #[serde(default)]
+    pub google_client_id: String,
+    #[serde(default)]
+    pub google_client_secret: String,
+    #[serde(default)]
+    pub google_accounts: Vec<String>,
     /// Width of the side Information panel (0 = default).
     #[serde(default)]
     pub info_panel_width: u32,

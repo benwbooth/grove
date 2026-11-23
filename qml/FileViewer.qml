@@ -143,10 +143,10 @@ Item {
             spacing: 6
             PushButton { text: fv.gdoc ? "Open in " + fv.gdoc.app : ""; tip: "Open it in your web browser"; onClicked: fv.app.grove.openUrl(fv.gdoc.url) }
             PushButton {
-                visible: fv.gdocError.indexOf("Connect your Google Drive") === 0
-                text: "Connect Google Drive…"
-                tip: "Set up your Google Drive (rclone): Google documents then show here"
-                onClicked: if (fv.app.activeWindow) fv.app.activeWindow.addCloudDrive()
+                visible: fv.gdocError.indexOf("Sign in") === 0
+                text: "Sign in with Google…"
+                tip: "Sign in to your Google account in the browser: Google documents then show here"
+                onClicked: if (fv.app.activeWindow) fv.app.activeWindow.googleSignIn()
             }
         }
     }

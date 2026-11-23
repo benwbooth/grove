@@ -313,7 +313,7 @@ Window {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 6
                     PushButton { text: "Open in " + (ql.pv.app || "Google"); tip: "Open it in your web browser"; onClicked: ql.app.grove.openUrl(ql.pv.url) }
-                    PushButton { visible: (ql.pv.gdocError || "").indexOf("Connect your Google Drive") === 0; text: "Connect Google Drive…"; tip: "Set up your Google Drive (rclone): Google documents then show here"; onClicked: ql.win.addCloudDrive() }
+                    PushButton { visible: (ql.pv.gdocError || "").indexOf("Sign in") === 0; text: "Sign in with Google…"; tip: "Sign in to your Google account in the browser: Google documents then show here"; onClicked: ql.win.googleSignIn() }
                 }
             }
             PushButton {

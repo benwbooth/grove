@@ -465,7 +465,7 @@ pub fn google_drives() -> Vec<String> {
 /// A Google Docs/Sheets/Slides link file's document, exported by rclone
 /// (by its file id: .docx, .xlsx, .pptx, .pdf), cached by the link file's
 /// time. Tries each Google Drive remote until one has it.
-pub fn gdoc_export(path: &std::path::Path) -> Result<std::path::PathBuf, String> {
+pub fn gdoc_export(path: &std::path::Path, settings: &grove_core::settings::Settings) -> Result<std::path::PathBuf, String> {
     let link = grove_core::gdocs::link(path).ok_or("This isn't a Google Docs link file.")?;
     let kind = grove_core::gdocs::kind(&path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).ok_or("Not a Google file.")?;
     if kind.export.is_empty() {
@@ -474,17 +474,41 @@ pub fn gdoc_export(path: &std::path::Path) -> Result<std::path::PathBuf, String>
     if link.file_id.is_empty() {
         return Err("The link file has no document id.".into());
     }
-    let remotes = google_drives();
-    if remotes.is_empty() {
-        return Err("Connect your Google Drive (Go › Add Cloud Drive…) to see what's in Google documents here.".into());
-    }
     let mtime = std::fs::metadata(path).map(|m| std::os::unix::fs::MetadataExt::mtime(&m)).unwrap_or(0);
     let dir = grove_core::util::cache_home().join("grove/gdocs").join(format!("{}-{mtime}", link.file_id));
     if let Some(f) = std::fs::read_dir(&dir).ok().and_then(|rd| rd.flatten().map(|e| e.path()).find(|p| p.is_file())) {
         return Ok(f);
     }
     let _ = std::fs::create_dir_all(&dir);
+    // grove's own Google sign-in first: the link's account, else any.
+    let accounts: Vec<String> = {
+        let mut a = settings.google_accounts.clone();
+        a.sort_by_key(|x| x != &link.email);
+        a
+    };
+    let mime = match kind.export {
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        _ => "application/pdf",
+    };
+    let stem: String = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "document".into()).chars().filter(|c| *c != '/').collect();
     let mut last = String::new();
+    for a in &accounts {
+        match crate::google::export(settings, a, &link.file_id, mime) {
+            Ok(bytes) => {
+                let out = dir.join(format!("{stem}.{}", kind.export));
+                std::fs::write(&out, bytes).map_err(|e| e.to_string())?;
+                return Ok(out);
+            }
+            Err(e) => last = e,
+        }
+    }
+    let remotes = google_drives();
+    if remotes.is_empty() {
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err(if last.is_empty() { "Sign in with Google to see what's in Google documents here.".into() } else { last });
+    }
     for r in remotes {
         let o = Command::new("rclone")
             .args(["backend", "copyid", &format!("{r}:"), &link.file_id, &format!("{}/", dir.display()), "--drive-export-formats", kind.export])

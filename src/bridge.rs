@@ -315,6 +315,17 @@ pub mod ffi {
         #[qinvokable]
         #[cxx_name = "gdocExport"]
         fn gdoc_export(self: &Grove, key: &QString, path: &QString);
+        /// Google sign-in: {configured, accounts}.
+        #[qinvokable]
+        #[cxx_name = "googleStatus"]
+        fn google_status(self: &Grove) -> QString;
+        /// Sign in with Google in the browser ({email} or {error}).
+        #[qinvokable]
+        #[cxx_name = "googleSignIn"]
+        fn google_sign_in(self: &Grove, key: &QString);
+        #[qinvokable]
+        #[cxx_name = "googleSignOut"]
+        fn google_sign_out(self: Pin<&mut Grove>, email: &QString);
         /// Open a web address in the default browser.
         #[qinvokable]
         #[cxx_name = "openUrl"]

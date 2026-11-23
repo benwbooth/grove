@@ -1078,14 +1078,54 @@ impl ffi::Grove {
 
     pub fn gdoc_export(&self, key: &QString, path: &QString) {
         let p = PathBuf::from(path.to_string());
-        self.answer(key, move || match crate::remote::gdoc_export(&p) {
+        let settings = self.rust().settings.clone();
+        self.answer(key, move || match crate::remote::gdoc_export(&p, &settings) {
             Ok(f) => json!({"path": f.display().to_string()}),
             Err(e) => json!({"error": e}),
         });
     }
 
+    pub fn google_status(&self) -> QString {
+        qs(&crate::google::status(&self.rust().settings).to_string())
+    }
+
+    pub fn google_sign_in(&self, key: &QString) {
+        let settings = self.rust().settings.clone();
+        let qt = self.qt_thread();
+        self.answer(key, move || match crate::google::sign_in(&settings) {
+            Ok(email) => {
+                let e = email.clone();
+                // Remember the account (its token is in the keyring).
+                let _ = qt.queue(move |mut g| {
+                    if !g.rust().settings.google_accounts.contains(&e) {
+                        let mut s = g.rust().settings.clone();
+                        s.google_accounts.push(e);
+                        g.as_mut().rust_mut().settings = s;
+                        g.save_settings();
+                    }
+                });
+                json!({"email": email})
+            }
+            Err(e) => json!({"error": e}),
+        });
+    }
+
+    pub fn google_sign_out(mut self: Pin<&mut Self>, email: &QString) {
+        let e = email.to_string();
+        crate::google::sign_out(&e);
+        let mut s = self.rust().settings.clone();
+        s.google_accounts.retain(|a| a != &e);
+        self.as_mut().rust_mut().settings = s;
+        self.save_settings();
+    }
+
     pub fn open_url(&self, url: &QString) {
         let u = url.to_string();
+        // Tests (screenshot runs) don't open the real browser.
+        if std::env::var_os("GROVE_SCREENSHOT").is_some() {
+            eprintln!("grove test openUrl {u}");
+            return;
+        }
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             if let Err(e) = apps::open_url(&u) {

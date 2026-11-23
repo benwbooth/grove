@@ -249,6 +249,8 @@ ApplicationWindow {
     function batchRename(paths) { renameSheet.start(paths) }
     function connectServer() { connectSheet.start() }
     function addCloudDrive() { connectSheet.close(); cloudSheet.start() }
+    // Sign in with Google (Google Docs/Sheets/Slides previews), with its setup.
+    function googleSignIn() { googleSheet.start() }
     function connectSaved(s) {
         toast("info", "Connecting to “" + s.name + "”…")
         Async.call(app.grove, k => app.grove.connectServer(k, JSON.stringify({ name: s.name, kind: s.kind, host: s.host, user: s.user, path: s.path, remember: true })), r => {
@@ -1245,6 +1247,7 @@ ApplicationWindow {
     }
     ConnectServer { id: connectSheet; app: bw.app; win: bw }
     CloudDriveSheet { id: cloudSheet; app: bw.app; win: bw }
+    GoogleSheet { id: googleSheet; app: bw.app; win: bw }
     // Finder's Go to Folder (when the path bar isn't in the toolbar).
     Sheet {
         id: goSheet
@@ -1462,6 +1465,7 @@ ApplicationWindow {
         else if (cmd === "viewscroll") { const v = p.viewLoaderItem(); if (v && v.restoreScroll) v.restoreScroll({ y: Number(arg), x: Number(arg) }) }
         else if (cmd === "previewscroll") { const pv = p.previewViewer(); if (pv && pv.item) pv.restoreView({ path: pv.item.path, doc: { y: Number(arg) }, pdf: { y: Number(arg) } }) }
         else if (cmd === "savesession") app.saveSession()
+        else if (cmd === "google") { googleSheet.start(); if (arg) googleSheet.step = Number(arg) }
         else if (cmd === "previewzoom") { const pv = p.previewViewer(); if (pv) pv.testZoom(Number(arg)) }
         else if (cmd === "infodump") Async.call(app.grove, k => app.grove.info(k, arg), r => console.warn("grove test info", JSON.stringify(r)))
         else if (cmd === "sort") { const [k, d] = arg.split(","); p.model.applySort(k, d === "desc"); p.rememberView() }
