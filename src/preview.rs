@@ -261,6 +261,8 @@ pub fn preview(path: &str, dark: bool) -> Value {
         Kind::Font => return with(json!({"kind": "font"})),
         // A ".doc" that's really plain text (DOS-era manuals): as text.
         Kind::Office if grove_core::worddoc::is_plain_text(p) => return with(json!({"kind": "code"})),
+        // A ".hlp" that isn't WinHelp (S-Lang's, DOS programs'): plain text.
+        Kind::Office if lower.ends_with(".hlp") && !grove_core::winhelp::is_winhelp(p) => return with(json!({"kind": "code"})),
         Kind::Office => {
             // The whole text is read by Quick Look's TextDoc; here only
             // whether there is any.

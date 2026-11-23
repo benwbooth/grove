@@ -28,6 +28,7 @@ pub mod trash;
 pub mod util;
 pub mod worddoc;
 pub mod vips;
+pub mod winhelp;
 
 /// Tests that change process-wide environment variables (XDG_*) take this.
 #[cfg(test)]

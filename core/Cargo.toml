@@ -33,6 +33,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 encoding_rs = "0.8.44"
 chardetng = "1.0.0"
 cfb = "0.16"
+libhlp = "0.3.0"
 
 [build-dependencies]
 cc = "1"

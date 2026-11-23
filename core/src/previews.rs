@@ -385,6 +385,11 @@ pub fn office_xml_text(xml: &str, limit: usize) -> String {
 
 /// An office document's text (the start of it).
 pub fn office_text(path: &Path, limit: usize, cancel: &AtomicBool) -> Option<String> {
+    // WinHelp (.hlp): its topics' text (winhelp.rs).
+    if path.to_string_lossy().to_lowercase().ends_with(".hlp") {
+        let t = crate::winhelp::text(path)?;
+        return Some(t.chars().take(limit).collect());
+    }
     // Old Word (.doc/.dot): its own binary formats (worddoc.rs).
     let lower = path.to_string_lossy().to_lowercase();
     if lower.ends_with(".doc") || lower.ends_with(".dot") {
@@ -467,8 +472,8 @@ pub fn kind_of(mimes: &[String], name: &str) -> Kind {
     if m.starts_with("application/vnd.comicbook") || matches!(ext, "cbz" | "cbr" | "cb7" | "cbt") {
         return Kind::Comic;
     }
-    if m.starts_with("application/vnd.oasis.opendocument") || m.starts_with("application/vnd.openxmlformats-officedocument") || m == "application/msword"
-        || matches!(ext, "odt" | "ods" | "odp" | "odg" | "docx" | "xlsx" | "pptx" | "ott" | "ots" | "otp" | "doc" | "dot")
+    if m.starts_with("application/vnd.oasis.opendocument") || m.starts_with("application/vnd.openxmlformats-officedocument") || m == "application/msword" || m == "application/winhlp"
+        || matches!(ext, "odt" | "ods" | "odp" | "odg" | "docx" | "xlsx" | "pptx" | "ott" | "ots" | "otp" | "doc" | "dot" | "hlp")
     {
         return Kind::Office;
     }

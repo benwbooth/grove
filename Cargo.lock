@@ -1386,6 +1386,7 @@ dependencies = [
  "ignore",
  "image",
  "libc",
+ "libhlp",
  "md-5",
  "msi",
  "parking_lot",
@@ -1696,6 +1697,17 @@ dependencies = [
  "libz-sys",
  "openssl-sys",
  "pkg-config",
+]
+
+[[package]]
+name = "libhlp"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0c4ff210ddeeec95c89cafa25fce07884067928d9a6c6c3dd8da2c13b9577d2"
+dependencies = [
+ "chardetng",
+ "encoding_rs",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

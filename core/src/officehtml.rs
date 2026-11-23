@@ -647,6 +647,7 @@ pub fn convert(path: &Path, media: &PathBuf, cancel: &AtomicBool) -> Option<Stri
         "odt" | "ott" | "fodt" => odt(path, media, cancel),
         "pptx" | "pptm" => pptx(path, cancel),
         "rtf" => rtf(path),
+        "hlp" => crate::winhelp::html(path),
         "doc" | "dot" => {
             // Old Word: its text, a paragraph per line (worddoc.rs).
             let t = crate::worddoc::text(path).ok()?;
