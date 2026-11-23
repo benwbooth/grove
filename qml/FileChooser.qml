@@ -43,6 +43,8 @@ ApplicationWindow {
     function showHelp() {}
     function setSetting(n, v) { app.grove.setSetting(n, JSON.stringify(v)) }
     function toggleHidden() { const v = !app.settings.show_hidden; setSetting("show_hidden", v); chooserPane.model.applyShowHidden(v) }
+    // Ctrl+H (or your own keys for it) shows and hides hidden files here too.
+    Shortcut { sequences: Help.seqs("hidden"); context: Qt.WindowShortcut; enabled: !fc.modalOpen; onActivated: fc.toggleHidden() }
     function confirm(t, m, a, fn) { fn() }
     function confirmDelete(p) {}
     function emptyTrash() {}
