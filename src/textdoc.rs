@@ -46,6 +46,8 @@ pub mod qobject {
         #[qproperty(bool, loading)]
         #[qproperty(QString, error)]
         #[qproperty(i32, lines)]
+        /// The text's encoding when it isn't UTF-8 ("DOS (CP437)", "windows-1252"...).
+        #[qproperty(QString, encoding)]
         #[qproperty(i32, max_cols, cxx_name = "maxCols")]
         #[qproperty(bool, rich_all, cxx_name = "richAll")]
         /// Markdown: the body font and the widest a picture may be.
@@ -118,6 +120,7 @@ pub struct TextDocRust {
     loading: bool,
     error: QString,
     lines: i32,
+    encoding: QString,
     max_cols: i32,
     rich_all: bool,
     family: QString,
@@ -214,6 +217,7 @@ impl qobject::TextDoc {
         self.as_mut().set_path(path.clone());
         self.as_mut().set_error(QString::default());
         self.as_mut().set_lines(0);
+        self.as_mut().set_encoding(QString::default());
         self.as_mut().set_max_cols(0);
         let p = path.to_string();
         let mode = mode.to_string();
@@ -293,7 +297,10 @@ fn whole_file(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, mo
                     }
                 }
                 let text = match read_text(&p, &mode, &cancel) {
-                    Ok(t) => t,
+                    Ok((t, enc)) => {
+                        let _ = qt.queue(move |m| m.set_encoding(qs(&enc)));
+                        t
+                    }
                     Err(e) => return send(vec![], 0, 0, true, Some(e)),
                 };
                 if cancel.load(Ordering::Relaxed) {
@@ -513,19 +520,21 @@ fn html_blocks(html: &str) -> Vec<String> {
     out
 }
 
-fn read_text(p: &str, mode: &str, cancel: &AtomicBool) -> Result<String, String> {
+/// The file's text, decoded from whatever it's in (UTF-8, UTF-16, DOS
+/// CP437, Windows-1252, Shift_JIS...: grove_core::textenc), and the
+/// encoding's name ("" for UTF-8).
+fn read_text(p: &str, mode: &str, cancel: &AtomicBool) -> Result<(String, String), String> {
     use std::io::Read;
     let path = std::path::Path::new(p);
     if mode == "office" {
-        return grove_core::previews::office_text(path, usize::MAX, cancel).ok_or_else(|| "No text in this document".to_string());
+        return grove_core::previews::office_text(path, usize::MAX, cancel).map(|t| (t, String::new())).ok_or_else(|| "No text in this document".to_string());
     }
     let f = std::fs::File::open(path).map_err(|e| grove_core::util::plain_error(&e, path))?;
     let mut buf = vec![];
     f.take(READ_LIMIT).read_to_end(&mut buf).map_err(|e| grove_core::util::plain_error(&e, path))?;
-    Ok(match String::from_utf8(buf) {
-        Ok(s) => s,
-        Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
-    })
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let (text, enc) = grove_core::textenc::read(&buf, &name);
+    Ok((text, enc.label()))
 }
 
 /// Markdown cut into sections at blank lines outside code fences (about
@@ -751,6 +760,18 @@ fn index_stream(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, 
             return;
         }
     };
+    // The encoding, from the start of the file (every block uses it).
+    let enc = {
+        let mut head = vec![0u8; 1 << 16];
+        let n = f.read(&mut head).unwrap_or(0);
+        head.truncate(n);
+        let _ = f.seek(SeekFrom::Start(0));
+        grove_core::textenc::detect(&head, &path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+    };
+    {
+        let label = enc.label();
+        let _ = qt.queue(move |m| m.set_encoding(qs(&label)));
+    }
     // The block reader: one request at a time, newest first.
     let (tx, rx) = std::sync::mpsc::channel::<(usize, u64, u64)>();
     {
@@ -775,7 +796,7 @@ fn index_stream(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, 
                         if !ok {
                             buf.clear();
                         }
-                        let text = block_text(&buf, code);
+                        let text = block_text(&buf, code, enc);
                         let b = ReadyBlock(Block { text: qs(&text), rich: false });
                         let _ = qt.queue(move |m| m.stream_block(gen, row, b));
                     }
@@ -799,8 +820,8 @@ fn index_stream(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, 
                 let mut head = vec![0u8; 65536];
                 let n = f.read(&mut head).unwrap_or(0);
                 head.truncate(n);
-                let head = String::from_utf8_lossy(&head).into_owned();
                 let path = std::path::Path::new(&p);
+                let head = grove_core::textenc::decode(&head, enc);
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 let name = crate::langguess::name_for(&p, &head, &name);
                 let mut hl = crate::preview::Highlighter::new(&head, &name, dark);
@@ -812,7 +833,7 @@ fn index_stream(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, 
                     if f.seek(SeekFrom::Start(start)).and_then(|_| f.read_exact(&mut buf)).is_err() {
                         return;
                     }
-                    let html = hl.html(&block_text(&buf, true));
+                    let html = hl.html(&block_text(&buf, true, enc));
                     let b = ReadyBlock(Block { text: qs(&html), rich: true });
                     let _ = qt.queue(move |m| m.stream_rich(gen, row, b));
                 }
@@ -920,9 +941,10 @@ fn index_stream(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, 
     let _ = qt.queue(move |m| m.stream_add(gen, batch));
 }
 
-/// A block's bytes as display text: no final newline, tabs as spaces (code).
-fn block_text(bytes: &[u8], code: bool) -> String {
-    let s = String::from_utf8_lossy(bytes);
+/// A block's bytes as display text (in the file's encoding): no final
+/// newline, tabs as spaces (code).
+fn block_text(bytes: &[u8], code: bool, enc: grove_core::textenc::Enc) -> String {
+    let s = grove_core::textenc::decode(bytes, enc);
     let s = s.strip_suffix('\n').unwrap_or(&s);
     let s = s.strip_suffix('\r').unwrap_or(s);
     if code && s.contains('\t') {

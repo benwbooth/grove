@@ -153,7 +153,7 @@ Item {
             x: dv.slim ? 10 : 12
             width: parent.width - tools.width - 30
             elide: Text.ElideRight
-            text: dv.paper ? "" : doc.lines > 0 ? doc.lines.toLocaleString(Qt.locale(), "f", 0) + (doc.lines === 1 ? " line" : " lines") + (doc.loading ? " so far…" : "") : ""
+            text: dv.paper ? "" : doc.lines > 0 ? doc.lines.toLocaleString(Qt.locale(), "f", 0) + (doc.lines === 1 ? " line" : " lines") + (doc.loading ? " so far…" : "") + (doc.encoding ? " · " + doc.encoding : "") : ""
             color: Theme.fgSecondary
             font.pixelSize: Theme.small
         }

@@ -127,11 +127,13 @@ pub fn text_page(p: &Path) -> Option<String> {
         n += k;
     }
     buf.truncate(n);
-    if buf.is_empty() || buf.contains(&0) {
+    let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let enc = grove_core::textenc::detect(&buf, &name);
+    let utf16 = matches!(enc, grove_core::textenc::Enc::Utf16Le | grove_core::textenc::Enc::Utf16Be);
+    if buf.is_empty() || (!utf16 && buf.contains(&0)) {
         return None;
     }
-    let text = String::from_utf8_lossy(&buf).into_owned();
-    let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let text = grove_core::textenc::decode(&buf, enc);
     let lower = name.to_lowercase();
     // Markdown rendered (the provider lays it out with QTextDocument).
     if crate::preview::is_markdown_name(&lower) {

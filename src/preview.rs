@@ -54,11 +54,15 @@ fn read_head(p: &Path, limit: usize) -> Option<(String, bool)> {
         n += k;
     }
     buf.truncate(n);
-    if buf.iter().take(8000).any(|&b| b == 0) {
+    let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let enc = grove_core::textenc::detect(&buf, &name);
+    // Zero bytes mean binary, except in UTF-16 text.
+    let utf16 = matches!(enc, grove_core::textenc::Enc::Utf16Le | grove_core::textenc::Enc::Utf16Be);
+    if !utf16 && buf.iter().take(8000).any(|&b| b == 0) {
         return None;
     }
     let truncated = n == limit;
-    Some((String::from_utf8_lossy(&buf).into_owned(), truncated))
+    Some((grove_core::textenc::decode(&buf, enc), truncated))
 }
 
 fn syntax_for<'a>(ss: &'a SyntaxSet, text: &str, name: &str) -> &'a syntect::parsing::SyntaxReference {
