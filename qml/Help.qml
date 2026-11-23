@@ -42,6 +42,7 @@ QtObject {
         { id: "pdfzoom", group: "View", action: "Zoom PDF and book pages", defaults: [], fixed: "Ctrl+wheel, Ctrl+= / Ctrl+−, Ctrl+0", note: "Click the percentage to fit the width again" },
         { id: "videofull", group: "View", action: "Video full screen", defaults: [], fixed: "double-click the video", note: "Esc, F or double-click to go back" },
         { id: "qltablesearch", group: "View", action: "Quick Look on a table (CSV, TSV, spreadsheet): search its rows", defaults: [], fixed: "Ctrl+F", note: "Click a header to sort, drag it to move the column, drag its edge to resize, right-click it to filter or hide; SQL runs queries (table t)" },
+        { id: "tablecopy", group: "View", action: "Table preview: copy the selected cells, rows or columns (tab-separated)", defaults: [], fixed: "Ctrl+C", note: "Drag over cells or the row numbers to select (Shift-click extends), Ctrl-click a header for its column; Ctrl+A selects all; right-click for Copy with Column Names; double-click a cell to see all of it" },
         { id: "split", group: "View", action: "Split view", defaults: ["F3"], fixed: "", note: "Dolphin: F3" },
         { id: "terminalpanel", group: "View", action: "Terminal panel", defaults: ["F4"], fixed: "", note: "Dolphin: F4" },
         { id: "infopanel", group: "View", action: "Information panel / preview pane", defaults: ["F11", "Ctrl+Shift+P"], fixed: "", note: "Dolphin: F11  ·  Finder: ⇧⌘P" },

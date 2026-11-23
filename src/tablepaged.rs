@@ -50,7 +50,8 @@ pub enum Cmd {
     View(u64, View),
     Query(u64, String),
     Table(u64, String),
-    Tsv(Vec<usize>),
+    /// Columns in this order, shown rows first..=last, with the header line?
+    Tsv(Vec<usize>, usize, usize, bool),
     Imported(Result<PathBuf, String>),
 }
 
@@ -900,7 +901,7 @@ impl Worker {
                     Err(e) => self.send(move |m| m.p_error(gen, e, false)),
                 }
             }
-            Cmd::Tsv(order) => self.tsv(order),
+            Cmd::Tsv(order, first, last, header) => self.tsv(order, first, last, header),
             Cmd::Imported(r) => {
                 self.importing = false;
                 let gen = self.gen;
@@ -1111,7 +1112,7 @@ impl Worker {
     }
 
     /// The shown rows (up to COPY_MAX) as TSV, columns in `order`.
-    fn tsv(&mut self, order: Vec<usize>) {
+    fn tsv(&mut self, order: Vec<usize>, first: usize, last: usize, header_line: bool) {
         let header: Vec<String> = match (&self.base, &self.csv) {
             (Some(b), _) => b.cols.clone(),
             (None, Some(c)) => c.header.clone(),
@@ -1119,8 +1120,8 @@ impl Worker {
         };
         let clean = |c: &str| c.replace(['\t', '\n', '\r'], " ");
         let line = |cells: &Vec<String>| order.iter().map(|&c| clean(cells.get(c).map(String::as_str).unwrap_or(""))).collect::<Vec<_>>().join("\t") + "\n";
-        let mut out = line(&header);
-        let mut p = 0;
+        let mut out = if header_line { line(&header) } else { String::new() };
+        let mut p = first / PAGE;
         let mut n = 0;
         let v = self.vgen;
         while n < COPY_MAX {
@@ -1132,9 +1133,19 @@ impl Worker {
             if pg.rows.is_empty() {
                 break;
             }
-            for r in &pg.rows {
+            for (k, r) in pg.rows.iter().enumerate() {
+                let at = p * PAGE + k;
+                if at < first {
+                    continue;
+                }
+                if at > last || n >= COPY_MAX {
+                    break;
+                }
                 out.push_str(&line(r));
                 n += 1;
+            }
+            if (p + 1) * PAGE > last {
+                break;
             }
             p += 1;
         }
@@ -1478,9 +1489,9 @@ impl qobject::TableData {
         self.as_mut().set_busy(true);
     }
 
-    pub(super) fn p_tsv_request(&self, order: Vec<usize>) {
+    pub(super) fn p_tsv_request(&self, order: Vec<usize>, first: usize, last: usize, header: bool) {
         if let Some(pg) = self.rust().paged_state.as_ref() {
-            let _ = pg.tx.send(Cmd::Tsv(order));
+            let _ = pg.tx.send(Cmd::Tsv(order, first, last, header));
         }
     }
 }

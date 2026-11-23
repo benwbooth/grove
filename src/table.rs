@@ -152,6 +152,10 @@ pub mod qobject {
         /// by tsvReady.
         #[qinvokable]
         fn request_tsv(self: &TableData, order: &QString);
+        /// Shown rows first..=last (absolute), columns in `order`, as TSV
+        /// (with the column names first if `header`), answered by tsvReady.
+        #[qinvokable]
+        fn request_range_tsv(self: Pin<&mut TableData>, first: i32, last: i32, order: &QString, header: bool);
         /// A SQLite database: show this table or view.
         #[qinvokable]
         fn show_table(self: Pin<&mut TableData>, name: &QString);
@@ -707,7 +711,31 @@ impl qobject::TableData {
 
     fn request_tsv(&self, order: &QString) {
         let order: Vec<usize> = serde_json::from_str(&order.to_string()).unwrap_or_default();
-        self.p_tsv_request(order);
+        self.p_tsv_request(order, 0, usize::MAX, true);
+    }
+
+    fn request_range_tsv(mut self: Pin<&mut Self>, first: i32, last: i32, order: &QString, header: bool) {
+        let (first, last) = (first.max(0) as usize, last.max(first).max(0) as usize);
+        let cols: Vec<usize> = serde_json::from_str(&order.to_string()).unwrap_or_default();
+        if self.rust().paged_state.is_some() {
+            self.p_tsv_request(cols, first, last, header);
+            return;
+        }
+        // Read whole: it's all in memory already.
+        let (text, n) = {
+            let r = self.rust();
+            let clean = |c: &str| c.replace(['\t', '\n', '\r'], " ");
+            let line = |cells: &[String]| cols.iter().map(|&c| clean(cells.get(c).map(String::as_str).unwrap_or(""))).collect::<Vec<_>>().join("\t") + "\n";
+            let mut out = if header { line(&r.cur.header) } else { String::new() };
+            let mut n = 0;
+            for k in first..=last.min(r.vis.len().saturating_sub(1)) {
+                let Some(&i) = r.vis.get(k) else { break };
+                out.push_str(&line(&r.cur.rows[i as usize]));
+                n += 1;
+            }
+            (out, n)
+        };
+        self.as_mut().tsv_ready(qs(&text), n);
     }
 
     fn show_table(self: Pin<&mut Self>, name: &QString) {

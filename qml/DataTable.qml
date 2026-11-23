@@ -37,11 +37,62 @@ Item {
     readonly property var sheetNames: { try { return JSON.parse(tbl.sheets) } catch (e) { return [] } }
 
     function colWidth(c) { return widths[c] !== undefined ? widths[c] : Math.min(420, Math.max(64, ((cols[c] || {}).width || 8) * fm.averageCharacterWidth + 24)) }
-    function reload() { tbl.load(active ? path : ""); filters = []; showQuery = false; showSchema = false; search.text = ""; query.text = "" }
+    function reload() { clearSel(); tbl.load(active ? path : ""); filters = []; showQuery = false; showSchema = false; search.text = ""; query.text = "" }
     function copyRows() {
         if (!dt.app) return
         if (tbl.paged) tbl.requestTsv(JSON.stringify(dt.shown))
         else dt.app.grove.copyText(tbl.rowsTsv(0, Math.max(0, tbl.count - 1), JSON.stringify(dt.shown)))
+    }
+    // Selection, like a spreadsheet: cells (click, drag, Shift-click),
+    // whole rows (the row numbers) or whole columns (Ctrl-click a header).
+    // Rows are shown-row numbers over the whole table (not the window);
+    // columns are positions in `shown`. Ctrl+C copies it as TSV.
+    property bool testCopy: false
+    property string selMode: ""     // "", "cells", "rows", "cols"
+    property int selR0: -1
+    property int selR1: -1
+    property int selC0: -1
+    property int selC1: -1
+    readonly property int selTop: Math.min(selR0, selR1)
+    readonly property int selBottom: Math.max(selR0, selR1)
+    readonly property int selLeft: Math.min(selC0, selC1)
+    readonly property int selRight: Math.max(selC0, selC1)
+    readonly property bool hasSel: selMode !== ""
+    function clearSel() { selMode = "" }
+    function selectCells(r0, c0, r1, c1) { selMode = "cells"; selR0 = r0; selC0 = c0; selR1 = r1; selC1 = c1 }
+    function selectRows(r0, r1) { selMode = "rows"; selR0 = r0; selR1 = r1; selC0 = 0; selC1 = shown.length - 1 }
+    function selectCols(c0, c1) { selMode = "cols"; selC0 = c0; selC1 = c1; selR0 = 0; selR1 = Math.max(0, tbl.count - 1) }
+    function selectAll() { if (tbl.count > 0 && shown.length) { selMode = "rows"; selR0 = 0; selR1 = tbl.count - 1; selC0 = 0; selC1 = shown.length - 1 } }
+    function rowSelected(r) { return (selMode === "rows" || selMode === "cells") && r >= selTop && r <= selBottom }
+    function cellSelected(r, c) {
+        if (selMode === "cols") return c >= selLeft && c <= selRight
+        if (selMode === "rows") return r >= selTop && r <= selBottom
+        return selMode === "cells" && r >= selTop && r <= selBottom && c >= selLeft && c <= selRight
+    }
+    function selCount() { return (selBottom - selTop + 1) * (selRight - selLeft + 1) }
+    // Copy the selection (a column copy starts with its name; `names`
+    // adds the names to any copy).
+    function copySel(names) {
+        if (!hasSel || !dt.app) return
+        const cols = shown.slice(Math.max(0, selLeft), selRight + 1)
+        const last = selMode === "cols" ? tbl.count - 1 : selBottom
+        tbl.requestRangeTsv(selMode === "cols" ? 0 : selTop, last, JSON.stringify(cols), !!names || selMode === "cols")
+        const n = last - (selMode === "cols" ? 0 : selTop) + 1
+        if (dt.app.toast) dt.app.toast("info", selMode === "cols" ? (cols.length === 1 ? "Copied the column" : "Copied " + cols.length + " columns")
+            : selMode === "rows" ? (n === 1 ? "Copied the row" : "Copied " + dt.rowsText(n) + " rows")
+            : (n * cols.length === 1 ? "Copied the cell" : "Copied " + dt.rowsText(n * cols.length) + " cells"))
+    }
+    // Content position → shown row (absolute) and column position (-1:
+    // the row numbers).
+    function rowAt(cy) { return Math.max(0, Math.min(tbl.count - 1, tbl.rowBase + Math.floor(cy / rowH))) }
+    function colAt(cx) {
+        if (cx < gutter) return -1
+        let acc = gutter
+        for (let i = 0; i < shown.length; i++) {
+            acc += colWidth(shown[i])
+            if (cx < acc) return i
+        }
+        return shown.length - 1
     }
     function rowsText(n) { return n.toLocaleString(Qt.locale(), "f", 0) }
     // Huge tables: the list holds a window of rows (tbl.rowBase on), so
@@ -75,12 +126,17 @@ Item {
         else if (cmd === "sql") { dt.showQuery = true; query.text = rest; tbl.runQuery(rest) }
         else if (cmd === "table") tbl.showTable(rest)
         else if (cmd === "schema") dt.showSchema = true
+        else if (cmd === "selcells") { const v = rest.split(":").map(Number); dt.selectCells(v[0], v[1], v[2], v[3]) }
+        else if (cmd === "selrows") { const v = rest.split(":").map(Number); dt.selectRows(v[0], v[1]) }
+        else if (cmd === "selcols") { const v = rest.split(":").map(Number); dt.selectCols(v[0], v[1]) }
+        else if (cmd === "copysel") { dt.testCopy = true; dt.copySel(rest === "names") }
+        else if (cmd === "cellmenu") cellMenu.popup(dt, dt.width / 2, dt.height / 2)
         console.warn("grove test table", a, "count", tbl.count, "total", tbl.total, "busy", tbl.busy, "indexing", tbl.indexing, "import", tbl.importProgress.toFixed(2), "paged", tbl.paged, "db", tbl.isDb, "table", tbl.table, "err", tbl.error + tbl.queryError, "first", list.count ? (list.itemAtIndex(list.indexAt(0, list.contentY + 1)) || {}).cells : "")
     }
     onPathChanged: Qt.callLater(reload)
     onActiveChanged: Qt.callLater(reload)
     function focusSearch() { search.forceActiveFocus(); search.selectAll() }
-    function sendFilters() { tbl.setFilters(JSON.stringify(filters.filter(f => f.op === "empty" || f.op === "notempty" || f.value !== ""))) }
+    function sendFilters() { clearSel(); tbl.setFilters(JSON.stringify(filters.filter(f => f.op === "empty" || f.op === "notempty" || f.value !== ""))) }
     function moveColumn(from, toIndex) {
         const o = order.slice()
         const i = o.indexOf(from)
@@ -89,6 +145,14 @@ Item {
         o.splice(Math.max(0, Math.min(o.length, toIndex > i ? toIndex - 1 : toIndex)), 0, from)
         order = o
     }
+    Connections {
+        target: tbl
+        function onSortColumnChanged() { dt.clearSel() }
+        function onDescendingChanged() { dt.clearSel() }
+        function onQueryingChanged() { dt.clearSel() }
+        function onTableChanged() { dt.clearSel() }
+    }
+    onShownChanged: if (selMode === "cols" || selMode === "cells") clearSel()
     function sortClick(c) {
         // Ascending, descending, then file order.
         if (tbl.sortColumn !== c) tbl.sortBy(c, false)
@@ -99,6 +163,7 @@ Item {
     TableData {
         id: tbl
         onTsvReady: (text, rows) => {
+            if (dt.testCopy) { console.warn("grove test copied " + JSON.stringify(text)); dt.testCopy = false; return }
             if (!dt.app) return
             dt.app.grove.copyText(text)
             if (rows >= 100000 && dt.app.toast) dt.app.toast("info", "Copied the first 100,000 rows")
@@ -264,8 +329,8 @@ Item {
             GButton {
                 anchors.verticalCenter: parent.verticalCenter
                 iconName: "edit-copy"
-                tip: "Copy the rows shown (tab-separated, with the header) for pasting into a spreadsheet"
-                onClicked: dt.copyRows()
+                tip: dt.hasSel ? "Copy the selection (tab-separated) for pasting into a spreadsheet (⌘C)" : "Copy the rows shown (tab-separated, with the header) for pasting into a spreadsheet"
+                onClicked: dt.hasSel ? dt.copySel(false) : dt.copyRows()
             }
             GLabel {
                 anchors.verticalCenter: parent.verticalCenter
@@ -421,6 +486,7 @@ Item {
                     width: dt.colWidth(modelData)
                     height: parent.height
                     Rectangle { anchors.fill: parent; color: hm.containsMouse && !hm.pressed ? Theme.hover : "transparent"; opacity: header.dragCol === hc.modelData ? 0.5 : 1 }
+                    Rectangle { anchors.fill: parent; visible: dt.selMode === "cols" && hc.index >= dt.selLeft && hc.index <= dt.selRight; color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.3) }
                     GLabel {
                         x: 8
                         width: parent.width - 16 - (sortMark.visible ? sortMark.width + 4 : 0)
@@ -469,11 +535,16 @@ Item {
                                 // Index in `shown` → index in `order`.
                                 const target = header.dropIndex < dt.shown.length ? dt.order.indexOf(dt.shown[header.dropIndex]) : dt.order.length
                                 dt.moveColumn(hc.modelData, target)
+                            } else if (!moved && e.button === Qt.LeftButton && (e.modifiers & (Qt.ControlModifier | Qt.MetaModifier | Qt.ShiftModifier))) {
+                                // Ctrl-click: select the column; Shift-click: through it.
+                                if ((e.modifiers & Qt.ShiftModifier) && dt.selMode === "cols") dt.selectCols(dt.selC0, hc.index)
+                                else dt.selectCols(hc.index, hc.index)
+                                keys.forceActiveFocus()
                             } else if (!moved && e.button === Qt.LeftButton) dt.sortClick(hc.modelData)
-                            else if (!moved && e.button === Qt.RightButton) { headMenu.col = hc.modelData; headMenu.popup() }
+                            else if (!moved && e.button === Qt.RightButton) { headMenu.col = hc.modelData; headMenu.pos = hc.index; headMenu.popup() }
                             header.dragCol = -1; header.dropIndex = -1; header.dropX = -1
                         }
-                        GTip { visible: hm.containsMouse && !hm.pressed; text: (hc.col.name || "") + " — click to sort, drag to move, right-click for more" }
+                        GTip { visible: hm.containsMouse && !hm.pressed; text: (hc.col.name || "") + " — click to sort, Ctrl-click to select the column (Shift-click for more), drag to move, right-click for more" }
                     }
                     // Resize handle.
                     MouseArea {
@@ -500,6 +571,10 @@ Item {
     GMenu {
         id: headMenu
         property int col: -1
+        property int pos: -1
+        GMenuItem { text: "Select Column"; onTriggered: { dt.selectCols(headMenu.pos, headMenu.pos); keys.forceActiveFocus() } }
+        GMenuItem { text: "Copy Column"; onTriggered: { dt.selectCols(headMenu.pos, headMenu.pos); dt.copySel(true) } }
+        GMenuSeparator {}
         GMenuItem { text: "Sort Ascending"; onTriggered: tbl.sortBy(headMenu.col, false) }
         GMenuItem { text: "Sort Descending"; onTriggered: tbl.sortBy(headMenu.col, true) }
         GMenuItem { text: "File Order"; enabled: tbl.sortColumn >= 0; onTriggered: tbl.sortBy(-1, false) }
@@ -546,6 +621,8 @@ Item {
             width: list.contentWidth
             height: Theme.rowHeight
             color: index % 2 ? Theme.rowAlt : "transparent"
+            readonly property int absRow: tbl.rowBase + index
+            readonly property bool rowSel: dt.rowSelected(absRow)
             Row {
                 height: parent.height
                 GLabel {
@@ -555,8 +632,9 @@ Item {
                     horizontalAlignment: Text.AlignRight
                     verticalAlignment: Text.AlignVCenter
                     text: tbl.querying ? tbl.rowBase + rowItem.index + 1 : rowItem.row
-                    color: Theme.fgTertiary
+                    color: dt.selMode === "rows" && rowItem.rowSel ? Theme.accentText : Theme.fgTertiary
                     font.pixelSize: Theme.small
+                    Rectangle { z: -1; anchors.fill: parent; visible: dt.selMode === "rows" && rowItem.rowSel; color: Theme.accent; opacity: 0.85 }
                 }
                 Repeater {
                     model: dt.shown
@@ -567,6 +645,13 @@ Item {
                         readonly property bool hit: search.text !== "" && t.toLowerCase().indexOf(search.text.toLowerCase()) >= 0
                         width: dt.colWidth(modelData)
                         height: rowItem.height
+                        required property int index
+                        readonly property bool sel: dt.hasSel && dt.cellSelected(rowItem.absRow, index)
+                        Rectangle {
+                            visible: cellItem.sel
+                            anchors.fill: parent
+                            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.dark ? 0.3 : 0.18)
+                        }
                         Rectangle {
                             visible: cellItem.hit
                             anchors.fill: parent; anchors.margins: 2
@@ -648,6 +733,116 @@ Item {
                 selectedTextColor: Theme.accentText
             }
         }
+    }
+    // Selecting: press and drag over cells (or the row numbers for whole
+    // rows), Shift to extend; right-click for Copy. Keys: Ctrl+C, Ctrl+A, Escape.
+    Item {
+        id: keys
+        focus: false
+        Keys.onPressed: (e) => {
+            const mod = e.modifiers & (Qt.ControlModifier | Qt.MetaModifier)
+            if (mod && e.key === Qt.Key_C && dt.hasSel) { dt.copySel(false); e.accepted = true }
+            else if (mod && e.key === Qt.Key_A) { dt.selectAll(); e.accepted = true }
+            else if (e.key === Qt.Key_Escape && dt.hasSel) { dt.clearSel(); e.accepted = true }
+        }
+    }
+    MouseArea {
+        id: selMouse
+        x: list.x
+        y: list.y
+        width: list.width - (list.ScrollBar.vertical.visible || wholeBar.visible ? 12 : 0)
+        height: list.height - (list.ScrollBar.horizontal.visible ? 12 : 0)
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        property bool rowsDrag: false
+        property real lastX: 0
+        property real lastY: 0
+        function cx(x) { return x + list.contentX }
+        function cy(y) { return y + list.contentY }
+        function extendTo(x, y) {
+            const r = dt.rowAt(cy(y))
+            if (rowsDrag) dt.selectRows(dt.selR0, r)
+            else dt.selectCells(dt.selR0, dt.selC0, r, Math.max(0, dt.colAt(cx(x))))
+        }
+        onPressed: (e) => {
+            keys.forceActiveFocus()
+            if (tbl.count === 0 || !dt.shown.length) return
+            const r = dt.rowAt(cy(e.y)), c = dt.colAt(cx(e.x))
+            if (e.button === Qt.RightButton) {
+                // Right-click outside the selection selects what's under it.
+                if (!(c < 0 ? dt.rowSelected(r) && dt.selMode === "rows" : dt.cellSelected(r, c)))
+                    c < 0 ? dt.selectRows(r, r) : dt.selectCells(r, c, r, c)
+                cellMenu.popup()
+                return
+            }
+            rowsDrag = c < 0 || ((e.modifiers & Qt.ShiftModifier) && dt.selMode === "rows")
+            if ((e.modifiers & Qt.ShiftModifier) && dt.hasSel && dt.selMode !== "cols") extendTo(e.x, e.y)
+            else if (c < 0) dt.selectRows(r, r)
+            else dt.selectCells(r, c, r, c)
+            lastX = e.x; lastY = e.y
+        }
+        onPositionChanged: (e) => {
+            if (!pressed || !(pressedButtons & Qt.LeftButton) || !dt.hasSel) return
+            lastX = e.x; lastY = e.y
+            extendTo(e.x, e.y)
+        }
+        onDoubleClicked: (e) => {
+            // The whole text of a long cell, selectable.
+            const r = dt.rowAt(cy(e.y)), c = dt.colAt(cx(e.x))
+            if (c >= 0 && e.button === Qt.LeftButton) { cellView.text = tbl.cell(r - tbl.rowBase, dt.shown[c]); cellView.title = (dt.cols[dt.shown[c]] || {}).name || ""; cellView.open() }
+        }
+        // Dragging past an edge scrolls.
+        Timer {
+            interval: 30; repeat: true
+            running: selMouse.pressed && (selMouse.lastY < 0 || selMouse.lastY > selMouse.height || selMouse.lastX < 0 || selMouse.lastX > selMouse.width)
+            onTriggered: {
+                const m = selMouse
+                if (m.lastY < 0) list.contentY = Math.max(0, list.contentY + m.lastY)
+                else if (m.lastY > m.height) list.contentY = Math.min(Math.max(0, list.contentHeight - list.height), list.contentY + (m.lastY - m.height))
+                if (m.lastX < 0) list.contentX = Math.max(0, list.contentX + m.lastX)
+                else if (m.lastX > m.width) list.contentX = Math.min(Math.max(0, list.contentWidth - list.width), list.contentX + (m.lastX - m.width))
+                m.extendTo(Math.max(0, Math.min(m.width - 1, m.lastX)), Math.max(0, Math.min(m.height - 1, m.lastY)))
+            }
+        }
+    }
+    GMenu {
+        id: cellMenu
+        GMenuItem { text: dt.selMode === "rows" ? (dt.selBottom > dt.selTop ? "Copy Rows" : "Copy Row") : dt.selMode === "cols" ? "Copy Column" : dt.selCount() > 1 ? "Copy Cells" : "Copy Cell"; onTriggered: dt.copySel(false) }
+        GMenuItem { text: "Copy with Column Names"; onTriggered: dt.copySel(true) }
+        GMenuSeparator {}
+        GMenuItem { text: dt.selBottom > dt.selTop ? "Select Rows" : "Select Row"; onTriggered: dt.selectRows(dt.selTop, dt.selBottom) }
+        GMenuItem { text: dt.selRight > dt.selLeft ? "Select Columns" : "Select Column"; onTriggered: dt.selectCols(dt.selLeft, dt.selRight) }
+        GMenuItem { text: "Select All"; onTriggered: dt.selectAll() }
+    }
+    // A cell's whole text (double-click).
+    Sheet {
+        id: cellView
+        property string text: ""
+        Flickable {
+            id: cellFlick
+            width: parent.width
+            height: Math.min(Math.round(320 * Theme.pt), cellEdit.implicitHeight)
+            contentHeight: cellEdit.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: GScrollBar {}
+            TextEdit {
+                id: cellEdit
+                width: cellFlick.width - 12
+                text: cellView.text
+                readOnly: true
+                selectByMouse: true
+                wrapMode: TextEdit.Wrap
+                renderType: Text.NativeRendering
+                color: Theme.fg
+                font.pixelSize: Theme.body
+                selectionColor: Theme.accent
+                selectedTextColor: Theme.accentText
+            }
+        }
+        buttons: [
+            PushButton { text: "Copy"; onClicked: { dt.app.grove.copyText(cellView.text); cellView.close() } },
+            PushButton { text: "Close"; primary: true; onClicked: cellView.close() }
+        ]
     }
     // The whole table's scroll bar (huge tables: the list holds a window).
     GScrollBar {
