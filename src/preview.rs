@@ -15,11 +15,8 @@ fn syntaxes() -> &'static SyntaxSet {
     S.get_or_init(|| {
         let mut b = two_face::syntax::extra_newlines().into_builder();
         // Languages bat lacks (data/syntaxes, each with its licence).
-        for src in [
-            include_str!("../data/syntaxes/PowerShell.sublime-syntax"),
-            // Tessera's shell language (.tsh, .tessh, #!…tessh).
-            include_str!("../data/syntaxes/tessh.sublime-syntax"),
-        ] {
+        // (tessh isn't one: its own grammar colours it, below.)
+        for src in [include_str!("../data/syntaxes/PowerShell.sublime-syntax")] {
             match syntect::parsing::SyntaxDefinition::load_from_str(src, true, None) {
                 Ok(d) => b.add(d),
                 Err(e) => eprintln!("grove: a syntax didn't load: {e}"),
@@ -85,12 +82,122 @@ fn syntax_for<'a>(ss: &'a SyntaxSet, text: &str, name: &str) -> &'a syntect::par
 
 /// Whether the name (or the first line, like a shebang) picks a language.
 pub fn known_by_name(name: &str, text: &str) -> bool {
-    syntax_for(syntaxes(), text, name).name != "Plain Text"
+    is_tessh(name, text) || syntax_for(syntaxes(), text, name).name != "Plain Text"
+}
+
+// ---- tessh: coloured by its own grammar (tree-sitter-tessh), as Tessera
+// colours it, in the theme's colours: one grammar for both to keep up ----
+
+/// Tessera's shell language: .tsh, .tessh, or a #!…tessh first line.
+fn is_tessh(name: &str, text: &str) -> bool {
+    let l = name.to_lowercase();
+    l.ends_with(".tsh")
+        || l.ends_with(".tessh")
+        || text.lines().next().is_some_and(|f| f.starts_with("#!") && f.split(|c: char| c == '/' || c.is_whitespace()).any(|w| w == "tessh"))
+}
+
+/// Theme scopes for each of tree-sitter-tessh's kinds, the first a theme
+/// colours used (themes name functions and operators differently).
+fn tessh_scopes(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "keyword" => &["keyword.control", "keyword"],
+        "string" => &["string.quoted", "string"],
+        "comment" => &["comment.line", "comment"],
+        "number" => &["constant.numeric"],
+        "constant" => &["constant.language", "constant"],
+        "function" => &["entity.name.function", "variable.function", "support.function", "meta.function-call"],
+        // (base16 colours operators as text: then cyan, as Tessera has them.)
+        "operator" => &["keyword.operator", "support.function", "constant.character.escape"],
+        "property" => &["variable.parameter", "entity.other.attribute-name"],
+        "variable" => &["variable.other", "variable"],
+        "embedded" => &["punctuation.section.embedded", "punctuation.definition.template-expression"],
+        "escape" => &["constant.character.escape"],
+        "attribute" => &["entity.other.attribute-name", "variable.parameter"],
+        "punctuation" => &["punctuation"],
+        _ => &[],
+    }
+}
+
+/// A tessh text's lines as coloured pieces (no newlines).
+fn tessh_runs(text: &str, theme: &syntect::highlighting::Theme) -> Vec<Vec<(syntect::highlighting::Color, String)>> {
+    use syntect::parsing::Scope;
+    let hl = syntect::highlighting::Highlighter::new(theme);
+    let plain = theme.settings.foreground.unwrap_or(syntect::highlighting::Color::BLACK);
+    let mut cache: std::collections::HashMap<&'static str, syntect::highlighting::Color> = Default::default();
+    let mut colour = |k: Option<&'static str>| {
+        let Some(k) = k else { return plain };
+        *cache.entry(k).or_insert_with(|| {
+            tessh_scopes(k)
+                .iter()
+                .filter_map(|sc| Scope::new(sc).ok())
+                .map(|sc| hl.style_for_stack(&[sc]).foreground)
+                .find(|c| *c != plain)
+                .unwrap_or(plain)
+        })
+    };
+    // (Later spans over earlier, as Tessera has them.)
+    let mut kind: Vec<Option<&'static str>> = vec![None; text.len()];
+    for (s, e, k) in tree_sitter_tessh::highlight::spans(text) {
+        for b in &mut kind[s.min(text.len())..e.min(text.len())] {
+            *b = Some(k);
+        }
+    }
+    let mut out = vec![];
+    let mut at = 0;
+    for line in text.split('\n') {
+        let end = at + line.len();
+        let mut runs: Vec<(syntect::highlighting::Color, String)> = vec![];
+        let mut s = at;
+        while s < end {
+            let k = kind[s];
+            let mut e = s + 1;
+            while e < end && kind[e] == k {
+                e += 1;
+            }
+            while !text.is_char_boundary(e) {
+                e += 1;
+            }
+            let piece = text[s..e].trim_end_matches('\r');
+            if !piece.is_empty() {
+                runs.push((colour(k), piece.to_string()));
+            }
+            s = e;
+        }
+        out.push(runs);
+        at = end + 1;
+    }
+    if text.ends_with('\n') {
+        out.pop();
+    }
+    out
+}
+
+/// Lines of runs as `<pre>` HTML, a newline after each when `trailing`.
+fn runs_html(lines: &[Vec<(syntect::highlighting::Color, String)>], trailing: bool) -> String {
+    let mut out = String::from("<pre style=\"margin:0\">");
+    for (i, runs) in lines.iter().enumerate() {
+        for (c, piece) in runs {
+            let esc = piece.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+            out.push_str(&format!("<span style=\"color:#{:02x}{:02x}{:02x}\">{}</span>", c.r, c.g, c.b, esc));
+        }
+        if trailing || i + 1 < lines.len() {
+            out.push('\n');
+        }
+    }
+    out.push_str("</pre>");
+    out
 }
 
 /// The first `max_lines` lines as coloured runs (light theme), for text
 /// thumbnails: [[["#rrggbb", "text"], ...], ...].
 pub fn highlight_runs(text: &str, name: &str, max_lines: usize) -> Vec<Vec<(String, String)>> {
+    if is_tessh(name, text) {
+        let shown: String = text.lines().take(max_lines).map(|l| format!("{l}\n")).collect();
+        return tessh_runs(&shown, &themes().themes["InspiredGitHub"])
+            .into_iter()
+            .map(|runs| runs.into_iter().map(|(c, t)| (format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b), t)).collect())
+            .collect();
+    }
     let ss = syntaxes();
     let syntax = syntax_for(ss, text, name);
     let theme = &themes().themes["InspiredGitHub"];
@@ -113,8 +220,10 @@ pub fn highlight_runs(text: &str, name: &str, max_lines: usize) -> Vec<Vec<(Stri
 
 /// Syntax colouring carried across blocks of one file (Quick Look shows
 /// a file as many blocks; the parser state runs on from one to the next).
+/// (tessh: each block coloured on its own, by its grammar.)
 pub struct Highlighter {
     h: syntect::easy::HighlightLines<'static>,
+    tessh: Option<&'static syntect::highlighting::Theme>,
 }
 
 impl Highlighter {
@@ -122,11 +231,14 @@ impl Highlighter {
         let ss = syntaxes();
         let syntax = syntax_for(ss, text, name);
         let theme = &themes().themes[if dark { "base16-ocean.dark" } else { "InspiredGitHub" }];
-        Highlighter { h: syntect::easy::HighlightLines::new(syntax, theme) }
+        Highlighter { h: syntect::easy::HighlightLines::new(syntax, theme), tessh: is_tessh(name, text).then_some(theme) }
     }
 
     /// Lines (no trailing newline) as `<pre>` HTML.
     pub fn html(&mut self, block: &str) -> String {
+        if let Some(theme) = self.tessh {
+            return runs_html(&tessh_runs(block, theme), false);
+        }
         let ss = syntaxes();
         let mut out = String::with_capacity(block.len() * 3);
         out.push_str("<pre style=\"margin:0\">");
@@ -162,6 +274,9 @@ pub fn highlight(text: &str, name: &str, dark: bool) -> String {
     let theme = &themes().themes[if dark { "base16-ocean.dark" } else { "InspiredGitHub" }];
     // Limit lines so the rich text stays quick.
     let shown: String = text.lines().take(2000).map(|l| format!("{l}\n")).collect();
+    if is_tessh(name, text) {
+        return runs_html(&tessh_runs(&shown, theme), true);
+    }
     let mut h = syntect::easy::HighlightLines::new(syntax, theme);
     let mut out = String::from("<pre style=\"margin:0\">");
     for line in syntect::util::LinesWithEndings::from(&shown) {
@@ -514,7 +629,7 @@ mod tests {
     fn finds_many_languages() {
         let ss = super::syntaxes();
         let mut bad = vec![];
-        for n in ["a.tsh", "b.tessh", "s.ps1", "RUN.BAT", "Makefile", "CMakeLists.txt", "a.toml", "x.nix", "v.vbs", "a.ts", "a.lua", "a.asm", "a.s", "c.ini", "Dockerfile", "a.qml", "a.kt", "a.swift", "a.zig", "a.dart", "a.ex", "a.hs", "a.vue", "a.svelte", "a.cs", "a.fs", "a.vb", "a.ahk", "a.reg", "a.proto", "a.graphql", "a.glsl", "a.cue", "a.srt", "a.diff", "a.r", "a.jl", "a.nim", "a.tcl", "a.pas", "a.f90", "a.cob", "a.v", "a.vhd", "a.scss", "a.less"] {
+        for n in ["s.ps1", "RUN.BAT", "Makefile", "CMakeLists.txt", "a.toml", "x.nix", "v.vbs", "a.ts", "a.lua", "a.asm", "a.s", "c.ini", "Dockerfile", "a.qml", "a.kt", "a.swift", "a.zig", "a.dart", "a.ex", "a.hs", "a.vue", "a.svelte", "a.cs", "a.fs", "a.vb", "a.ahk", "a.reg", "a.proto", "a.graphql", "a.glsl", "a.cue", "a.srt", "a.diff", "a.r", "a.jl", "a.nim", "a.tcl", "a.pas", "a.f90", "a.cob", "a.v", "a.vhd", "a.scss", "a.less"] {
             let got = &super::syntax_for(ss, "", n).name;
             if got == "Plain Text" { bad.push(n) }
         }
@@ -534,12 +649,14 @@ mod tests {
 
     #[test]
     fn tessh_by_name_and_shebang() {
-        let ss = super::syntaxes();
-        assert_eq!(super::syntax_for(ss, "", "build.tsh").name, "tessh");
-        assert_eq!(super::syntax_for(ss, "", "x.tessh").name, "tessh");
-        assert_eq!(super::syntax_for(ss, "#!/usr/bin/env tessh\nls\n", "run").name, "tessh");
-        let h = super::highlight("name = world\nprint hello $name  # hi\nls -la ~/src | head -3\n", "a.tsh", true);
+        assert!(super::known_by_name("build.tsh", ""));
+        assert!(super::known_by_name("x.tessh", ""));
+        assert!(super::known_by_name("run", "#!/usr/bin/env tessh\nls\n"));
+        let h = super::highlight("name = world\nprint hello $name  # hi\nls -la ~/src | head -3\ncat <<END\nhi $name\nEND\n", "a.tsh", true);
         assert!(h.matches("<span").count() > 6, "{h}");
+        assert_eq!(h.matches('\n').count(), 6, "{h}");
+        let mut hl = super::Highlighter::new("", "a.tsh", false);
+        assert_eq!(hl.html("echo hi 2>&1\nls").matches('\n').count(), 1);
     }
 
     #[test]

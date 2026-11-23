@@ -25,7 +25,8 @@
       packages = forAll (pkgs:
         let
           qtEnv = qtEnvFor pkgs;
-          cargoDeps = pkgs.rustPlatform.importCargoLock { lockFile = ./Cargo.lock; };
+          # (allowBuiltinFetchGit: tree-sitter-tessh, from Tessera's repository.)
+          cargoDeps = pkgs.rustPlatform.importCargoLock { lockFile = ./Cargo.lock; allowBuiltinFetchGit = true; };
           src = pkgs.lib.cleanSourceWith {
             src = ./.;
             filter = path: type: !(pkgs.lib.hasInfix "/target" path) && baseNameOf path != ".qt-env" && baseNameOf path != "result";
