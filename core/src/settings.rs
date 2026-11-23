@@ -105,6 +105,9 @@ pub struct Settings {
     pub list_preview: bool,
     #[serde(default)]
     pub list_preview_height: u32,
+    /// List and icon views: the Information panel under the files (else at the side).
+    #[serde(default = "t")]
+    pub info_bottom: bool,
     /// Width of the side Information panel (0 = default).
     #[serde(default)]
     pub info_panel_width: u32,

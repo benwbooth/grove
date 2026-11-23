@@ -27,7 +27,8 @@ Item {
     readonly property string thumbSrc: item && item.thumb && path ? "image://thumb/" + encodeURIComponent(path) + "?m=" + (item.mtime || 0) : ""
 
     onItemChanged: Qt.callLater(load)
-    onActiveChanged: if (!active) player.stop()
+    // Shown again (a panel moved or reopened): load what's selected now.
+    onActiveChanged: { if (!active) player.stop(); Qt.callLater(load) }
     // The previous file stays on screen until the next one's details are in
     // (clearing first made every move flash an icon, then a thumbnail).
     property var life: ({ alive: true })

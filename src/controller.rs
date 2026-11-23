@@ -825,9 +825,12 @@ impl ffi::Grove {
         let mut v = serde_json::to_value(&self.rust().settings).unwrap();
         let val: Value = serde_json::from_str(&value_json.to_string()).unwrap_or(Value::Null);
         v[name.to_string()] = val;
-        if let Ok(s) = serde_json::from_value::<settings::Settings>(v) {
-            self.as_mut().rust_mut().settings = s;
-            self.save_settings();
+        match serde_json::from_value::<settings::Settings>(v) {
+            Ok(s) => {
+                self.as_mut().rust_mut().settings = s;
+                self.save_settings();
+            }
+            Err(e) => eprintln!("grove: setting {name} not saved: {e}"),
         }
     }
 

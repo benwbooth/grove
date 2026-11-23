@@ -110,6 +110,17 @@ Rectangle {
             }
         }
         Rectangle { id: rule; anchors { right: facts.left; top: parent.top; bottom: parent.bottom; topMargin: 10; bottomMargin: 10 } width: 1; color: Theme.separator; visible: facts.visible }
+        // Move it to the side of the window.
+        GButton {
+            z: 3
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: 8
+            iconName: "view-split-left-right"
+            iconSize: 14
+            tip: "Show the Information panel at the side instead (View > Information Panel Below Files)"
+            onClicked: bp.pane.win.placeInfo(false)
+        }
         Item {
             id: facts
             anchors { top: parent.top; bottom: parent.bottom; right: parent.right }
@@ -117,7 +128,7 @@ Rectangle {
             visible: !!bp.item
             clip: true
             Column {
-                anchors { top: parent.top; left: parent.left; right: parent.right; margins: 16; topMargin: 14 }
+                anchors { top: parent.top; left: parent.left; right: parent.right; margins: 16; topMargin: 14; rightMargin: 40 }
                 spacing: 10
                 Row {
                     width: parent.width

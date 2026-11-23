@@ -750,7 +750,7 @@ FocusScope {
     // The list and grid views' preview pane (Settings: list_preview, its height).
     Loader {
         id: listPreview
-        active: (pane.viewMode === "list" || pane.viewMode === "icons") && !!pane.app && pane.app.settings.list_preview !== false && !(pane.win && pane.win.chooserMode)
+        active: (pane.viewMode === "list" || pane.viewMode === "icons") && !!pane.app && pane.app.settings.list_preview !== false && pane.app.settings.info_bottom !== false && !(pane.win && pane.win.chooserMode)
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: selectBar.top
