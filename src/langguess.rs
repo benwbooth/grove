@@ -28,7 +28,12 @@ pub fn guess_ext(path: &str, text: &str) -> Option<String> {
     if says_plain(path) {
         // Unless asked to (a setting): then only Magika, and only when it's
         // sure (the content rules took notes for INI or Markdown).
-        return if txt_guessing() { magika(path, 0.9) } else { None };
+        // Java .properties files (settings saved as .txt) Magika doesn't
+        // know: a strict rule, every line a comment or key=value.
+        if !txt_guessing() {
+            return None;
+        }
+        return magika(path, 0.9).or_else(|| looks_like_properties(text).then(|| "properties".to_string()));
     }
     if let Some(e) = by_rules(text) {
         return Some(e.to_string());
@@ -53,6 +58,24 @@ pub fn set_txt_guessing(on: bool) {
 pub fn says_plain(path: &str) -> bool {
     let n = path.rsplit('/').next().unwrap_or(path).to_lowercase();
     matches!(n.rsplit_once('.').map(|(_, e)| e), Some("txt" | "text" | "asc" | "nfo" | "diz"))
+}
+
+/// Java-style properties: at least 5 settings, and every other non-blank
+/// line a # or ! comment (no [sections]: that's INI).
+fn looks_like_properties(text: &str) -> bool {
+    let mut pairs = 0;
+    for l in text.lines().map(str::trim).filter(|l| !l.is_empty()).take(400) {
+        if l.starts_with('#') || l.starts_with('!') {
+            continue;
+        }
+        let Some(i) = l.find(['=', ':']) else { return false };
+        let key = l[..i].trim_end();
+        if key.is_empty() || key.contains(char::is_whitespace) || key.starts_with('[') {
+            return false;
+        }
+        pairs += 1;
+    }
+    pairs >= 5
 }
 
 fn by_rules(text: &str) -> Option<&'static str> {
@@ -95,6 +118,9 @@ fn by_rules(text: &str) -> Option<&'static str> {
             }
         }
     }
+    if looks_like_properties(t) {
+        return Some("properties");
+    }
     let md_headings = lines.iter().filter(|l| l.starts_with("# ") || l.starts_with("## ") || l.starts_with("### ")).count();
     if !t.starts_with("#!") && md_headings >= 2 && (t.contains("](") || t.contains("```") || t.contains("\n- ")) {
         return Some("md");
@@ -114,6 +140,10 @@ fn magika(path: &str, min_score: f32) -> Option<String> {
     // Magika's model, in-process on tract (grove_core::magika; no
     // onnxruntime, no magika command).
     let g = grove_core::magika::identify(std::path::Path::new(path))?;
+    // GROVE_DEBUG_LANG=1: what Magika said, and how sure it was.
+    if std::env::var_os("GROVE_DEBUG_LANG").is_some() {
+        eprintln!("grove magika {path}: {} ({:.2})", g.label, g.score);
+    }
     let label = g.label;
     let ext = if g.is_text && !matches!(label, "txt" | "unknown" | "empty" | "undefined") {
         g.extensions.first().map(|e| e.to_string()).or_else(|| Some(label.to_string())).map(|e| (e, g.score))
@@ -138,5 +168,7 @@ mod tests {
         assert_eq!(by_rules("[core]\nbare = false\n# c\n"), Some("ini"));
         assert_eq!(by_rules("a,b,c\n1,2,3\n4,5,6\n"), Some("csv"));
         assert_eq!(by_rules("just some words"), None);
+        assert_eq!(by_rules("# settings\n.level=WARNING\na.b=1\nc=2\nd: 3\ne=\n"), Some("properties"));
+        assert_eq!(by_rules("Dear Bob: hi\nthanks=yes\n"), None);
     }
 }
