@@ -20,15 +20,16 @@ separate privileged/FUSE service is needed (drives).
 | Waveform, probe, video thumbs | ffmpeg, ffprobe, ffmpegthumbnailer | FFmpeg linked (ffmpeg-next) | todo |
 | Pictures Qt can't read | magick, convert, vipsthumbnail | libheif-rs, image crate, libvips | todo |
 | File type AI | magika CLI | magika crate (ONNX) | todo |
-| Git status | git | git2 (libgit2) | todo |
-| Compare folders | diff | similar crate | todo |
-| Network browsing | avahi-browse | mdns-sd crate | todo |
-| Disk images (mount) | udisksctl | UDisks2 over D-Bus | todo |
-| Permissions | chmod | std::fs | todo |
+| Git status and menu (add, commit, log, diff, pull, push) | git | git2 (libgit2), src/gitstatus.rs | done |
+| Compare files/folders | diff | similar crate (src/compare.rs) | done |
+| Network browsing | avahi-browse | mdns-sd crate | done |
+| Disk images (mount) | udisksctl | UDisks2 over D-Bus | done |
+| Permissions, owner | chmod, chown, env (as root) | std::fs; as root `pkexec grove --root-helper` (src/roothelper.rs) | done |
 | Burn | xorriso | libisofs/libburn FFI | todo |
 
 Stays external, by nature:
 - apps grove opens files with (desktop entries);
-- pkexec, for changes needing root;
+- pkexec, for changes needing root (it runs grove itself);
+- umount, for mounts from fstab that udisks doesn't manage (setuid);
 - rclone, sshfs, simple-mtpfs/jmtpfs, fusermount: FUSE mounts run as their own processes;
 - hearth-search: hearth's indexer.

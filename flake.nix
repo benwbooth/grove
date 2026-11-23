@@ -16,7 +16,7 @@
       # places, devices, git status). All optional at run time.
       # Libraries grove links instead of running their command-line tools
       # (docs/NO_EXTERNAL_TOOLS.md).
-      linkedFor = pkgs: with pkgs; [ libarchive ];
+      linkedFor = pkgs: with pkgs; [ libarchive libgit2 libssh2 openssl zlib ];
       runtimeFor = pkgs: with pkgs; [
         ffmpegthumbnailer libheif git sshfs rclone simple-mtpfs
         poppler-utils vips imagemagick djvulibre mupdf ghostscript magika-cli pandoc

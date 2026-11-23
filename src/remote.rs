@@ -275,34 +275,35 @@ fn rclone_remotes() -> Vec<String> {
     Command::new("rclone").arg("listremotes").output().map(|o| String::from_utf8_lossy(&o.stdout).lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect()).unwrap_or_default()
 }
 
-/// Servers on the local network (mDNS via avahi-browse) and rclone remotes.
+/// Servers on the local network (mDNS, in-process: mdns-sd, no
+/// avahi-browse) and rclone remotes.
 pub fn discover() -> Value {
-    let mut hosts = vec![];
-    if which("avahi-browse") {
-        let mut outs = vec![];
-        for t in ["_sftp-ssh._tcp", "_ssh._tcp", "_smb._tcp", "_webdav._tcp", "_webdavs._tcp"] {
-            if let Ok(o) = Command::new("timeout").args(["4", "avahi-browse", "-tpr", t]).output() {
-                outs.push(String::from_utf8_lossy(&o.stdout).into_owned());
-            }
-        }
-        for out in outs {
-            for l in out.lines() {
-                let f: Vec<&str> = l.split(';').collect();
-                if f.len() >= 9 && f[0] == "=" && f[2] == "IPv4" {
-                    let kind = match f[4] {
-                        "_smb._tcp" => "smb",
-                        "_webdav._tcp" | "_webdavs._tcp" => "webdav",
-                        _ => "sftp",
-                    };
-                    let v = json!({"name": f[3].replace("\\032", " "), "kind": kind, "host": f[6], "address": f[7], "port": f[8].parse::<u16>().unwrap_or(0)});
-                    if !hosts.iter().any(|h: &Value| h["host"] == v["host"] && h["kind"] == v["kind"]) {
-                        hosts.push(v);
+    let mut hosts: Vec<Value> = vec![];
+    if let Ok(d) = mdns_sd::ServiceDaemon::new() {
+        let types = [("_sftp-ssh._tcp.local.", "sftp"), ("_ssh._tcp.local.", "sftp"), ("_smb._tcp.local.", "smb"), ("_webdav._tcp.local.", "webdav"), ("_webdavs._tcp.local.", "webdav")];
+        let rxs: Vec<_> = types.iter().filter_map(|(t, k)| d.browse(t).ok().map(|rx| (rx, *k))).collect();
+        // Answers come within a second or two; listen for 3.
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while std::time::Instant::now() < until {
+            for (rx, kind) in &rxs {
+                while let Ok(ev) = rx.try_recv() {
+                    if let mdns_sd::ServiceEvent::ServiceResolved(info) = ev {
+                        let Some(addr) = info.get_addresses_v4().into_iter().next() else { continue };
+                        let full = info.get_fullname();
+                        let name = mdns_sd::instance_name_unescaped(full);
+                        let host = info.get_hostname().trim_end_matches('.').to_string();
+                        let v = json!({"name": name, "kind": kind, "host": host, "address": addr.to_string(), "port": info.get_port()});
+                        if !hosts.iter().any(|h| h["host"] == v["host"] && h["kind"] == v["kind"]) {
+                            hosts.push(v);
+                        }
                     }
                 }
             }
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
+        let _ = d.shutdown();
     }
-    json!({"hosts": hosts, "remotes": rclone_remotes(), "avahi": which("avahi-browse")})
+    json!({"hosts": hosts, "remotes": rclone_remotes(), "avahi": true})
 }
 
 // ---------------------------------------------------------------- rclone setup

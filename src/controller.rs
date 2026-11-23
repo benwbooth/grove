@@ -1166,14 +1166,9 @@ impl ffi::Grove {
         let (a, b) = (a.to_string(), b.to_string());
         self.answer(key, move || {
             let tool = ["meld", "kompare", "kdiff3", "diffuse"].into_iter().find(|t| grove_core::thumbs::which(t).is_some());
-            let o = std::process::Command::new("diff").args(["-u", "-r", &a, &b]).output();
-            match o {
-                Ok(o) => {
-                    let text = String::from_utf8_lossy(&o.stdout).into_owned();
-                    let same = o.status.code() == Some(0);
-                    json!({"same": same, "text": text, "html": if same { String::new() } else { crate::preview::highlight(&text, "x.diff", dark) }, "tool": tool})
-                }
-                Err(_) => json!({"error": "Comparing needs the diff program (diffutils), which isn't installed."}),
+            match crate::compare::compare(Path::new(&a), Path::new(&b)) {
+                Ok((same, text)) => json!({"same": same, "text": text, "html": if same { String::new() } else { crate::preview::highlight(&text, "x.diff", dark) }, "tool": tool}),
+                Err(e) => json!({"error": format!("Couldn't compare: {e}")}),
             }
         });
     }
@@ -1182,31 +1177,16 @@ impl ffi::Grove {
         let p = path.to_string();
         let qt = self.qt_thread();
         self.answer(key, move || {
-            let o = std::process::Command::new("udisksctl").args(["loop-setup", "-r", "-f", &p]).output();
-            let dev = match o {
-                Ok(o) if o.status.success() => {
-                    let out = String::from_utf8_lossy(&o.stdout).into_owned();
-                    out.split_whitespace().last().unwrap_or("").trim_end_matches('.').to_string()
+            match crate::places::mount_image(&p) {
+                Ok((at, d)) => {
+                    let _ = qt.queue(|mut g| {
+                        let r = *g.places_revision() + 1;
+                        g.as_mut().set_places_revision(r);
+                    });
+                    json!({"ok": true, "path": at, "device": d})
                 }
-                Ok(o) => return json!({"error": format!("Couldn't open the disk image: {}", String::from_utf8_lossy(&o.stderr).trim())}),
-                Err(_) => return json!({"error": "Opening disk images needs udisks (udisksctl)."}),
-            };
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            // The image itself, or its first partition.
-            for d in [dev.clone(), format!("{dev}p1")] {
-                if let Ok(o) = std::process::Command::new("udisksctl").args(["mount", "-b", &d]).output() {
-                    if o.status.success() {
-                        let out = String::from_utf8_lossy(&o.stdout).into_owned();
-                        let at = out.split(" at ").nth(1).unwrap_or("").trim().trim_end_matches('.').to_string();
-                        let _ = qt.queue(|mut g| {
-                            let r = *g.places_revision() + 1;
-                            g.as_mut().set_places_revision(r);
-                        });
-                        return json!({"ok": true, "path": at, "device": d});
-                    }
-                }
+                Err(e) => json!({"error": e}),
             }
-            json!({"error": "The disk image was attached but has nothing grove can open (no readable filesystem)."})
         });
     }
 

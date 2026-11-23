@@ -37,6 +37,9 @@ imagesize = "0.13"
 calamine = "0.38"
 rusqlite = { version = "0.43", features = ["bundled"] }
 memchr = "2"
+git2 = { version = "0.21", features = ["ssh", "https"] }
+similar = "3.2.1"
+mdns-sd = "0.22.0"
 
 [build-dependencies]
 cxx-qt-build = "0.10"

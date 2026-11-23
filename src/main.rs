@@ -28,7 +28,9 @@ mod model;
 mod places;
 mod portal;
 mod preview;
+mod compare;
 mod remote;
+mod roothelper;
 mod table;
 mod textdoc;
 mod secrets;
@@ -40,7 +42,12 @@ use bridge::ffi;
 use cxx_qt_lib::QString;
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // As root through pkexec: change permissions/owners, nothing else.
+    if args.first().map(String::as_str) == Some("--root-helper") {
+        std::process::exit(roothelper::run(&args[1..]));
+    }
+    roothelper::apply_env_args(&mut args);
     let mut paths: Vec<String> = Vec::new();
     let mut action = "folders";
     let mut new_window = false;

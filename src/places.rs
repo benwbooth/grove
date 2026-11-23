@@ -158,6 +158,33 @@ pub fn mount(device: &str) -> Value {
     }
 }
 
+/// Attach a disk image read-only (UDisks2 LoopSetup over D-Bus, no
+/// udisksctl) and mount it, or its first partition: (mount path, device).
+pub fn mount_image(path: &str) -> Result<(String, String), String> {
+    let c = zbus::blocking::Connection::system().map_err(|_| "Can't reach the disk service (udisks).".to_string())?;
+    let f = std::fs::File::open(path).map_err(|e| grove_core::util::plain_error(&e, Path::new(path)))?;
+    let mut o: HashMap<String, zbus::zvariant::Value<'static>> = HashMap::new();
+    o.insert("read-only".into(), zbus::zvariant::Value::from(true));
+    let fd = zbus::zvariant::Fd::from(&f);
+    let r = c
+        .call_method(Some("org.freedesktop.UDisks2"), "/org/freedesktop/UDisks2/Manager", Some("org.freedesktop.UDisks2.Manager"), "LoopSetup", &(fd, o))
+        .map_err(|e| format!("Couldn't open the disk image: {}", plain_dbus(&e)))?;
+    let loop_obj: zbus::zvariant::OwnedObjectPath = r.body().deserialize().map_err(|e| e.to_string())?;
+    let base = loop_obj.as_str().to_string();
+    // udisks probes the image (and its partitions) just after attaching it.
+    for _ in 0..20 {
+        for obj in [base.clone(), format!("{base}p1")] {
+            if let Ok(r) = c.call_method(Some("org.freedesktop.UDisks2"), obj.as_str(), Some("org.freedesktop.UDisks2.Filesystem"), "Mount", &(opts(),)) {
+                let at = r.body().deserialize::<String>().unwrap_or_default();
+                let dev = obj.rsplit('/').next().map(|d| format!("/dev/{d}")).unwrap_or_default();
+                return Ok((at, dev));
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    }
+    Err("The disk image was attached but has nothing grove can open (no readable filesystem).".into())
+}
+
 fn plain_dbus(e: &zbus::Error) -> String {
     let s = e.to_string();
     if s.contains("target is busy") || s.contains("Busy") {

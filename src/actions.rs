@@ -39,15 +39,17 @@ pub fn quick(qt: &CxxQtThread<ffi::Grove>, action: &str, paths: &[PathBuf], arg:
             }
         }
         "open-as-root" => {
-            let exe = std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|_| "grove".into());
-            let mut argv = vec!["pkexec".to_string(), "env".into()];
+            // pkexec clears the environment: grove puts back what the window
+            // needs itself (--env), no env command.
+            let mut argv = vec!["pkexec".to_string(), crate::roothelper::exe()];
             for v in ["WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DISPLAY", "XAUTHORITY", "QT_QPA_PLATFORM"] {
                 if let Ok(x) = std::env::var(v) {
+                    argv.push("--env".into());
                     argv.push(format!("{v}={x}"));
                 }
             }
+            argv.push("--env".into());
             argv.push("GROVE_NO_DBUS=1".into());
-            argv.push(exe);
             argv.push("--new-window".into());
             argv.extend(paths.iter().map(|p| p.to_string_lossy().into_owned()));
             if let Err(e) = apps::spawn_detached(&argv, None) {

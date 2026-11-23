@@ -91,55 +91,39 @@ pub fn info(path: &str) -> Value {
     })
 }
 
+/// The same change as root: grove's own helper through pkexec (polkit asks).
 fn pkexec(args: &[&str]) -> Value {
-    match std::process::Command::new("pkexec").args(args).output() {
+    let exe = crate::roothelper::exe();
+    match std::process::Command::new("pkexec").arg(&exe).arg("--root-helper").args(args).output() {
         Ok(o) if o.status.success() => json!({"ok": true, "elevated": true}),
-        Ok(o) if o.status.code() == Some(126) => json!({"error": "Cancelled: the administrator password wasn't given."}),
+        Ok(o) if o.status.code() == Some(126) || o.status.code() == Some(127) => json!({"error": "Cancelled: the administrator password wasn't given."}),
         Ok(o) => json!({"error": format!("The change didn't work: {}", String::from_utf8_lossy(&o.stderr).trim())}),
         Err(_) => json!({"error": "Changing this needs administrator rights, and pkexec (polkit) isn't available."}),
     }
 }
 
 pub fn set_mode(path: &str, mode: u32, recursive: bool) -> Value {
-    let p = Path::new(path);
-    if !recursive {
-        match std::fs::set_permissions(p, std::fs::Permissions::from_mode(mode)) {
-            Ok(()) => return json!({"ok": true}),
-            Err(e) if e.kind() != std::io::ErrorKind::PermissionDenied => return json!({"error": grove_core::util::plain_error(&e, p)}),
-            Err(_) => {}
-        }
-    } else {
-        let ok = std::process::Command::new("chmod").args(["-R", &format!("{mode:o}"), path]).status().map(|s| s.success()).unwrap_or(false);
-        if ok {
-            return json!({"ok": true});
-        }
+    match crate::roothelper::chmod(Path::new(path), mode, recursive) {
+        Ok(()) => return json!({"ok": true}),
+        Err(e) if e.kind() != std::io::ErrorKind::PermissionDenied => return json!({"error": grove_core::util::plain_error(&e, Path::new(path))}),
+        Err(_) => {}
     }
     let m = format!("{mode:o}");
-    let mut args = vec!["chmod"];
-    if recursive {
-        args.push("-R");
-    }
-    args.push(&m);
-    args.push(path);
-    pkexec(&args)
+    pkexec(&["chmod", &m, if recursive { "1" } else { "0" }, path])
 }
 
 pub fn set_owner(path: &str, owner: &str, group: &str, recursive: bool) -> Value {
-    let spec = if group.is_empty() { owner.to_string() } else { format!("{owner}:{group}") };
-    let mut args = vec!["chown"];
-    if recursive {
-        args.push("-R");
-    }
-    args.push(&spec);
-    args.push(path);
     // Changing just the group to one of yours works without root.
-    if owner == user_name(unsafe { libc::getuid() }) {
-        let ok = std::process::Command::new(args[0]).args(&args[1..]).status().map(|s| s.success()).unwrap_or(false);
-        if ok {
-            return json!({"ok": true});
+    let mine = owner == user_name(unsafe { libc::getuid() });
+    let (o, g) = (if mine { "" } else { owner }, group);
+    match crate::roothelper::chown(Path::new(path), o, g, recursive) {
+        Ok(()) => return json!({"ok": true}),
+        Err(e) if e.kind() != std::io::ErrorKind::PermissionDenied && e.raw_os_error() != Some(libc::EPERM) => {
+            return json!({"error": grove_core::util::plain_error(&e, Path::new(path))})
         }
+        Err(_) => {}
     }
-    pkexec(&args)
+    pkexec(&["chown", owner, group, if recursive { "1" } else { "0" }, path])
 }
 
 /// User/group names for list columns (cached: looked up once per id).
