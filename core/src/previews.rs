@@ -385,6 +385,13 @@ pub fn office_xml_text(xml: &str, limit: usize) -> String {
 
 /// An office document's text (the start of it).
 pub fn office_text(path: &Path, limit: usize, cancel: &AtomicBool) -> Option<String> {
+    // Old Word (.doc/.dot): its own binary formats (worddoc.rs).
+    let lower = path.to_string_lossy().to_lowercase();
+    if lower.ends_with(".doc") || lower.ends_with(".dot") {
+        let t = crate::worddoc::text(path).ok()?;
+        let t: String = t.chars().take(limit).collect();
+        return (!t.trim().is_empty()).then_some(t);
+    }
     let names = archive_names(path, cancel);
     let part = office_text_part(&names)?;
     let xml = archive_text(path, &part, cancel)?;
@@ -460,8 +467,8 @@ pub fn kind_of(mimes: &[String], name: &str) -> Kind {
     if m.starts_with("application/vnd.comicbook") || matches!(ext, "cbz" | "cbr" | "cb7" | "cbt") {
         return Kind::Comic;
     }
-    if m.starts_with("application/vnd.oasis.opendocument") || m.starts_with("application/vnd.openxmlformats-officedocument")
-        || matches!(ext, "odt" | "ods" | "odp" | "odg" | "docx" | "xlsx" | "pptx" | "ott" | "ots" | "otp")
+    if m.starts_with("application/vnd.oasis.opendocument") || m.starts_with("application/vnd.openxmlformats-officedocument") || m == "application/msword"
+        || matches!(ext, "odt" | "ods" | "odp" | "odg" | "docx" | "xlsx" | "pptx" | "ott" | "ots" | "otp" | "doc" | "dot")
     {
         return Kind::Office;
     }

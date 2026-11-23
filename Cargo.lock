@@ -1373,6 +1373,7 @@ dependencies = [
  "apfs",
  "cab",
  "cc",
+ "cfb",
  "chardetng",
  "crc32fast",
  "dmgwiz",

@@ -647,6 +647,19 @@ pub fn convert(path: &Path, media: &PathBuf, cancel: &AtomicBool) -> Option<Stri
         "odt" | "ott" | "fodt" => odt(path, media, cancel),
         "pptx" | "pptm" => pptx(path, cancel),
         "rtf" => rtf(path),
+        "doc" | "dot" => {
+            // Old Word: its text, a paragraph per line (worddoc.rs).
+            let t = crate::worddoc::text(path).ok()?;
+            let mut out = String::new();
+            for para in t.split('\n') {
+                if para.trim().is_empty() {
+                    continue;
+                }
+                let cells: Vec<&str> = para.split('\t').collect();
+                let _ = writeln!(out, "<p>{}</p>", cells.iter().map(|c| esc(c)).collect::<Vec<_>>().join("&emsp;"));
+            }
+            Some(out)
+        }
         _ => None,
     }
 }

@@ -257,6 +257,8 @@ pub fn preview(path: &str, dark: bool) -> Value {
             return with(json!({"kind": "thumb", "pages": count}));
         }
         Kind::Font => return with(json!({"kind": "font"})),
+        // A ".doc" that's really plain text (DOS-era manuals): as text.
+        Kind::Office if grove_core::worddoc::is_plain_text(p) => return with(json!({"kind": "code"})),
         Kind::Office => {
             // The whole text is read by Quick Look's TextDoc; here only
             // whether there is any.

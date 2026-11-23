@@ -28,7 +28,9 @@ Window {
             iw.info = r
             comment.text = r.comment || ""
             tagsField.text = (r.tags || []).join(", ")
-            if (r.isDir && !iw.counting) {
+            // Inside an archive: its listing gave the size and count.
+            if (r.inArchive && r.isDir) { iw.folderBytes = r.size || 0; iw.folderItems = r.items || 0 }
+            else if (r.isDir && !iw.counting) {
                 iw.counting = true
                 sizeKey = Async.call(app.grove, k => { iw.sizeKey = k; app.grove.folderSize(k, iw.path) }, null)
             }
@@ -135,6 +137,8 @@ Window {
 
             Section {
                 title: "Tags"
+                // (Not for something inside an archive: nothing to change there.)
+                visible: !iw.info.inArchive
                 GField {
                     id: tagsField
                     width: parent.width - 14
@@ -179,15 +183,18 @@ Window {
                 Fact { k: "Uncompressed"; visible: !!iw.arch
                        v: !iw.arch ? "" : iw.arch.uncompressedText + (iw.arch.ratio && iw.arch.ratio < 1 ? " — packed to " + Math.round(iw.arch.ratio * 100) + "%" : "") + (iw.arch.files > 1 ? ", " + iw.arch.files + " files" : "") }
                 Fact { k: "Where"; v: iw.info.parent || "" }
-                Fact { k: "Created"; v: iw.fmt(iw.info.btime) }
-                Fact { k: "Modified"; v: iw.fmt(iw.info.mtime) }
-                Fact { k: "Opened"; v: iw.fmt(iw.info.atime) }
+                Fact { k: "Created"; v: iw.fmt(iw.info.btime); visible: !iw.info.inArchive }
+                Fact { k: "Modified"; v: iw.info.inArchive ? (iw.info.modifiedText || "--") : iw.fmt(iw.info.mtime) }
+                Fact { k: "Opened"; v: iw.fmt(iw.info.atime); visible: !iw.info.inArchive }
+                Fact { k: "In archive"; v: iw.info.archive || ""; visible: !!iw.info.inArchive }
                 Fact { k: "Points to"; v: iw.info.target || ""; visible: !!iw.info.isLink }
-                Fact { k: "Disk"; v: iw.info.mount ? iw.info.mount + " — " + iw.app.size(iw.info.diskFree || 0) + " free of " + iw.app.size(iw.info.diskTotal || 0) : "" }
+                Fact { k: "Disk"; visible: !iw.info.inArchive; v: iw.info.mount ? iw.info.mount + " — " + iw.app.size(iw.info.diskFree || 0) + " free of " + iw.app.size(iw.info.diskTotal || 0) : "" }
             }
 
             Section {
                 title: "Comments"
+                // (Not for something inside an archive: nothing to change there.)
+                visible: !iw.info.inArchive
                 TextArea {
                     id: comment
                     width: parent.width - 14
@@ -235,6 +242,8 @@ Window {
 
             Section {
                 title: "Rating"
+                // (Not for something inside an archive: nothing to change there.)
+                visible: !iw.info.inArchive
                 Row {
                     spacing: 4
                     Repeater {
@@ -258,6 +267,8 @@ Window {
 
             Section {
                 title: "Locked"
+                // (Not for something inside an archive: nothing to change there.)
+                visible: !iw.info.inArchive
                 GCheck {
                     text: "Locked (nobody can change it, including you, until unlocked)"
                     width: parent.width - 14
@@ -272,7 +283,8 @@ Window {
 
             Section {
                 title: "Folder Icon"
-                visible: !!iw.info.isDir
+                // (Not for something inside an archive: nothing to change there.)
+                visible: !iw.info.inArchive && (!!iw.info.isDir)
                 open: false
                 GLabel { width: parent.width - 14; text: "A theme icon name (e.g. folder-music) or a picture's path. Saved in the folder's .directory file, so Dolphin shows it too."; wrapMode: Text.Wrap; elide: Text.ElideNone; font.pixelSize: Theme.small; color: Theme.fgSecondary }
                 Row {
@@ -285,7 +297,8 @@ Window {
 
             Section {
                 title: "Checksums"
-                visible: !iw.info.isDir
+                // (Not for something inside an archive: nothing to change there.)
+                visible: !iw.info.inArchive && (!iw.info.isDir)
                 open: false
                 GLabel { width: parent.width - 14; text: "Check a download: paste the checksum the website gives to compare."; wrapMode: Text.Wrap; elide: Text.ElideNone; font.pixelSize: Theme.small; color: Theme.fgSecondary }
                 GField { id: expected; width: parent.width - 14; placeholderText: "Paste a checksum to verify"; onTextChanged: iw.verify() }
@@ -324,6 +337,8 @@ Window {
 
             Section {
                 title: "Sharing & Permissions"
+                // (Not for something inside an archive: nothing to change there.)
+                visible: !iw.info.inArchive
                 GLabel {
                     width: parent.width - 14
                     wrapMode: Text.Wrap; elide: Text.ElideNone

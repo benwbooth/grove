@@ -46,7 +46,86 @@ fn writable(p: &Path) -> bool {
     unsafe { libc::access(c.as_ptr(), libc::W_OK) == 0 }
 }
 
+/// Get Info for something inside an archive: from the archive's listing,
+/// with "Where" as a path through the archives (they're folders here).
+fn archive_info(path: &str) -> Value {
+    let rest = &path["archive://".len()..];
+    let (archive, inner) = rest.split_once('#').unwrap_or((rest, ""));
+    let inner = inner.trim_matches('/');
+    if inner.is_empty() {
+        return info(archive);
+    }
+    let (container, _, leaf) = crate::archive::resolve(archive, inner).unwrap_or((archive.to_string(), String::new(), inner.to_string()));
+    let leaf = leaf.trim_matches('/').to_string();
+    // The path names a nested archive itself: it's listed in its parent.
+    let (entries, leaf) = if leaf.is_empty() {
+        let parent_inner = inner.rsplit_once('/').map(|(a, _)| a).unwrap_or("");
+        let parent = if parent_inner.is_empty() { archive.to_string() } else { crate::archive::resolve(archive, parent_inner).map(|(c, _, _)| c).unwrap_or(archive.to_string()) };
+        let last = inner.rsplit('/').next().unwrap_or(inner).to_string();
+        let prefix = parent_inner.to_string();
+        (crate::archive::list(&parent).unwrap_or_default(), if prefix.is_empty() || parent != archive { last } else { inner.to_string() })
+    } else {
+        (crate::archive::list(&container).unwrap_or_default(), leaf)
+    };
+    let found = entries.iter().find(|e| e.path == leaf).cloned();
+    let under = format!("{leaf}/");
+    let is_dir = found.as_ref().map(|e| e.is_dir).unwrap_or(false) || entries.iter().any(|e| e.path.starts_with(&under));
+    if found.is_none() && !is_dir {
+        return json!({"error": "It isn't in the archive any more."});
+    }
+    let name = inner.rsplit('/').next().unwrap_or(inner).to_string();
+    let parent_inner = inner.rsplit_once('/').map(|(a, _)| a).unwrap_or("");
+    let where_ = if parent_inner.is_empty() { archive.to_string() } else { format!("{archive}/{parent_inner}") };
+    let (size, items) = if is_dir {
+        let inside: Vec<_> = entries.iter().filter(|e| e.path.starts_with(&under)).collect();
+        (inside.iter().filter(|e| !e.is_dir).map(|e| e.size).sum::<u64>(), crate::archive::children(&entries, &leaf).len())
+    } else {
+        (found.as_ref().map(|e| e.size).unwrap_or(0), 0)
+    };
+    let e = grove_core::listing::Entry {
+        hidden: name.starts_with('.'),
+        name: name.clone(),
+        path: path.to_string(),
+        is_dir,
+        is_link: false,
+        size,
+        mtime: 0,
+        atime: 0,
+        ctime: 0,
+        btime: 0,
+        mode: 0o644,
+        uid: 0,
+        gid: 0,
+        target: String::new(),
+        broken: false,
+        depth: 0,
+        note: String::new(),
+        key: String::new(),
+    };
+    let mime = crate::mime::for_entry(&e);
+    let mimes = crate::mime::with_parents(&mime.name);
+    let def = if is_dir { None } else { grove_core::apps::default_for(&mimes, &grove_core::apps::all()) };
+    json!({
+        "path": path,
+        "name": name,
+        "parent": where_,
+        "inArchive": true,
+        "archive": archive,
+        "isDir": is_dir,
+        "isLink": false,
+        "mime": mime.name, "kind": mime.comment, "icon": crate::mime::icon_for(&e, &mime),
+        "isArchive": false,
+        "size": size, "sizeText": grove_core::util::human_size(size),
+        "items": items,
+        "modifiedText": found.map(|e| e.mtime_text).unwrap_or_default(),
+        "defaultApp": def.map(|a| json!({"id": a.id, "name": a.name, "icon": a.icon})),
+    })
+}
+
 pub fn info(path: &str) -> Value {
+    if path.starts_with("archive://") {
+        return archive_info(path);
+    }
     let p = Path::new(path);
     let lm = match std::fs::symlink_metadata(p) {
         Ok(m) => m,
