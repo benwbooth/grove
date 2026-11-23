@@ -22,10 +22,21 @@ pub fn name_for(path: &str, text: &str, name: &str) -> String {
 
 /// The extension a text's content looks like (json, xml, py, rs...).
 pub fn guess_ext(path: &str, text: &str) -> Option<String> {
+    // A name that says plain text means plain text: no guessing (a .txt of
+    // notes was coloured as INI or Markdown).
+    if says_plain(path) {
+        return None;
+    }
     if let Some(e) = by_rules(text) {
         return Some(e.to_string());
     }
     magika(path)
+}
+
+/// Names that say "plain text": .txt, .text, .asc, .nfo, .diz.
+pub fn says_plain(path: &str) -> bool {
+    let n = path.rsplit('/').next().unwrap_or(path).to_lowercase();
+    matches!(n.rsplit_once('.').map(|(_, e)| e), Some("txt" | "text" | "asc" | "nfo" | "diz"))
 }
 
 fn by_rules(text: &str) -> Option<&'static str> {
