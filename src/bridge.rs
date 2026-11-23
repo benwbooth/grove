@@ -311,6 +311,14 @@ pub mod ffi {
         /// A track's waveform for the player (async_reply {base, played}: PNGs).
         #[qinvokable]
         fn audio_waveform(self: &Grove, key: &QString, path: &QString, width: i32, height: i32, dark: bool);
+        /// A Google Docs link file's document, exported ({path} or {error}).
+        #[qinvokable]
+        #[cxx_name = "gdocExport"]
+        fn gdoc_export(self: &Grove, key: &QString, path: &QString);
+        /// Open a web address in the default browser.
+        #[qinvokable]
+        #[cxx_name = "openUrl"]
+        fn open_url(self: &Grove, url: &QString);
         /// A file inside an archive, taken out for previewing (async_reply {path}).
         #[qinvokable]
         fn archive_local(self: &Grove, key: &QString, path: &QString);

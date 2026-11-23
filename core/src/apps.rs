@@ -498,6 +498,34 @@ pub fn spawn_detached(argv: &[String], cwd: Option<&Path>) -> Result<(), String>
     }
 }
 
+/// Open a web address in the default browser (its desktop entry, run
+/// directly: no xdg-open).
+pub fn open_url(url: &str) -> Result<(), String> {
+    let all = all();
+    let types: Vec<String> = ["x-scheme-handler/https", "x-scheme-handler/http", "text/html"].iter().map(|s| s.to_string()).collect();
+    let app = default_for(&types, &all).ok_or("There's no web browser set to open links.")?;
+    let mut argv = Vec::new();
+    let mut placed = false;
+    for a in split_exec(&app.exec) {
+        match a.as_str() {
+            "%u" | "%U" | "%f" | "%F" => {
+                argv.push(url.to_string());
+                placed = true;
+            }
+            "%i" | "%c" | "%k" => {}
+            _ if a.contains("%u") || a.contains("%U") => {
+                argv.push(a.replace("%u", url).replace("%U", url));
+                placed = true;
+            }
+            _ => argv.push(a.replace("%%", "%")),
+        }
+    }
+    if !placed {
+        argv.push(url.to_string());
+    }
+    spawn_detached(&argv, None)
+}
+
 /// Open `files` with `app`.
 pub fn launch(app: &App, files: &[PathBuf]) -> Result<(), String> {
     launch_exec(app, &app.exec, files)

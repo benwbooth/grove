@@ -159,6 +159,7 @@ Rectangle {
                     GLabel { width: grid.keyW; horizontalAlignment: Text.AlignRight; text: "Opens with"; color: Theme.fgSecondary; font.pixelSize: Theme.small; visible: !!bp.info.defaultApp }
                     GLabel { width: grid.width - grid.keyW - 10; elide: Text.ElideRight; text: bp.info.defaultApp ? bp.info.defaultApp.name : ""; font.pixelSize: Theme.small; visible: !!bp.info.defaultApp }
                 }
+                OpenButtons { pane: bp.pane; item: bp.item }
                 PushButton { text: "More Info…"; tip: "Open the Get Info window (Alt+Return)"; onClicked: bp.pane.win.showInfo([bp.item.path]) }
             }
         }

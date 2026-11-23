@@ -102,6 +102,18 @@ Window {
         if (p.indexOf("/") !== 0) { pv = { kind: "other" }; return }
         Async.call(app.grove, k => app.grove.preview(k, p, Theme.dark), r => {
             if (!ql.item || ql.item.path !== p) return
+            // A Google Docs/Sheets/Slides link: its document, exported from
+            // Google Drive, shown as any other (or a card to open it online).
+            if (r.kind === "gdoc") {
+                ql.pv = r
+                if (r.canExport)
+                    Async.call(app.grove, k => app.grove.gdocExport(k, p), e => {
+                        if (!ql.item || ql.item.path !== p) return
+                        if (e.path) ql.showItem(Object.assign({}, it, { path: e.path, gdocUrl: r.url, gdocApp: r.app }))
+                        else ql.pv = Object.assign({}, r, { gdocError: e.error || "" })
+                    })
+                return
+            }
             ql.pv = r
             // Office documents: their text at once, then the real pages
             // once LibreOffice has made a PDF (seconds; cached after).
@@ -288,6 +300,31 @@ Window {
                 visible: ql.editing === "markup"
                 src: ql.editing === "markup" && ql.item ? "file://" + encodeURI(ql.item.path).replace(/#/g, "%23") : ""
             }
+            // Google link files: open it online (and connect a Drive to see it here).
+            Column {
+                anchors.centerIn: parent
+                spacing: 10
+                visible: ql.pv.kind === "gdoc"
+                width: Math.min(parent.width - 40, 460)
+                GIcon { anchors.horizontalCenter: parent.horizontalCenter; size: 128; name: ql.item ? (ql.item.icon || ql.item.iconName || "") : "" }
+                GLabel { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.Wrap; color: Theme.fgSecondary
+                         text: ql.pv.gdocError ? ql.pv.gdocError : ql.pv.canExport ? "Getting it from Google Drive…" : (ql.pv.app || "") + " — it lives online" }
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 6
+                    PushButton { text: "Open in " + (ql.pv.app || "Google"); tip: "Open it in your web browser"; onClicked: ql.app.grove.openUrl(ql.pv.url) }
+                    PushButton { visible: (ql.pv.gdocError || "").indexOf("Connect your Google Drive") === 0; text: "Connect Google Drive…"; tip: "Set up your Google Drive (rclone): Google documents then show here"; onClicked: ql.win.addCloudDrive() }
+                }
+            }
+            PushButton {
+                z: 5
+                visible: !!(ql.item && ql.item.gdocUrl)
+                anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 12
+                text: ql.item && ql.item.gdocApp ? "Open in " + ql.item.gdocApp : ""
+                tip: "This is a copy exported from Google Drive; open the document itself in your browser"
+                onClicked: ql.app.grove.openUrl(ql.item.gdocUrl)
+            }
+
             // Pinch / Ctrl+wheel / double-click to zoom; pan once zoomed.
             ZoomView {
                 id: qlZoom

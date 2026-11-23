@@ -447,3 +447,54 @@ pub fn rclone_step(j: &str) -> Value {
     }
     json!({"error": "rclone kept asking questions; stopped."})
 }
+
+
+// ---------------------------------------------------------------- Google Docs
+
+/// rclone remotes of type "drive" (Google Drive), for exporting Google
+/// Docs/Sheets/Slides that synced folders keep only as links.
+pub fn google_drives() -> Vec<String> {
+    if !which("rclone") {
+        return vec![];
+    }
+    let o = Command::new("rclone").args(["config", "dump"]).output();
+    let dump: Value = o.ok().and_then(|o| serde_json::from_slice(&o.stdout).ok()).unwrap_or(json!({}));
+    dump.as_object().map(|m| m.iter().filter(|(_, x)| x["type"] == "drive").map(|(k, _)| k.clone()).collect()).unwrap_or_default()
+}
+
+/// A Google Docs/Sheets/Slides link file's document, exported by rclone
+/// (by its file id: .docx, .xlsx, .pptx, .pdf), cached by the link file's
+/// time. Tries each Google Drive remote until one has it.
+pub fn gdoc_export(path: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    let link = grove_core::gdocs::link(path).ok_or("This isn't a Google Docs link file.")?;
+    let kind = grove_core::gdocs::kind(&path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).ok_or("Not a Google file.")?;
+    if kind.export.is_empty() {
+        return Err(format!("{} can't be exported for a preview; open it in the browser.", kind.app));
+    }
+    if link.file_id.is_empty() {
+        return Err("The link file has no document id.".into());
+    }
+    let remotes = google_drives();
+    if remotes.is_empty() {
+        return Err("Connect your Google Drive (Go › Add Cloud Drive…) to see what's in Google documents here.".into());
+    }
+    let mtime = std::fs::metadata(path).map(|m| std::os::unix::fs::MetadataExt::mtime(&m)).unwrap_or(0);
+    let dir = grove_core::util::cache_home().join("grove/gdocs").join(format!("{}-{mtime}", link.file_id));
+    if let Some(f) = std::fs::read_dir(&dir).ok().and_then(|rd| rd.flatten().map(|e| e.path()).find(|p| p.is_file())) {
+        return Ok(f);
+    }
+    let _ = std::fs::create_dir_all(&dir);
+    let mut last = String::new();
+    for r in remotes {
+        let o = Command::new("rclone")
+            .args(["backend", "copyid", &format!("{r}:"), &link.file_id, &format!("{}/", dir.display()), "--drive-export-formats", kind.export])
+            .output()
+            .map_err(|e| e.to_string())?;
+        if let Some(f) = std::fs::read_dir(&dir).ok().and_then(|rd| rd.flatten().map(|e| e.path()).find(|p| p.is_file())) {
+            return Ok(f);
+        }
+        last = String::from_utf8_lossy(&o.stderr).lines().last().unwrap_or("").to_string();
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    Err(if last.is_empty() { "Google Drive didn't send the document.".into() } else { format!("Google Drive didn't send it: {last}") })
+}

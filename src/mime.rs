@@ -25,6 +25,10 @@ fn cache() -> &'static Mutex<HashMap<String, Arc<MimeRec>>> {
 /// data/mime/*.xml for the system; these cover a fresh dev build).
 fn known_here(name: &str) -> Option<MimeRec> {
     let l = name.to_ascii_lowercase();
+    // Google Docs/Sheets/Slides... link files (Insync, Google Drive).
+    if let Some(k) = grove_core::gdocs::kind(&l) {
+        return Some(MimeRec { name: k.mime.into(), icon: k.icon.into(), generic: k.icon.into(), comment: k.comment.into() });
+    }
     if l.ends_with(".tsh") || l.ends_with(".tessh") {
         return Some(MimeRec { name: "text/x-tessh".into(), icon: "text-x-script".into(), generic: "text-x-script".into(), comment: "tessh script".into() });
     }

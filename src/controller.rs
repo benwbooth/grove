@@ -266,6 +266,14 @@ impl ffi::Grove {
                     }
                     None => p,
                 };
+                // A Google Docs/Sheets/... link file: its page in the browser.
+                if let Some(l) = grove_core::gdocs::link(&p) {
+                    grove_core::recents::add(&p, "application/vnd.google-apps");
+                    if let Err(e) = apps::open_url(&l.url) {
+                        let _ = qt.queue(move |g| g.notify(qs("error"), qs(&e)));
+                    }
+                    continue;
+                }
                 let m = crate::mime::deep(&p.to_string_lossy());
                 let mimes = crate::mime::with_parents(&m.name);
                 let app = apps::default_for(&mimes, &all);
@@ -1065,6 +1073,24 @@ impl ffi::Grove {
         self.answer(key, move || match crate::docconv::to_pdf(&p) {
             Ok(pdf) => crate::preview::pdf_json(&pdf, &std::sync::atomic::AtomicBool::new(false)),
             Err(e) => serde_json::json!({"error": e}),
+        });
+    }
+
+    pub fn gdoc_export(&self, key: &QString, path: &QString) {
+        let p = PathBuf::from(path.to_string());
+        self.answer(key, move || match crate::remote::gdoc_export(&p) {
+            Ok(f) => json!({"path": f.display().to_string()}),
+            Err(e) => json!({"error": e}),
+        });
+    }
+
+    pub fn open_url(&self, url: &QString) {
+        let u = url.to_string();
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            if let Err(e) = apps::open_url(&u) {
+                let _ = qt.queue(move |g| g.notify(qs("error"), qs(&e)));
+            }
         });
     }
 

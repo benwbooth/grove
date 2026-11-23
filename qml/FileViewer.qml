@@ -61,6 +61,7 @@ Item {
         if (key !== "" && key === loadedKey) return
         loadedKey = key
         player.stop()
+        gdoc = null; gdocError = ""; gdocLoading = false
         converting = false
         if (!active || !item || !item.path || item.isDir) { pv = {}; path = ""; return }
         const want = item.path
@@ -71,10 +72,32 @@ Item {
             })
         } else if (want.indexOf("/") === 0) show(want, want)
     }
+    // A Google Docs/Sheets/Slides link file: its link, and why its
+    // content can't be shown (no Google Drive connected...).
+    property var gdoc: null
+    property string gdocError: ""
+    property bool gdocLoading: false
     function show(local, want) {
         const life = fv.life
         Async.call(app.grove, k => app.grove.preview(k, local, Theme.dark), r => {
             if (!life.alive || !fv.item || fv.item.path !== want) return
+            if (r.kind === "gdoc") {
+                fv.gdoc = r
+                fv.gdocError = ""
+                fv.path = local
+                fv.pv = r
+                if (r.canExport) {
+                    fv.gdocLoading = true
+                    Async.call(app.grove, k => app.grove.gdocExport(k, local), e => {
+                        if (!life.alive || !fv.item || fv.item.path !== want) return
+                        fv.gdocLoading = false
+                        if (e.path) fv.showExported(e.path, want)
+                        else fv.gdocError = e.error || ""
+                    })
+                }
+                return
+            }
+            if (local === want) fv.gdoc = null
             fv.path = local
             fv.pv = r
             if (r.convert) {
@@ -88,6 +111,57 @@ Item {
         })
     }
 
+    // The exported copy of a Google document, in its own viewer.
+    function showExported(local, want) {
+        const life = fv.life
+        Async.call(app.grove, k => app.grove.preview(k, local, Theme.dark), r => {
+            if (!life.alive || !fv.item || fv.item.path !== want) return
+            fv.path = local
+            fv.pv = r
+        })
+    }
+    // Google link files: what it is, and buttons to open it in Google or
+    // connect a Google Drive (whose exports show the content right here).
+    Column {
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 12
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: 8
+        z: 3
+        visible: !!fv.gdoc && fv.pv.kind === "gdoc"
+        width: Math.min(parent.width - 24, 420)
+        GLabel {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            color: Theme.fgSecondary
+            font.pixelSize: Theme.small
+            text: fv.gdocLoading ? "Getting it from Google Drive…" : fv.gdocError !== "" ? fv.gdocError : fv.gdoc ? (fv.gdoc.app + " — it lives online" + (fv.gdoc.email ? " (" + fv.gdoc.email + ")" : "")) : ""
+        }
+        Row {
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: 6
+            PushButton { text: fv.gdoc ? "Open in " + fv.gdoc.app : ""; tip: "Open it in your web browser"; onClicked: fv.app.grove.openUrl(fv.gdoc.url) }
+            PushButton {
+                visible: fv.gdocError.indexOf("Connect your Google Drive") === 0
+                text: "Connect Google Drive…"
+                tip: "Set up your Google Drive (rclone): Google documents then show here"
+                onClicked: if (fv.app.activeWindow) fv.app.activeWindow.addCloudDrive()
+            }
+        }
+    }
+    // Over an exported Google document: back to the real thing.
+    PushButton {
+        z: 3
+        visible: !!fv.gdoc && fv.pv.kind !== "gdoc" && !!fv.pv.kind
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 10
+        text: fv.gdoc ? "Open in " + fv.gdoc.app : ""
+        tip: "This is a copy exported from Google Drive; open the document itself in your browser"
+        onClicked: fv.app.grove.openUrl(fv.gdoc.url)
+    }
+
     // Pictures (and anything without a viewer of its own): the thumbnail.
     SwapImage {
         id: thumb
@@ -98,8 +172,11 @@ Item {
         anchors.bottomMargin: fv.pv.kind === "media" ? (fv.pv.video ? 40 : 40 + Math.min(56, fv.height * 0.22) + 8) : 0
     }
     GIcon {
+        // (Room under it for a Google link file's buttons.)
+        readonly property real below: fv.pv.kind === "gdoc" ? 110 : 0
         anchors.centerIn: parent
-        size: Math.min(parent.width, parent.height, 256)
+        anchors.verticalCenterOffset: -below / 2
+        size: Math.max(32, Math.min(parent.width, parent.height - below - 16, 256))
         name: fv.item ? (fv.item.icon || fv.item.iconName || "") : ""
         visible: thumb.visible && thumb.status !== Image.Ready && thumb.status !== Image.Loading && fv.pv.kind !== "image"
     }

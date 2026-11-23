@@ -217,6 +217,13 @@ pub fn preview(path: &str, dark: bool) -> Value {
     };
     use grove_core::previews::{self, Kind};
     let lower = name.to_lowercase();
+    // Google Docs/Sheets/Slides link files: what it is, its link, and
+    // whether a Google Drive remote can send the document for a preview.
+    if let Some(k) = grove_core::gdocs::kind(&name) {
+        let l = grove_core::gdocs::link(p);
+        return with(json!({"kind": "gdoc", "app": k.app, "url": l.as_ref().map(|l| l.url.clone()).unwrap_or_default(),
+                           "email": l.map(|l| l.email).unwrap_or_default(), "canExport": !k.export.is_empty()}));
+    }
     // Tables (CSV, TSV, spreadsheets): Quick Look's table view reads them
     // itself (TableData), whole, off the UI thread.
     if crate::table::is_table_name(&lower) {

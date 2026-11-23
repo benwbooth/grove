@@ -132,6 +132,11 @@ Item {
             GLabel { text: "Tags"; color: Theme.fgSecondary; horizontalAlignment: Text.AlignRight; width: 90; visible: !!(p.info.tags && p.info.tags.length > 0) }
             GLabel { text: p.info.tags ? p.info.tags.join(", ") : ""; visible: !!(p.info.tags && p.info.tags.length > 0) }
         }
+        OpenButtons {
+            anchors.horizontalCenter: parent.horizontalCenter
+            pane: p.pane
+            item: p.item
+        }
         PushButton {
             visible: !p.compact
             anchors.horizontalCenter: parent.horizontalCenter
