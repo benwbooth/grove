@@ -60,7 +60,13 @@
               # nixbld user. The exports are regenerated every build anyway.
               rm -rf "$workDir/target/cxxqt"
               # libsqlite3-sys copies its bindings the same way (fs::copy).
-              rm -rf "$workDir"/target/release/build/libsqlite3-sys-*/out
+              # Its whole build-script run goes, fingerprint included: with
+              # only out/ removed cargo still thinks the script ran and the
+              # crate then fails to find out/bindgen.rs.
+              for d in "$workDir"/target/release/build/libsqlite3-sys-*; do
+                [ -d "$d/out" ] || continue
+                rm -rf "$d" "$workDir/target/release/.fingerprint/$(basename "$d")"
+              done
               CARGO_HOME="$NIX_BUILD_TOP/.cargo" CARGO_TARGET_DIR="$workDir/target" \
                 cargo build ${cargoArgs} --offline --locked -j "$NIX_BUILD_CORES"
               find "$workDir/target" -mindepth 1 -user "$(id -u)" ! -perm -o+w -exec chmod a+rwX {} + 2>/dev/null || true
