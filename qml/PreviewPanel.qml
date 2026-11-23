@@ -71,6 +71,7 @@ Item {
                 id: viewer
                 anchors.fill: parent
                 visible: !p.compact
+                slim: true
                 app: p.pane ? p.pane.app : null
                 item: p.compact ? null : p.item
                 active: !p.compact && p.visible

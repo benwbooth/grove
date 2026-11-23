@@ -13,6 +13,8 @@ Item {
     property var app
     property var item: null
     property bool active: true
+    // Small panes: viewers with light toolbars (DocView.slim).
+    property bool slim: false
     property var pv: ({})
     property string path: ""          // local path being shown
     property bool converting: false
@@ -103,6 +105,7 @@ Item {
         anchors.fill: parent
         visible: fv.pv.kind === "code" || fv.pv.kind === "markdown" || (fv.pv.kind === "office" && !!fv.pv.hasText) || (fv.pv.kind === "other" && fv.textAsked)
         active: visible && fv.active
+        slim: fv.slim
         path: visible ? fv.path : ""
         mode: fv.pv.kind === "markdown" ? "markdown" : fv.pv.kind === "office" ? "office" : "code"
     }

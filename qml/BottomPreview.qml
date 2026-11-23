@@ -71,44 +71,82 @@ Rectangle {
     // Back to the saved height once the setting has it (no jump on release).
     onSavedHChanged: dragH = 0
 
+    // A faint tint behind the card, so the file reads as a thing on a shelf.
+    Rectangle { anchors { top: edge.bottom; left: parent.left; right: parent.right; bottom: parent.bottom } color: Theme.rowAlt }
+
     Item {
+        id: body
         anchors { top: edge.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
-        FileViewer {
-            id: viewer
-            anchors { top: parent.top; bottom: parent.bottom; left: parent.left; margins: 8 }
-            width: Math.max(160, parent.width - facts.width - 24)
-            app: bp.pane ? bp.pane.app : null
-            item: bp.item
-            active: bp.visible && !!bp.item
-        }
-        GLabel {
-            anchors.centerIn: viewer
-            visible: !bp.item
-            text: "Select a file to preview it"
-            color: Theme.fgTertiary
-        }
-        Rectangle { x: viewer.x + viewer.width + 8; width: 1; height: parent.height; color: Theme.separator }
-        Column {
-            id: facts
-            anchors { top: parent.top; right: parent.right; topMargin: 12; rightMargin: 14 }
-            width: Math.min(300, parent.width * 0.35)
-            spacing: 6
-            visible: !!bp.item
-            GLabel { width: parent.width; text: bp.item ? bp.item.name : ""; font.bold: true; wrapMode: Text.WrapAnywhere; maximumLineCount: 3; elide: Text.ElideRight }
-            GLabel { width: parent.width; text: (bp.info.kind || (bp.item ? bp.item.kind : "")) + (bp.info.sizeText ? " — " + bp.info.sizeText : ""); color: Theme.fgSecondary; elide: Text.ElideRight }
-            Grid {
-                columns: 2
-                columnSpacing: 8
-                rowSpacing: 4
-                visible: bp.info.path !== undefined
-                GLabel { text: "Modified"; color: Theme.fgSecondary; font.pixelSize: Theme.small }
-                GLabel { text: bp.info.mtime ? new Date(bp.info.mtime * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat) : "--"; font.pixelSize: Theme.small }
-                GLabel { text: "Created"; color: Theme.fgSecondary; font.pixelSize: Theme.small }
-                GLabel { text: bp.info.btime ? new Date(bp.info.btime * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat) : "--"; font.pixelSize: Theme.small }
-                GLabel { text: "Opens with"; color: Theme.fgSecondary; font.pixelSize: Theme.small; visible: !!bp.info.defaultApp }
-                GLabel { text: bp.info.defaultApp ? bp.info.defaultApp.name : ""; font.pixelSize: Theme.small; visible: !!bp.info.defaultApp }
+        // The details' column: fixed width, narrower in small windows.
+        readonly property real factsW: Math.round(Math.max(190, Math.min(280, width * 0.32)))
+        // The file itself, in a rounded card.
+        Rectangle {
+            id: card
+            anchors { top: parent.top; bottom: parent.bottom; left: parent.left; right: rule.left; margins: 10 }
+            radius: Math.round(8 * Theme.pt)
+            color: Theme.content
+            border.width: 1
+            border.color: Theme.separator
+            Item {
+                anchors.fill: parent
+                anchors.margins: 1
+                clip: true
+                FileViewer {
+                    id: viewer
+                    anchors.fill: parent
+                    slim: true
+                    app: bp.pane ? bp.pane.app : null
+                    item: bp.item
+                    active: bp.visible && !!bp.item
+                }
             }
-            PushButton { text: "More Info…"; tip: "Open the Get Info window (Alt+Return)"; onClicked: bp.pane.win.showInfo([bp.item.path]) }
+            GLabel {
+                anchors.centerIn: parent
+                visible: !bp.item
+                text: bp.pane && bp.pane.model && bp.pane.model.selectionCount > 1 ? bp.pane.model.selectionCount + " items selected" : "Select a file to preview it"
+                color: Theme.fgTertiary
+            }
+        }
+        Rectangle { id: rule; anchors { right: facts.left; top: parent.top; bottom: parent.bottom; topMargin: 10; bottomMargin: 10 } width: 1; color: Theme.separator; visible: facts.visible }
+        Item {
+            id: facts
+            anchors { top: parent.top; bottom: parent.bottom; right: parent.right }
+            width: visible ? body.factsW : 0
+            visible: !!bp.item
+            clip: true
+            Column {
+                anchors { top: parent.top; left: parent.left; right: parent.right; margins: 16; topMargin: 14 }
+                spacing: 10
+                Row {
+                    width: parent.width
+                    spacing: 10
+                    GIcon { id: factIcon; size: 36; name: bp.item ? (bp.item.icon || bp.item.iconName || "") : ""; anchors.verticalCenter: parent.verticalCenter }
+                    Column {
+                        width: parent.width - factIcon.width - 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
+                        GLabel { width: parent.width; text: bp.item ? bp.item.name : ""; font.bold: true; font.pixelSize: Math.round(Theme.body * 1.08); wrapMode: Text.WrapAnywhere; maximumLineCount: 2; elide: Text.ElideRight }
+                        GLabel { width: parent.width; text: (bp.info.kind || (bp.item ? bp.item.kind : "")) + (bp.info.sizeText ? " · " + bp.info.sizeText : ""); color: Theme.fgSecondary; font.pixelSize: Theme.small; elide: Text.ElideRight }
+                    }
+                }
+                Rectangle { width: parent.width; height: 1; color: Theme.separator; visible: bp.info.path !== undefined }
+                Grid {
+                    id: grid
+                    width: parent.width
+                    columns: 2
+                    columnSpacing: 10
+                    rowSpacing: 5
+                    visible: bp.info.path !== undefined
+                    readonly property real keyW: Math.round(parent.width * 0.36)
+                    GLabel { width: grid.keyW; horizontalAlignment: Text.AlignRight; text: "Modified"; color: Theme.fgSecondary; font.pixelSize: Theme.small }
+                    GLabel { width: grid.width - grid.keyW - 10; elide: Text.ElideRight; text: bp.info.mtime ? new Date(bp.info.mtime * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat) : "--"; font.pixelSize: Theme.small }
+                    GLabel { width: grid.keyW; horizontalAlignment: Text.AlignRight; text: "Created"; color: Theme.fgSecondary; font.pixelSize: Theme.small }
+                    GLabel { width: grid.width - grid.keyW - 10; elide: Text.ElideRight; text: bp.info.btime ? new Date(bp.info.btime * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat) : "--"; font.pixelSize: Theme.small }
+                    GLabel { width: grid.keyW; horizontalAlignment: Text.AlignRight; text: "Opens with"; color: Theme.fgSecondary; font.pixelSize: Theme.small; visible: !!bp.info.defaultApp }
+                    GLabel { width: grid.width - grid.keyW - 10; elide: Text.ElideRight; text: bp.info.defaultApp ? bp.info.defaultApp.name : ""; font.pixelSize: Theme.small; visible: !!bp.info.defaultApp }
+                }
+                PushButton { text: "More Info…"; tip: "Open the Get Info window (Alt+Return)"; onClicked: bp.pane.win.showInfo([bp.item.path]) }
+            }
         }
     }
 }

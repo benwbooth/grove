@@ -12,6 +12,9 @@ Item {
     property string path: ""
     property string mode: ""        // code, markdown, office, plain
     property bool active: false
+    // Small panes (the preview column, the list's preview strip): a light
+    // toolbar with smaller controls, no bar of its own.
+    property bool slim: false
     // Viewing choices, remembered: soft wrap for text and code, and
     // Markdown as its coloured source instead of the rendered page.
     Settings { id: prefs; category: "viewer"; property bool wrapText: false; property bool markdownSource: false; property bool wrapMarkdown: true; property real textZoom: 1 }
@@ -121,13 +124,14 @@ Item {
     Rectangle {
         id: opts
         width: parent.width
-        height: Math.round(36 * Theme.pt)
-        color: Theme.toolbar
-        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.separator }
+        height: Math.round((dv.slim ? 28 : 36) * Theme.pt)
+        color: dv.slim ? "transparent" : Theme.toolbar
+        Rectangle { visible: !dv.slim; anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.separator }
         GLabel {
             anchors.verticalCenter: parent.verticalCenter
-            x: 12
+            x: dv.slim ? 10 : 12
             width: parent.width - tools.width - 30
+            elide: Text.ElideRight
             text: dv.paper ? "" : doc.lines > 0 ? doc.lines.toLocaleString(Qt.locale(), "f", 0) + (doc.lines === 1 ? " line" : " lines") + (doc.loading ? " so far…" : "") : ""
             color: Theme.fgSecondary
             font.pixelSize: Theme.small
@@ -136,11 +140,11 @@ Item {
             id: tools
             anchors.verticalCenter: parent.verticalCenter
             anchors.right: parent.right
-            anchors.rightMargin: 8
-            spacing: 6
+            anchors.rightMargin: dv.slim ? 4 : 8
+            spacing: dv.slim ? 2 : 6
             Segmented {
                 visible: dv.mode === "markdown"
-                height: Math.round(28 * Theme.pt)
+                height: Math.round((dv.slim ? 22 : 28) * Theme.pt)
                 anchors.verticalCenter: parent.verticalCenter
                 items: [
                     { icon: "view-preview|document-preview", tip: "Rendered: the Markdown as a formatted page", value: "rendered" },
@@ -149,17 +153,17 @@ Item {
                 current: prefs.markdownSource ? "source" : "rendered"
                 onPicked: (v) => prefs.markdownSource = v === "source"
             }
-            Rectangle { visible: dv.mode === "markdown"; width: 1; height: 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
-            GButton { iconName: "zoom-out"; iconSize: 16; enabled: prefs.textZoom > 0.6; tip: "Smaller text"; anchors.verticalCenter: parent.verticalCenter
+            Rectangle { visible: dv.mode === "markdown"; width: 1; height: dv.slim ? 14 : 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
+            GButton { iconName: "zoom-out"; iconSize: dv.slim ? 14 : 16; enabled: prefs.textZoom > 0.6; tip: "Smaller text"; anchors.verticalCenter: parent.verticalCenter
                 onClicked: prefs.textZoom = Math.max(0.6, Math.round((prefs.textZoom - 0.1) * 10) / 10) }
-            GButton { iconName: "zoom-in"; iconSize: 16; enabled: prefs.textZoom < 2.5; tip: "Larger text"; anchors.verticalCenter: parent.verticalCenter
+            GButton { iconName: "zoom-in"; iconSize: dv.slim ? 14 : 16; enabled: prefs.textZoom < 2.5; tip: "Larger text"; anchors.verticalCenter: parent.verticalCenter
                 onClicked: prefs.textZoom = Math.min(2.5, Math.round((prefs.textZoom + 0.1) * 10) / 10) }
-            Rectangle { visible: !dv.paper; width: 1; height: 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
+            Rectangle { visible: !dv.paper; width: 1; height: dv.slim ? 14 : 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
             GButton {
                 id: wrapBtn
                 visible: !dv.paper
                 checked: dv.wrap
-                WrapGlyph { anchors.centerIn: parent; size: 16; color: wrapBtn.enabled ? wrapBtn.tint : Theme.fgDisabled }
+                WrapGlyph { anchors.centerIn: parent; size: dv.slim ? 14 : 16; color: wrapBtn.enabled ? wrapBtn.tint : Theme.fgDisabled }
                 anchors.verticalCenter: parent.verticalCenter
                 tip: dv.wrap ? "Wrap long lines: on (click to keep each line whole and scroll sideways)" : "Wrap long lines: off (scroll sideways or Shift+wheel; click to wrap)"
                 onClicked: { if (dv.rendered) prefs.wrapMarkdown = !prefs.wrapMarkdown; else prefs.wrapText = !prefs.wrapText }
