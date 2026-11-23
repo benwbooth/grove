@@ -1452,6 +1452,8 @@ ApplicationWindow {
         else if (cmd === "cloudnext") cloudSheet.page === "name" ? cloudSheet.begin() : cloudSheet.send(arg || "")
         else if (cmd === "cloudquit") cloudSheet.abandon()
         else if (cmd === "clouddefaults") cloudSheet.send(cloudSheet.answer, { defaults: true })
+        else if (cmd === "cloudwait") { const f = cloudSheet.providers.find(x => x.name === arg); if (f) { cloudSheet.provider = f; cloudSheet.page = "ask"; cloudSheet.busy = true; cloudSheet.waitingLong = true } }
+        else if (cmd === "clouddump") console.log("grove: cloud " + JSON.stringify({ page: cloudSheet.page, busy: cloudSheet.busy, error: cloudSheet.error, optName: cloudSheet.opt.Name, help0: cloudSheet.helpLines[0], guide: cloudSheet.guide, ex: cloudSheet.examples.length, step: cloudSheet.step }).slice(0, 600))
         else if (cmd === "openrow") { console.warn("grove test item", p.model.get(Number(arg))); p.openRow(Number(arg), false) }
         else if (cmd === "dumpx") { const v = p.viewLoaderItem(); console.warn("grove test x", arg || "", v && v.stripX !== undefined ? v.stripX.toFixed(1) : "?") }
         else if (cmd === "media") console.warn("grove test media", arg || "", ql.mediaState())

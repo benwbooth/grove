@@ -19,12 +19,30 @@ Sheet {
     property bool waitingLong: false
     property string error: ""
     property bool created: false
-    title: page === "pick" ? "Add Cloud Drive" : provider ? "Add " + provider.description : "Add Cloud Drive"
+    // What's been answered (for guides: S3's provider...).
+    property var answers: ({})
+    RcloneGuides { id: guides }
+    readonly property var guide: page === "ask" && provider ? guides.guide(provider.name, (step.option || {}).Name, answers) : null
+    readonly property var signInGuide: busy && waitingLong && provider && guides.oauth.indexOf(provider.name) >= 0 ? guides.signIn(provider.name) : null
+    // A guide's page opens when its question comes up (once per question).
+    property var openedGuides: ({})
+    onGuideChanged: if (guide && guide.url) {
+        const k = provider.name + "/" + (step.option || {}).Name
+        if (!openedGuides[k]) { openedGuides[k] = true; app.grove.openUrl(guide.url) }
+    }
+    title: page === "pick" ? "Add Cloud Drive" : provider ? "Add " + shortName(provider) : "Add Cloud Drive"
+    // rclone's descriptions can be a whole list ("Amazon S3 Compliant
+    // Storage Providers including AWS, Alibaba, …"): keep the name part.
+    function shortName(p) {
+        const d = p.description || p.name
+        const m = d.match(/^(.*?)(\s+including\b|\s*\(|,)/)
+        return m && m[1].length > 2 ? m[1] : d
+    }
     width: Math.min(parent ? parent.width - 40 : 600, Math.round(600 * Theme.pt))
     closePolicy: busy ? Popup.NoAutoClose : Popup.CloseOnEscape
 
     function start() {
-        page = "pick"; provider = null; error = ""; busy = false; created = false; step = {}
+        page = "pick"; provider = null; error = ""; busy = false; created = false; step = {}; answers = {}; openedGuides = {}
         search.text = ""
         open()
         if (!providers.length)
@@ -33,7 +51,7 @@ Sheet {
     }
     function pick(p) {
         provider = p
-        nameField.text = p.description.replace(/\s*\(.*\)\s*/g, "").replace(/[:\/]/g, " ").trim()
+        nameField.text = shortName(p).replace(/[:\/,]/g, " ").replace(/\s+/g, " ").trim()
         page = "name"
         Qt.callLater(() => nameField.forceActiveFocus())
     }
@@ -42,6 +60,7 @@ Sheet {
         opts = opts || {}
         busy = true; error = ""; waitingLong = false
         longWait.restart()
+        if (step.option && step.option.Name && result !== undefined) { const a = Object.assign({}, answers); a[step.option.Name] = String(result); answers = a }
         const req = { name: driveName, type: provider.name, state: step.state || "", result: result === undefined ? "" : String(result),
                       password: !!(step.option && step.option.IsPassword), defaults: !!opts.defaults, started: created }
         Async.call(app.grove, k => app.grove.rcloneStep(k, JSON.stringify(req)), r => {
@@ -168,7 +187,7 @@ Sheet {
         GField { id: nameField; width: parent.width; placeholderText: "e.g. My Google Drive"; tip: "Shown in the sidebar; letters, numbers, spaces, - _ . (no “:” or “/”)"
             Keys.onReturnPressed: cd.begin() }
         GLabel { width: parent.width; wrapMode: Text.Wrap; elide: Text.ElideNone; color: Theme.fgSecondary; font.pixelSize: Theme.small
-            text: "Next, rclone asks what it needs for " + (cd.provider ? cd.provider.description : "") + ". Most questions can be left as they are." }
+            text: "Next, rclone asks what it needs for " + (cd.provider ? cd.shortName(cd.provider) : "") + ". Most questions can be left as they are." }
     }
 
     // ---------------------------------------------------------- ask
@@ -196,6 +215,32 @@ Sheet {
                     onLinkActivated: (l) => Qt.openUrlExternally(l)
                     HoverHandler { cursorShape: parent.hoveredLink ? Qt.PointingHandCursor : Qt.ArrowCursor }
                     text: cd.linkify(cd.helpLines.slice(1).join("\n").trim()) }
+            }
+        }
+        // Step-by-step help for this question (its page opens by itself).
+        Column {
+            width: parent.width
+            spacing: 8
+            visible: !!cd.guide
+            Rectangle {
+                width: parent.width
+                height: guideSay.implicitHeight + 16
+                radius: 8
+                color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.12)
+                GLabel { id: guideSay; x: 10; y: 8; width: parent.width - 20; wrapMode: Text.Wrap; elide: Text.ElideNone; text: cd.guide ? cd.guide.say : "" }
+            }
+            StepPicture {
+                width: parent.width
+                visible: !!(cd.guide && cd.guide.rows)
+                address: cd.guide && cd.guide.address ? cd.guide.address : ""
+                heading: cd.guide && cd.guide.heading ? cd.guide.heading : ""
+                rows: cd.guide && cd.guide.rows ? cd.guide.rows : []
+            }
+            PushButton {
+                visible: !!(cd.guide && cd.guide.url)
+                text: "Open This Page Again"
+                tip: cd.guide && cd.guide.url ? cd.guide.url : ""
+                onClicked: cd.app.grove.openUrl(cd.guide.url)
             }
         }
         // yes / no
@@ -255,7 +300,20 @@ Sheet {
             spacing: 8
             visible: cd.busy && cd.waitingLong
             BusyDots { running: parent.visible; anchors.verticalCenter: parent.verticalCenter }
-            GLabel { text: "Waiting for rclone… If your browser opened, sign in there, then come back."; color: Theme.fgSecondary; anchors.verticalCenter: parent.verticalCenter }
+            GLabel { text: cd.signInGuide ? "Waiting for you to sign in in the browser…" : "Waiting for rclone… If your browser opened, sign in there, then come back."; color: Theme.fgSecondary; anchors.verticalCenter: parent.verticalCenter }
+        }
+        // The browser sign-in: what that page looks like and what to click.
+        Column {
+            width: parent.width
+            spacing: 8
+            visible: !!cd.signInGuide
+            GLabel { width: parent.width; wrapMode: Text.Wrap; elide: Text.ElideNone; text: cd.signInGuide ? cd.signInGuide.say : "" }
+            StepPicture {
+                width: parent.width
+                address: cd.signInGuide ? cd.signInGuide.address : ""
+                heading: cd.signInGuide ? cd.signInGuide.heading : ""
+                rows: cd.signInGuide ? cd.signInGuide.rows : []
+            }
         }
     }
 

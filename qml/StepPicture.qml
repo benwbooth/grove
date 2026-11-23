@@ -73,8 +73,10 @@ Rectangle {
                 // The thing to use: a pulsing ring.
                 Rectangle {
                     visible: row.hot
-                    anchors.fill: parent
-                    anchors.margins: -4
+                    x: -4; y: -4
+                    // A button's ring hugs the button; others take the row.
+                    width: (row.modelData.kind === "button" && inner.item ? inner.item.implicitWidth : parent.width) + 8
+                    height: parent.height + 8
                     radius: 8
                     color: "transparent"
                     border.width: 2.5
@@ -123,6 +125,7 @@ Rectangle {
         id: buttonC
         Item {
             height: 26
+            implicitWidth: btnText.implicitWidth + 24
             Rectangle {
                 width: btnText.implicitWidth + 24
                 height: 26
