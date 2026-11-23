@@ -1,0 +1,25 @@
+[Desktop Entry]
+Type=Application
+Name=Grove Archiver
+GenericName=Archive Manager
+Comment=Open, extract and make archives: 7z, zip, rar, tar and more
+Exec=grove --archive %F
+Icon=package-x-generic
+Terminal=false
+Categories=Qt;Utility;Archiving;Compression;
+Keywords=archive;extract;unzip;zip;7z;7-zip;rar;tar;compress;unpack;ark;
+MimeType=application/zip;application/x-zip-compressed;application/x-7z-compressed;application/vnd.rar;application/x-rar;application/x-rar-compressed;application/x-tar;application/x-compressed-tar;application/x-xz-compressed-tar;application/x-zstd-compressed-tar;application/x-bzip2-compressed-tar;application/x-bzip-compressed-tar;application/x-lzma-compressed-tar;application/x-lzip-compressed-tar;application/x-lz4-compressed-tar;application/x-tarz;application/gzip;application/x-gzip;application/x-xz;application/x-bzip2;application/x-bzip;application/zstd;application/x-zstd;application/x-lzma;application/x-lzip;application/x-lz4;application/x-compress;application/x-iso9660-image;application/x-cd-image;application/x-udf-image;application/x-cpio;application/x-cpio-compressed;application/vnd.debian.binary-package;application/x-deb;application/x-rpm;application/x-source-rpm;application/java-archive;application/x-java-archive;application/x-archive;application/vnd.ms-cab-compressed;application/x-cabinet;application/x-xar;application/x-lha;application/x-lzh-compressed;application/x-cbz;application/vnd.comicbook+zip;application/x-cbr;application/vnd.comicbook-rar;application/x-cb7;application/x-cbt;application/x-ms-wim;application/x-apple-diskimage;application/x-msi;
+Actions=ExtractHere;ExtractTo;Test;
+StartupWMClass=grove
+
+[Desktop Action ExtractHere]
+Name=Extract Here
+Exec=grove --extract-here %F
+
+[Desktop Action ExtractTo]
+Name=Extract To…
+Exec=grove --extract-to %F
+
+[Desktop Action Test]
+Name=Test Archive
+Exec=grove --test-archive %F

@@ -68,6 +68,9 @@ Item {
         return w
     }
 
+    // Grove Archiver: archive windows, extract/compress/test flows.
+    property Archiver archiver: Archiver { app: app }
+
     Component { id: playerComp; PlayerWindow {} }
     // Grove Player windows (one per file).
     function play(paths) {
@@ -83,6 +86,7 @@ Item {
     function handleOpen(req) {
         const paths = req.paths || []
         if (req.action === "play") { play(paths); return }
+        if (archiver.handle(req)) return
         if (req.action === "properties") {
             for (const p of paths) {
                 const w = activeWindow || openWindow([grove.home()])
@@ -223,7 +227,7 @@ Item {
         let req = null
         try { req = JSON.parse(grove.env("GROVE_OPEN") || "null") } catch (e) {}
         if (portalMode) return
-        if (req && req.paths && req.paths.length) handleOpen(req)
+        if (req && req.paths && (req.paths.length || req.action === "archive")) handleOpen(req)
         else if (!service) {
             let sess = null
             try { sess = JSON.parse(grove.session() || "null") } catch (e) {}

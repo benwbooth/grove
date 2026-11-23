@@ -359,6 +359,32 @@ pub mod ffi {
         #[qinvokable]
         fn compress(self: Pin<&mut Grove>, paths: &QString, format: &QString) -> i32;
 
+        // --- Grove Archiver (7-Zip's features) ---
+        /// An archive's full listing (async_reply: Listing or {error, code}).
+        #[qinvokable]
+        fn arc_list(self: &Grove, key: &QString, path: &QString, password: &QString);
+        /// Start a job: kind extract | create | test | update, args JSON.
+        #[qinvokable]
+        fn arc_start(self: &Grove, kind: &QString, args: &QString) -> i32;
+        /// A job's state now (JSON; never waits).
+        #[qinvokable]
+        fn arc_progress(self: &Grove, id: i32) -> QString;
+        /// Answer a job's question (replace, skip, rename, ...All, cancel).
+        #[qinvokable]
+        fn arc_answer(self: &Grove, id: i32, answer: &QString);
+        #[qinvokable]
+        fn arc_cancel(self: &Grove, id: i32);
+        #[qinvokable]
+        fn arc_pause(self: &Grove, id: i32, paused: bool);
+        #[qinvokable]
+        fn arc_forget(self: &Grove, id: i32);
+        /// One member taken out to the cache (async_reply {path} or {error, code}).
+        /// A free name for a new file ("Archive 2.7z"): async_reply {path}.
+        #[qinvokable]
+        fn arc_unique(self: &Grove, key: &QString, path: &QString);
+        #[qinvokable]
+        fn arc_member(self: &Grove, key: &QString, archive: &QString, inner: &QString, password: &QString);
+
         // --- Quick Look editing ---
         /// Save markup over a picture. mode: "replace" (the original goes to
         /// the Trash, Undo puts it back) or "copy" (a new file next to it).

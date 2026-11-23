@@ -1906,6 +1906,22 @@ pub fn destination(archive: &Path, listing: &Listing, base: &Path, mode: &str) -
     }
 }
 
+/// A free name keeping a double extension whole: "x.tar.gz" -> "x 2.tar.gz".
+pub fn unique_archive_name(target: &Path) -> PathBuf {
+    let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let stem = strip_archive_ext(&name);
+    let ext = name.strip_prefix(&stem).unwrap_or("").to_string();
+    let dir = target.parent().unwrap_or(Path::new("/"));
+    for n in 2.. {
+        let c = dir.join(format!("{stem} {n}{ext}"));
+        let vol = dir.join(format!("{stem} {n}{ext}.001"));
+        if c.symlink_metadata().is_err() && vol.symlink_metadata().is_err() {
+            return c;
+        }
+    }
+    unreachable!()
+}
+
 /// "photos.tar.gz" -> "photos", "a.7z" -> "a".
 pub fn strip_archive_ext(name: &str) -> String {
     let l = name.to_lowercase();

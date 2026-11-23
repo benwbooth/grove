@@ -12,6 +12,7 @@
 mod accounts;
 mod actions;
 mod archive;
+mod archiver;
 mod burn;
 mod bridge;
 mod controller;
@@ -70,6 +71,14 @@ fn main() {
             "--select" | "-s" => action = "items",
             // Grove Player: play the files in a QuickTime-style window.
             "--play" | "-p" => action = "play",
+            // Grove Archiver (7-Zip's features, grove's look): browse an
+            // archive, extract it beside itself or somewhere picked, add
+            // files to a new archive, test it.
+            "--archive" | "-a" => action = "archive",
+            "--extract-here" => action = "extracthere",
+            "--extract-to" => action = "extractto",
+            "--compress" => action = "compress",
+            "--test-archive" => action = "testarchive",
             "--service" => std::env::set_var("GROVE_SERVICE", "1"),
             "--portal" => std::env::set_var("GROVE_PORTAL", "1"),
             "--screenshot" => {
@@ -81,7 +90,7 @@ fn main() {
                 i += 1;
             }
             "--help" | "-h" => {
-                println!("grove [--new-window] [--select] [--play] [PATH|URI ...]\n\nA Finder-style file manager. Press F1 in a window for help and shortcuts.\n--play opens the files in Grove Player.");
+                println!("grove [--new-window] [--select] [--play] [PATH|URI ...]\n\nA Finder-style file manager. Press F1 in a window for help and shortcuts.\n--play opens the files in Grove Player.\n\nGrove Archiver:\n  --archive [ARCHIVE ...]   browse archives (7-Zip-style window)\n  --extract-here ARCHIVE    extract next to it\n  --extract-to ARCHIVE      pick where and how to extract\n  --compress PATH ...       Add to Archive (format, level, password, volumes)\n  --test-archive ARCHIVE    check an archive for damage");
                 return;
             }
             "--version" => {
@@ -114,7 +123,7 @@ fn main() {
             return;
         }
     }
-    if !paths.is_empty() {
+    if !paths.is_empty() || action == "archive" {
         std::env::set_var("GROVE_OPEN", serde_json::json!({"action": action, "paths": paths}).to_string());
     }
     // hearth's light/dark mode and accent, so grove matches the shell.

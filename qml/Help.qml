@@ -99,6 +99,22 @@ QtObject {
         { id: "burn", group: "Other", action: "Burn to Disc…", defaults: [], fixed: "", note: "Finder: File › Burn to Disc" },
         { id: "markup", group: "View", action: "Markup (in Quick Look)", defaults: [], fixed: "", note: "Finder: pen, highlighter, shapes, text, crop, rotate" },
         { id: "qlpages", group: "View", action: "Previous / next page (PDFs in Quick Look)", defaults: [], fixed: "Page Up / Page Down", note: "Preview: the page counter's arrows do the same" },
+        { id: "arcopen", group: "Grove Archiver", defaults: [], action: "Open an archive", fixed: "Ctrl+O", note: "Grove Archiver shows any archive with 7-Zip's columns. From grove: right-click › Archive › Open in Grove Archiver" },
+        { id: "arcup", group: "Grove Archiver", defaults: [], action: "Up one folder inside the archive", fixed: "Backspace, Alt+Up, Left", note: "Right or Return opens the selected folder" },
+        { id: "arcopenfile", group: "Grove Archiver", defaults: [], action: "Open a file from the archive", fixed: "Return, double-click", note: "It's taken out to grove's cache and opened in its app" },
+        { id: "arcextract", group: "Grove Archiver", defaults: [], action: "Extract what's selected (or everything) with options", fixed: "Ctrl+E", note: "Where to, make a folder or not, keep folders, files already there, password" },
+        { id: "arcextractall", group: "Grove Archiver", defaults: [], action: "Extract everything", fixed: "Ctrl+Shift+E", note: "Extract Here (from grove or the desktop) uses Settings › Archives" },
+        { id: "arccopyto", group: "Grove Archiver", defaults: [], action: "Copy the selection to a folder", fixed: "F5", note: "7-Zip's Copy To" },
+        { id: "arctest", group: "Grove Archiver", defaults: [], action: "Test the archive", fixed: "Ctrl+T", note: "Checks every file against its stored checksum" },
+        { id: "arcadd", group: "Grove Archiver", defaults: [], action: "Add files to the archive", fixed: "Ctrl+Shift+A, Insert, drop files on the window", note: "7z, zip and tar archives (rar, iso and the like can only be read)" },
+        { id: "arcdelete", group: "Grove Archiver", defaults: [], action: "Delete from the archive", fixed: "Delete", note: "Removed from the archive only; it can't be undone" },
+        { id: "arcrename", group: "Grove Archiver", defaults: [], action: "Rename inside the archive", fixed: "F2", note: "" },
+        { id: "arcmkdir", group: "Grove Archiver", defaults: [], action: "New folder inside the archive", fixed: "Ctrl+Shift+N", note: "" },
+        { id: "arcinfo", group: "Grove Archiver", defaults: [], action: "Archive info (format, method, solid, encryption, volumes)", fixed: "Ctrl+I, Alt+Return", note: "" },
+        { id: "arcfilter", group: "Grove Archiver", defaults: [], action: "Filter by name", fixed: "Ctrl+F", note: "Esc clears it" },
+        { id: "arcsort", group: "Grove Archiver", defaults: [], action: "Sort by a column", fixed: "click the column header", note: "Click again to reverse" },
+        { id: "arccompress", group: "Grove Archiver", defaults: [], action: "Add to Archive (new archive)", fixed: "right-click › Archive › Add to Archive…", note: "7z, zip, tar.zst/xz/gz/bz2: level, method, solid, cores, split into volumes, password (7z can hide file names; zip AES-256 or ZipCrypto)" },
+        { id: "arcpause", group: "Grove Archiver", defaults: [], action: "Pause or cancel a job", fixed: "Pause / Cancel in its window, Esc", note: "Hide keeps it going in the background; the window comes back if it needs you" },
         { id: "help", group: "Other", action: "Help and shortcuts", defaults: ["F1", "Ctrl+?", "Ctrl+Shift+/"], fixed: "", note: "Dolphin: F1  ·  Finder: ⇧⌘?" }
     ]
 

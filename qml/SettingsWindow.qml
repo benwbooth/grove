@@ -148,6 +148,19 @@ Window {
                 ToggleRow { label: "Ask before emptying the Trash"; help: "Emptying the Trash can't be undone."; key: "confirm_empty_trash" }
             }
             Group {
+                title: "Archives (Grove Archiver)"
+                ChoiceRow { label: "Extract Here puts files"; help: "Double-clicking an archive outside grove, or Extract Here: next to the archive, or ask each time."; key: "extract_location"
+                    choices: [{ label: "Next to the archive", value: "beside" }, { label: "Ask where", value: "ask" }] }
+                ChoiceRow { label: "Make a folder for it"; help: "A folder named after the archive keeps its files together. When needed: unless everything is already in one folder."; key: "extract_folder"
+                    choices: [{ label: "When needed", value: "auto" }, { label: "Always", value: "always" }, { label: "Never", value: "never" }] }
+                ToggleRow { label: "Show the result in grove"; help: "After extracting or making an archive, a grove window opens at it."; key: "archive_reveal" }
+                ToggleRow { label: "Move archives to the Trash after extracting"; help: "Only when everything came out without problems. You can get it back from the Trash."; key: "archive_trash_after" }
+                ChoiceRow { label: "New archives are"; help: "The format Add to Archive starts with: 7z is smallest, zip opens everywhere."; key: "archive_format"
+                    choices: [{ label: "7z", value: "7z" }, { label: "zip", value: "zip" }, { label: "tar.zst", value: "tar.zst" }, { label: "tar.gz", value: "tar.gz" }] }
+                ChoiceRow { label: "Compression"; help: "Higher is smaller but slower (7-Zip's levels)."; key: "archive_level"
+                    choices: [{ label: "Store", value: 0 }, { label: "Fastest", value: 1 }, { label: "Fast", value: 3 }, { label: "Normal", value: 5 }, { label: "Maximum", value: 7 }, { label: "Ultra", value: 9 }] }
+            }
+            Group {
                 title: "Search"
                 ToggleRow { label: "Search inside files by default"; help: "The toolbar search looks at file contents, not just names."; key: "search_contents" }
                 ToggleRow { label: "Skip what .gitignore lists"; help: "Leaves build output and other ignored files out of search results."; key: "search_respect_ignore" }

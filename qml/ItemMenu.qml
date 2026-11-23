@@ -50,6 +50,22 @@ GMenu {
         tip: "Into a folder named after the archive if it holds more than one item; else right here"; onTriggered: m.pane.extract() }
     GMenuItem { text: "Extract To…"; iconName: "archive-extract|folder-open"; visible: m.isArchive; height: visible ? implicitHeight : 0
         tip: "Pick where to extract it (a folder named after the archive is made there if it holds more than one item)"; onTriggered: m.pane.extractTo() }
+    GMenu {
+        // 7-Zip's context menu, from Grove Archiver.
+        id: arcMenu
+        title: "Archive"
+        enabled: !m.pane.special && (m.target.path || "").indexOf("/") === 0
+        readonly property var ar: m.pane.win.app.archiver
+        readonly property string stem: m.one ? (m.target.name || "") : "Archive"
+        GMenuItem { text: "Open in Grove Archiver"; iconName: "package-x-generic"; enabled: m.isArchive && m.one; tip: "See what's inside with 7-Zip's columns (packed size, CRC, method), add, delete, rename, test"; onTriggered: arcMenu.ar.openWindow(m.target.path) }
+        GMenuItem { text: "Extract Files…"; iconName: "archive-extract"; enabled: m.isArchive; tip: "Where to, folder or not, files already there, password"; onTriggered: { for (const p of m.sel) arcMenu.ar.extractDialog(p, {}) } }
+        GMenuItem { text: "Extract to “" + (m.one ? m.target.name.replace(/(\.tar)?\.[^.]+$/, "") : "…") + "/”"; iconName: "archive-extract|folder"; enabled: m.isArchive; tip: "Into a new folder named after the archive"; onTriggered: { for (const p of m.sel) arcMenu.ar.extractToFolder(p) } }
+        GMenuItem { text: "Test Archive"; iconName: "dialog-ok-apply"; enabled: m.isArchive; tip: "Check every file against its checksum, to find damage"; onTriggered: { for (const p of m.sel) arcMenu.ar.test(p, "") } }
+        GMenuSeparator {}
+        GMenuItem { text: "Add to Archive…"; iconName: "archive-insert"; tip: "Format, compression level, password, split into volumes"; onTriggered: arcMenu.ar.compressDialog(m.sel) }
+        GMenuItem { text: "Add to “" + arcMenu.stem + ".7z”"; iconName: "archive-insert"; tip: "Right away, with the default settings"; onTriggered: arcMenu.ar.quickCompress(m.sel, "7z") }
+        GMenuItem { text: "Add to “" + arcMenu.stem + ".zip”"; iconName: "archive-insert"; tip: "Right away; opens on any computer"; onTriggered: arcMenu.ar.quickCompress(m.sel, "zip") }
+    }
     GMenuItem { text: "Open Disk Image"; iconName: "media-optical"; visible: m.isDiskImage && m.one; height: visible ? implicitHeight : 0; tip: "Attach the image (ISO, IMG) read-only and open it like a disk"; onTriggered: m.pane.win.mountImage(m.target.path) }
     GMenuItem { text: "Compare"; iconName: "kompare|document-compare|view-split-left-right"; visible: m.sel.length === 2; height: visible ? implicitHeight : 0; tip: "Show the differences between the two items"; onTriggered: m.pane.win.compareFiles(m.sel[0], m.sel[1]) }
     GMenuItem { text: "Copy to Other Side"; iconName: "edit-copy"; visible: m.split; height: visible ? implicitHeight : 0; shortcutText: Help.shown("Shift+F5"); onTriggered: m.pane.win.toOtherPane(false) }

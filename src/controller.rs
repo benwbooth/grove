@@ -1206,6 +1206,40 @@ impl ffi::Grove {
         id
     }
 
+    pub fn arc_list(&self, key: &QString, path: &QString, password: &QString) {
+        let (p, pw) = (path.to_string(), password.to_string());
+        self.answer(key, move || crate::archiver::list_json(&p, (!pw.is_empty()).then_some(pw.as_str())));
+    }
+    pub fn arc_start(&self, kind: &QString, args: &QString) -> i32 {
+        crate::archiver::start(self.qt_thread(), &kind.to_string(), &args.to_string())
+    }
+    pub fn arc_progress(&self, id: i32) -> QString {
+        qs(&crate::archiver::progress(id).to_string())
+    }
+    pub fn arc_answer(&self, id: i32, answer: &QString) {
+        crate::archiver::answer(id, &answer.to_string())
+    }
+    pub fn arc_cancel(&self, id: i32) {
+        crate::archiver::cancel(id)
+    }
+    pub fn arc_pause(&self, id: i32, paused: bool) {
+        crate::archiver::pause(id, paused)
+    }
+    pub fn arc_forget(&self, id: i32) {
+        crate::archiver::forget(id)
+    }
+    pub fn arc_unique(&self, key: &QString, path: &QString) {
+        let p = std::path::PathBuf::from(path.to_string());
+        self.answer(key, move || {
+            let out = if p.exists() { grove_core::archiver::unique_archive_name(&p) } else { p };
+            serde_json::json!({"path": out})
+        });
+    }
+    pub fn arc_member(&self, key: &QString, archive: &QString, inner: &QString, password: &QString) {
+        let (a, i, pw) = (archive.to_string(), inner.to_string(), password.to_string());
+        self.answer(key, move || crate::archiver::member_json(&a, &i, (!pw.is_empty()).then_some(pw.as_str())));
+    }
+
     pub fn chooser_done(&self, id: &QString, ok: bool, uris: &QString, choices: &QString) {
         crate::portal::answer(&id.to_string(), ok, &uris.to_string(), &choices.to_string());
     }
