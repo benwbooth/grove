@@ -6,6 +6,7 @@
 //! per file (path, size, time). Never called on the UI thread.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 /// The name to pick syntax colouring by: `name` itself when it already
@@ -25,12 +26,27 @@ pub fn guess_ext(path: &str, text: &str) -> Option<String> {
     // A name that says plain text means plain text: no guessing (a .txt of
     // notes was coloured as INI or Markdown).
     if says_plain(path) {
-        return None;
+        // Unless asked to (a setting): then only Magika, and only when it's
+        // sure (the content rules took notes for INI or Markdown).
+        return if txt_guessing() { magika(path, 0.9) } else { None };
     }
     if let Some(e) = by_rules(text) {
         return Some(e.to_string());
     }
-    magika(path)
+    magika(path, 0.0)
+}
+
+/// The "colour .txt files by their contents" setting (read from the
+/// settings at first use; the controller updates it when it changes).
+fn txt_flag() -> &'static AtomicBool {
+    static F: OnceLock<AtomicBool> = OnceLock::new();
+    F.get_or_init(|| AtomicBool::new(grove_core::settings::load().guess_txt_language))
+}
+pub fn txt_guessing() -> bool {
+    txt_flag().load(Ordering::Relaxed)
+}
+pub fn set_txt_guessing(on: bool) {
+    txt_flag().store(on, Ordering::Relaxed)
 }
 
 /// Names that say "plain text": .txt, .text, .asc, .nfo, .diz.
@@ -86,20 +102,21 @@ fn by_rules(text: &str) -> Option<&'static str> {
     None
 }
 
-fn magika(path: &str) -> Option<String> {
+/// Magika's guess (an extension), if it's at least `min_score` sure.
+fn magika(path: &str, min_score: f32) -> Option<String> {
     let meta = std::fs::metadata(path).ok()?;
     let key = (path.to_string(), meta.len(), std::os::unix::fs::MetadataExt::mtime(&meta));
-    static CACHE: OnceLock<Mutex<HashMap<(String, u64, i64), Option<String>>>> = OnceLock::new();
+    static CACHE: OnceLock<Mutex<HashMap<(String, u64, i64), Option<(String, f32)>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
     if let Some(v) = cache.lock().unwrap().get(&key) {
-        return v.clone();
+        return v.clone().filter(|(_, s)| *s >= min_score).map(|(e, _)| e);
     }
     // Magika's model, in-process on tract (grove_core::magika; no
     // onnxruntime, no magika command).
     let g = grove_core::magika::identify(std::path::Path::new(path))?;
     let label = g.label;
     let ext = if g.is_text && !matches!(label, "txt" | "unknown" | "empty" | "undefined") {
-        g.extensions.first().map(|e| e.to_string()).or_else(|| Some(label.to_string()))
+        g.extensions.first().map(|e| e.to_string()).or_else(|| Some(label.to_string())).map(|e| (e, g.score))
     } else {
         None
     };
@@ -108,7 +125,7 @@ fn magika(path: &str) -> Option<String> {
         c.clear();
     }
     c.insert(key, ext.clone());
-    ext
+    ext.filter(|(_, s)| *s >= min_score).map(|(e, _)| e)
 }
 
 #[cfg(test)]

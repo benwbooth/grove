@@ -844,6 +844,7 @@ impl ffi::Grove {
         v[name.to_string()] = val;
         match serde_json::from_value::<settings::Settings>(v) {
             Ok(s) => {
+                crate::langguess::set_txt_guessing(s.guess_txt_language);
                 self.as_mut().rust_mut().settings = s;
                 self.save_settings();
             }

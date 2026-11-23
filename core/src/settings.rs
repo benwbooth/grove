@@ -75,6 +75,10 @@ pub struct Settings {
     pub show_extensions: bool,
     #[serde(default = "t")]
     pub show_git_status: bool,
+    /// Colour .txt (and .text, .nfo...) files as code when Magika is sure
+    /// what they are (off: they're always plain text).
+    #[serde(default)]
+    pub guess_txt_language: bool,
     /// Search content as well as names in the toolbar search.
     #[serde(default)]
     pub search_contents: bool,
