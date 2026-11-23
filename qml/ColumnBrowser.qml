@@ -266,6 +266,11 @@ Item {
                 target: root.fm
                 function onSortKeyChanged() { if (column.ownLoaded) own.applySort(root.fm.sortKey || "name", root.fm.descending) }
                 function onDescendingChanged() { if (column.ownLoaded) own.applySort(root.fm.sortKey || "name", root.fm.descending) }
+                // Hidden files / folders first switched since this column
+                // loaded: its copy follows (it was shown stale, hiding
+                // items, once you clicked into a folder in it).
+                function onShowHiddenChanged() { if (column.ownLoaded) own.applyShowHidden(root.fm.showHidden) }
+                function onFoldersFirstChanged() { if (column.ownLoaded) own.applyFoldersFirst(root.fm.foldersFirst) }
             }
             // The list changes model when the column stops (or starts) being
             // the last one: the same folder from another copy. A new model
