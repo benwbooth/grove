@@ -177,7 +177,14 @@ fn access_token(settings: &grove_core::settings::Settings, email: &str) -> Resul
     let refresh = crate::secrets::lookup(&keyring_key(email)).ok_or_else(|| format!("Sign in to Google as {email} again."))?;
     let mut r = ureq::post(TOKEN)
         .send_form([("client_id", id.as_str()), ("client_secret", secret.as_str()), ("refresh_token", refresh.as_str()), ("grant_type", "refresh_token")])
-        .map_err(|e| format!("Google refused the saved sign-in ({e}); sign in again."))?;
+        .map_err(|e| match e {
+            // invalid_grant: the sign-in ended (apps in Testing: after 7 days).
+            ureq::Error::StatusCode(400 | 401) => {
+                tokens().lock().unwrap().remove(email);
+                format!("Sign in to Google again ({email}): Google ends the sign-in every 7 days for your own Google Cloud app.")
+            }
+            e => format!("Google didn't answer ({e})."),
+        })?;
     let t: Value = r.body_mut().read_json().map_err(|e| e.to_string())?;
     let a = t["access_token"].as_str().ok_or("Google gave no access token.")?.to_string();
     let e = t["expires_in"].as_u64().unwrap_or(3600);

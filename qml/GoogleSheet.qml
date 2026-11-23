@@ -45,14 +45,17 @@ Sheet {
           address: "console.cloud.google.com/apis/library/drive.googleapis.com", heading: "Google Drive API",
           rows: [{ kind: "text", label: "Google Enterprise API · Create and manage resources in Google Drive." }, { kind: "button", label: "ENABLE", hot: true }] },
         { url: "https://console.cloud.google.com/auth/overview/create",
-          say: "Name the sign-in screen: App name grove and your email, then Next. Audience: External, Next. Your email again, Next. Tick the agreement and click Create.",
+          say: "Set up the sign-in screen. It has four parts, each ending with Next: fill in what's highlighted. The email comes twice (support email, then contact email: yours both times). At the end tick the agreement, then Continue and Create.",
           address: "console.cloud.google.com/auth/overview/create", heading: "Project configuration",
-          rows: [{ kind: "field", label: "App name *", value: "grove", hot: true }, { kind: "field", label: "User support email *", value: "you@gmail.com" },
-                 { kind: "choice", label: "Internal" }, { kind: "choice", label: "External", value: true, hot: true }, { kind: "button", label: "CREATE" }] },
+          rows: [{ kind: "field", label: "1 · App Information: App name *", value: "grove", hot: true }, { kind: "field", label: "1 · User support email *", value: "you@gmail.com", hot: true },
+                 { kind: "choice", label: "2 · Audience: External", value: true, hot: true },
+                 { kind: "field", label: "3 · Contact Information: Email addresses *", value: "you@gmail.com", hot: true },
+                 { kind: "choice", label: "4 · Finish: I agree to the Google API Services: User Data Policy", value: true, hot: true }] },
         { url: "https://console.cloud.google.com/auth/audience",
-          say: "Publish it, so your sign-in lasts (in \"testing\" it ends every 7 days): click Publish app, then Confirm. It's only for you; Google doesn't review it.",
+          say: "Let your Google account use it: under Test users click Add users, type your Gmail address, then Save. (Leave it in Testing: publishing would need a website and privacy policy. In Testing, Google ends the sign-in every 7 days; grove then asks you to sign in again, one click.)",
           address: "console.cloud.google.com/auth/audience", heading: "Audience",
-          rows: [{ kind: "text", label: "Publishing status: Testing" }, { kind: "button", label: "PUBLISH APP", hot: true }, { kind: "text", label: "User type: External" }] },
+          rows: [{ kind: "text", label: "Publishing status: Testing" }, { kind: "text", label: "Test users" }, { kind: "button", label: "+ ADD USERS", hot: true },
+                 { kind: "field", label: "Add users", value: "you@gmail.com", hot: true }, { kind: "button", label: "SAVE" }] },
         { url: "https://console.cloud.google.com/auth/clients/create",
           say: "Make grove's client: Application type Desktop app, name grove, then Create. A box shows its Client ID and Client secret: keep it open for the next step.",
           address: "console.cloud.google.com/auth/clients/create", heading: "Create OAuth client ID",
@@ -113,7 +116,7 @@ Sheet {
             GLabel {
                 visible: gs.configured && !gs.busy
                 width: parent.width; wrapMode: Text.Wrap; color: Theme.fgTertiary; font.pixelSize: Theme.small
-                text: "Google will say \"Google hasn't verified this app\": it's your own app. Click Advanced, then \"Go to grove (unsafe)\", then Continue."
+                text: "Google will say \"Google hasn't verified this app\": it's your own app. Click Continue (or Advanced, then \"Go to grove (unsafe)\"), then Continue again. If it says access is blocked, add your account as a test user (setup step 4)."
             }
         }
 
