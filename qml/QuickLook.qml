@@ -83,6 +83,10 @@ Window {
         if (s.pos && pv.kind === "media") pendingPos = s.pos
         pendingView = null
     }
+    Connections {
+        target: ql.app
+        function onGoogleSignInsChanged() { if (ql.item && ql.pv && ql.pv.gdocError) ql.showItem(ql.item) }
+    }
     function showItem(it) {
         if (editing !== "") stopEditing()
         item = it

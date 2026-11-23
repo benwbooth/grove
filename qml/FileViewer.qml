@@ -75,6 +75,11 @@ Item {
     // A Google Docs/Sheets/Slides link file: its link, and why its
     // content can't be shown (no Google Drive connected...).
     property var gdoc: null
+    // Signed in to Google meanwhile: try this document again.
+    Connections {
+        target: fv.app
+        function onGoogleSignInsChanged() { if (fv.gdoc && fv.gdocError !== "") { fv.loadedKey = ""; fv.load() } }
+    }
     property string gdocError: ""
     property bool gdocLoading: false
     function show(local, want) {

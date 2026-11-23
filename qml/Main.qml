@@ -16,6 +16,9 @@ Item {
     property bool portalMode: grove.env("GROVE_PORTAL") === "1"
     property string screenshot: grove.env("GROVE_SCREENSHOT")
     property int trashCount: 0
+    // Goes up on each Google sign-in: previews of Google documents that
+    // couldn't be fetched try again.
+    property int googleSignIns: 0
     property var closedTabs: []
     // The tab being dragged ({win, index}) while a tab drag is under way.
     property var dragTab: null

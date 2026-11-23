@@ -76,6 +76,7 @@ Sheet {
         Async.call(app.grove, k => app.grove.googleSignIn(k), r => {
             gs.busy = false
             if (r.error) { gs.error = r.error; return }
+            gs.app.googleSignIns++
             gs.done = "Signed in as " + r.email + ". Google documents now show in previews."
             gs.refresh()
             gs.win.toast("info", "Signed in to Google as " + r.email)
