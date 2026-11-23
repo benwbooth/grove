@@ -1366,6 +1366,8 @@ ApplicationWindow {
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "previewdrag") p.previewDrag(Number(arg))
         else if (cmd === "extract") p.extract()
+        else if (cmd === "colscroll") { const v = p.viewLoaderItem(); if (v && v.testScroll) v.testScroll(Number(arg)) }
+        else if (cmd === "dumpcols") { const v = p.viewLoaderItem(); if (v && v.testDump) v.testDump() }
         else if (cmd === "placeinfo") { bw.placeInfo(arg === "bottom"); console.warn("grove test placeinfo", arg, JSON.stringify({ b: app.settings.info_bottom, p: app.settings.info_panel, lp: app.settings.list_preview, view: bottomPreviewView })) }
         else if (cmd === "expandrow") p.model.toggleExpanded(Number(arg))
         else if (cmd === "selectrow") p.model.select(Number(arg), "set")

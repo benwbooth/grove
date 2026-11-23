@@ -144,6 +144,14 @@ Item {
         Qt.callLater(() => strip.glideToEnd())
     }
 
+    // Tests (GROVE_TEST dumpcols): each column's folder, scroll and model.
+    function testScroll(y) { const c = strip.itemAtIndex(chain.length - 1); if (c && c.list) c.list.contentY = y }
+    function testDump() {
+        for (let i = 0; i < cols.count; i++) {
+            const c = strip.itemAtIndex(i)
+            if (c && c.list) console.warn("grove test col", i, c.folder, "y", Math.round(c.list.contentY), "count", c.list.count, "fm", c.colModel === fm)
+        }
+    }
     function positionAt(row) {
         const col = strip.itemAtIndex(chain.length - 1)
         if (col && col.list) col.list.positionViewAtIndex(row, ListView.Contain)
@@ -246,7 +254,23 @@ Item {
                 own.applySort("name", false)
                 own.loadPath(folder)
             }
-            Component.onCompleted: loadOwn()
+            Component.onCompleted: { loadOwn(); swapModel() }
+            // The list changes model when the column stops (or starts) being
+            // the last one: the same folder from another copy. A new model
+            // scrolls a ListView back to the top (clicking an archive jumped
+            // its column up), so keep where it was.
+            onColModelChanged: swapModel()
+            function swapModel() {
+                const m = isPreview ? null : colModel
+                if (lv.model === m) return
+                const had = !!lv.model
+                const y = lv.contentY
+                lv.model = m
+                if (!had) return
+                const back = () => { lv.contentY = Math.max(lv.originY, Math.min(y, lv.originY + lv.contentHeight - lv.height)) }
+                back()
+                Qt.callLater(back)
+            }
             onSelectedChildChanged: if (!isPreview && selectedChild) own.selectPaths(JSON.stringify([root.rowPathOf(selectedChild)]))
 
             MouseArea {
@@ -265,7 +289,7 @@ Item {
                 visible: !column.isPreview
                 anchors.fill: parent
                 anchors.rightMargin: 1
-                model: column.isPreview ? null : column.colModel
+                // (Set by column.swapModel, keeping the scroll position.)
                 clip: true
                 reuseItems: true
                 boundsBehavior: Flickable.StopAtBounds
