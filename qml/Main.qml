@@ -219,8 +219,11 @@ Item {
             try { sess = JSON.parse(grove.session() || "null") } catch (e) {}
             if (settings.restore_session !== false && sess && sess.windows && sess.windows.length && sessionOn)
                 for (const w of sess.windows) {
-                    const st = (w.states || []).filter(t => t && t.path && t.path.indexOf("/") === 0)
-                    const win = st.length ? openWindowWithStates(st) : openWindow(w.tabs.filter(t => t.indexOf("/") === 0), [])
+                    // Every place but a search: folders, inside archives, the
+                    // Trash, Recents, Computer, servers.
+                    const ok = p => !!p && p.indexOf("search:") !== 0
+                    const st = (w.states || []).filter(t => t && ok(t.path))
+                    const win = st.length ? openWindowWithStates(st) : openWindow((w.tabs || []).filter(ok), [])
                     if (win && win.restoreWindow) win.restoreWindow(w)
                 }
             if (settings.restore_session !== false && sess && sess.players && sessionOn)

@@ -1462,6 +1462,7 @@ ApplicationWindow {
         else if (cmd === "viewscroll") { const v = p.viewLoaderItem(); if (v && v.restoreScroll) v.restoreScroll({ y: Number(arg), x: Number(arg) }) }
         else if (cmd === "previewscroll") { const pv = p.previewViewer(); if (pv && pv.item) pv.restoreView({ path: pv.item.path, doc: { y: Number(arg) }, pdf: { y: Number(arg) } }) }
         else if (cmd === "savesession") app.saveSession()
+        else if (cmd === "previewzoom") { const pv = p.previewViewer(); if (pv) pv.testZoom(Number(arg)) }
         else if (cmd === "infodump") Async.call(app.grove, k => app.grove.info(k, arg), r => console.warn("grove test info", JSON.stringify(r)))
         else if (cmd === "sort") { const [k, d] = arg.split(","); p.model.applySort(k, d === "desc"); p.rememberView() }
         else if (cmd === "dumpstate") console.warn("grove test state", JSON.stringify(bw.windowState()))

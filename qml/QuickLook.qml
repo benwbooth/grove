@@ -288,16 +288,24 @@ Window {
                 visible: ql.editing === "markup"
                 src: ql.editing === "markup" && ql.item ? "file://" + encodeURI(ql.item.path).replace(/#/g, "%23") : ""
             }
-            Image {
+            // Pinch / Ctrl+wheel / double-click to zoom; pan once zoomed.
+            ZoomView {
+                id: qlZoom
                 anchors.fill: parent
-                cache: false
                 visible: ql.pv.kind === "image" && ql.editing !== "markup"
-                source: ql.pv.kind === "image" ? "file://" + encodeURI(ql.pv.src).replace(/#/g, "%23") : ""
-                fillMode: Image.PreserveAspectFit
-                asynchronous: true
-                autoTransform: true
-                smooth: true
-                mipmap: true
+                key: ql.pv.kind === "image" ? (ql.pv.src || "") : ""
+                actualZoom: qlPic.paintedWidth > 0 && ql.pv.width > 0 ? ql.pv.width / qlPic.paintedWidth : 2
+                Image {
+                    id: qlPic
+                    anchors.fill: parent
+                    cache: false
+                    source: ql.pv.kind === "image" ? "file://" + encodeURI(ql.pv.src).replace(/#/g, "%23") : ""
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    autoTransform: true
+                    smooth: true
+                    mipmap: true
+                }
             }
 
             Item {

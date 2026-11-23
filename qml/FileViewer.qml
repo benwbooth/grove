@@ -113,12 +113,23 @@ Item {
         GLabel { text: "Getting every page ready…"; color: Theme.fgSecondary; font.pixelSize: Theme.small }
     }
 
-    SwapImage {
-        id: pic
+    // Tests: zoom the picture by `z` around its middle.
+    function testZoom(z) { picZoom.zoomAt(picZoom.width / 2, picZoom.height / 2, z) }
+    // Pictures zoom (pinch, Ctrl+wheel, double-click) and pan once zoomed;
+    // decoded bigger as the zoom grows, so they stay sharp.
+    ZoomView {
+        id: picZoom
         anchors.fill: parent
         visible: fv.pv.kind === "image"
-        source: visible ? "file://" + encodeURI(fv.pv.src || fv.path).replace(/#/g, "%23") : ""
-        sourceSize: Qt.size(Math.ceil(Math.min(width, 2048) * Screen.devicePixelRatio), 0)
+        key: visible ? fv.path : ""
+        actualZoom: pic.paintedWidth > 0 && fv.pv.width > 0 ? fv.pv.width / pic.paintedWidth : 2
+        SwapImage {
+            id: pic
+            anchors.fill: parent
+            source: picZoom.visible ? "file://" + encodeURI(fv.pv.src || fv.path).replace(/#/g, "%23") : ""
+            readonly property real wantZoom: picZoom.zoom > 1.5 ? Math.min(4, Math.pow(2, Math.ceil(Math.log(picZoom.zoom) / Math.LN2))) : 1
+            sourceSize: Qt.size(Math.ceil(Math.min(width * wantZoom, 8192) * Screen.devicePixelRatio), 0)
+        }
     }
     PreviewSpinner { image: pic; size: 18; anchors.centerIn: parent }
 

@@ -16,6 +16,8 @@ Item {
     readonly property int status: front === 0 ? a.status : b.status
     readonly property bool pending: (front === 0 ? a.source : b.source) != source || status === Image.Loading
     property int front: 0
+    // The picture's size on screen (fit), for zoom.
+    readonly property real paintedWidth: front === 0 ? a.paintedWidth : b.paintedWidth
 
     onSourceChanged: {
         const back = front === 0 ? b : a

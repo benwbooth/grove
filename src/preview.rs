@@ -236,7 +236,9 @@ pub fn preview(path: &str, dark: bool) -> Value {
     match previews::kind_of(&parents, &name) {
         Kind::Picture => {
             if crate::bridge::ffi::grove_can_read_image(&crate::bridge::ffi::QString::from(path)) {
-                return with(json!({"kind": "image", "src": path}));
+                // Its pixel size (the header only), for "actual size" zoom.
+                let (w, h) = imagesize::size(path).map(|s| (s.width, s.height)).unwrap_or((0, 0));
+                return with(json!({"kind": "image", "src": path, "width": w, "height": h}));
             }
             // HEIC/AVIF/RAW/PSD...: a big thumbnail (system thumbnailers,
             // vips or ImageMagick), made by the thumbnail provider.
