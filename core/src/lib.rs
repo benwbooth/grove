@@ -4,6 +4,7 @@ pub mod apps;
 pub mod checksum;
 pub mod du;
 pub mod versions;
+pub mod libarchive;
 pub mod listing;
 pub mod mounts;
 pub mod previews;

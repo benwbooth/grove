@@ -1,4 +1,4 @@
-//! Archives through libarchive's bsdtar (zip, tar.*, 7z, rar, iso...), and
+//! Archives through libarchive, linked (zip, tar.*, 7z, rar, iso...), and
 //! 7-Zip for what libarchive can't read (disk images: .dmg, .vhd, .wim;
 //! Windows installers: .msi): list them (browse as folders, Quick Look),
 //! extract, compress.
@@ -19,7 +19,7 @@ pub struct ArchEntry {
 }
 
 /// A lone compressed file (not a tar): "notes.txt.gz" -> "notes.txt". It
-/// browses as a folder holding that one file, decompressed with bsdcat
+/// browses as a folder holding that one file, decompressed by libarchive
 /// (libarchive: gzip, xz, bzip2, zstd, lzip, lz4, lzma, compress).
 pub fn single_compressed(name: &str) -> Option<String> {
     let n = name.to_lowercase();
@@ -36,20 +36,9 @@ fn single_of(path: &str) -> Option<String> {
     Path::new(path).file_name().and_then(|n| single_compressed(&n.to_string_lossy()))
 }
 
-/// Decompress a lone compressed file to `out` with bsdcat.
-fn bsdcat_to(archive: &str, out: &Path) -> Result<(), String> {
-    let file = std::fs::File::create(out).map_err(|e| e.to_string())?;
-    let o = std::process::Command::new("bsdcat")
-        .arg(archive)
-        .stdout(file)
-        .stderr(std::process::Stdio::piped())
-        .output()
-        .map_err(|_| "Decompressing needs bsdcat (libarchive), which isn't installed.".to_string())?;
-    if !o.status.success() {
-        let _ = std::fs::remove_file(out);
-        return Err(format!("Couldn't decompress: {}", String::from_utf8_lossy(&o.stderr).trim()));
-    }
-    Ok(())
+/// Decompress a lone compressed file to `out` (libarchive).
+fn decompress_to(archive: &str, out: &Path) -> Result<(), String> {
+    grove_core::libarchive::decompress(Path::new(archive), out, &std::sync::atomic::AtomicBool::new(false)).map_err(|e| format!("Couldn't decompress: {e}"))
 }
 
 /// Formats only 7-Zip reads (libarchive doesn't): Apple disk images,
@@ -128,7 +117,7 @@ fn extract_7z(archive: &str, dir: &Path, members: &[&str]) -> Result<(), String>
     Ok(())
 }
 
-/// Every container bsdtar (libarchive) can list and extract: zip and its
+/// Every container libarchive can list and extract: zip and its
 /// relatives, tar with any compression, 7z, rar, cab, iso/udf, cpio, ar/deb,
 /// rpm, xar/pkg, lha, warc, comic book archives. Documents that happen to be
 /// zips (EPUB, ODF, OOXML) aren't on the list: they open in their apps.
@@ -154,47 +143,6 @@ pub fn is_archive(mime: &str, name: &str) -> bool {
         ".ar", ".a", ".cab", ".xar", ".pkg", ".lha", ".lzh", ".cbz", ".cbr", ".cb7", ".cbt", ".warc",
     ];
     MIMES.contains(&mime) || EXTS.iter().any(|e| n.ends_with(e)) || SEVENZ_EXTS.iter().any(|e| n.ends_with(e)) || single_compressed(name).is_some()
-}
-
-/// Parse `bsdtar -tvf` (ls -l style) lines.
-pub fn parse_listing(text: &str) -> Vec<ArchEntry> {
-    let mut v = Vec::new();
-    for line in text.lines() {
-        let f: Vec<&str> = line.split_whitespace().collect();
-        if f.len() < 9 {
-            continue;
-        }
-        // perms links owner group size month day time/year name...
-        let Some(name_start) = nth_field_start(line, 8) else { continue };
-        let mut name = line[name_start..].to_string();
-        if let Some(i) = name.find(" -> ") {
-            name.truncate(i);
-        }
-        if let Some(i) = name.find(" link to ") {
-            name.truncate(i);
-        }
-        let is_dir = f[0].starts_with('d') || name.ends_with('/');
-        v.push(ArchEntry { path: name.trim_end_matches('/').trim_start_matches("./").to_string(), size: f[4].parse().unwrap_or(0), is_dir, mtime_text: format!("{} {} {}", f[5], f[6], f[7]) });
-    }
-    v.retain(|e| !e.path.is_empty() && e.path != ".");
-    v
-}
-
-fn nth_field_start(line: &str, n: usize) -> Option<usize> {
-    let mut count = 0;
-    let mut in_field = false;
-    for (i, c) in line.char_indices() {
-        if c.is_whitespace() {
-            in_field = false;
-        } else if !in_field {
-            if count == n {
-                return Some(i);
-            }
-            count += 1;
-            in_field = true;
-        }
-    }
-    None
 }
 
 /// Listing, remembered while the archive file is unchanged (browsing a big
@@ -257,19 +205,18 @@ fn list_uncached(path: &str) -> Result<Vec<ArchEntry>, String> {
     if needs_7z(path) {
         return list_7z(path);
     }
-    let o = std::process::Command::new("bsdtar").args(["-tvf", path]).output().map_err(|_| "Archives need bsdtar (libarchive), which isn't installed.".to_string())?;
-    if !o.status.success() {
-        // libarchive can't read it: 7-Zip reads more (when it's there).
-        if sevenzip().is_some() {
-            if let Ok(v) = list_7z(path) {
-                if !v.is_empty() {
-                    return Ok(v);
-                }
-            }
-        }
-        return Err(format!("This archive can't be read: {}", String::from_utf8_lossy(&o.stderr).trim()));
+    let never = std::sync::atomic::AtomicBool::new(false);
+    let v = grove_core::libarchive::list(Path::new(path), &never)?;
+    Ok(v.into_iter().map(|m| ArchEntry { path: m.path, size: m.size, is_dir: m.is_dir, mtime_text: when(m.mtime) }).collect())
+}
+
+/// A member's time as shown in lists ("2026-10-15 19:43").
+fn when(secs: i64) -> String {
+    if secs <= 0 {
+        return String::new();
     }
-    Ok(parse_listing(&String::from_utf8_lossy(&o.stdout)))
+    let t = grove_core::util::local_timestamp(secs).replace('T', " ");
+    t[..t.len().min(16)].to_string()
 }
 
 /// The decompressed size of a lone compressed file. gzip records it (mod
@@ -296,15 +243,7 @@ pub fn single_uncompressed(path: &str) -> Option<u64> {
     if len > 512 << 20 {
         return None;
     }
-    let mut child = std::process::Command::new("bsdcat")
-        .arg(path)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .ok()?;
-    let n = std::io::copy(&mut child.stdout.take()?, &mut std::io::sink()).ok();
-    let ok = child.wait().map(|s| s.success()).unwrap_or(false);
-    if ok { n } else { None }
+    grove_core::libarchive::decompressed_size(Path::new(path), &std::sync::atomic::AtomicBool::new(false))
 }
 
 /// Compressed (on disk) and uncompressed sizes of an archive or lone
@@ -381,7 +320,7 @@ pub fn extract_job(qt: CxxQtThread<ffi::Grove>, id: i32, archive: String, dest: 
             if out.exists() {
                 out = grove_core::ops::unique_name(&out);
             }
-            match bsdcat_to(&archive, &out) {
+            match decompress_to(&archive, &out) {
                 Ok(()) => {
                     crate::controller::push_history_any("Extract", grove_core::ops::Action::Exists { paths: vec![out.clone()] });
                     job_msg(&qt, id, json!({"id": id, "title": title, "state": "done", "results": [out], "dest": dest_dir}));
@@ -425,14 +364,12 @@ pub fn extract_job(qt: CxxQtThread<ffi::Grove>, id: i32, archive: String, dest: 
             let _ = qt.queue(move |g| g.folders_touched(QString::from(s.as_str())));
             return;
         }
-        let o = std::process::Command::new("bsdtar").arg("-xf").arg(&archive).arg("-C").arg(&target).output();
-        match o {
-            Ok(o) if o.status.success() => {
+        match grove_core::libarchive::extract(Path::new(&archive), &target, &[], &std::sync::atomic::AtomicBool::new(false)) {
+            Ok(()) => {
                 crate::controller::push_history_any("Extract", grove_core::ops::Action::Exists { paths: vec![created.clone()] });
                 job_msg(&qt, id, json!({"id": id, "title": title, "state": "done", "results": [created], "dest": dest_dir}));
             }
-            Ok(o) => job_msg(&qt, id, json!({"id": id, "title": title, "state": "failed", "errors": [format!("Couldn't extract: {}", String::from_utf8_lossy(&o.stderr).trim())]})),
-            Err(_) => job_msg(&qt, id, json!({"id": id, "title": title, "state": "failed", "errors": ["Archives need bsdtar (libarchive), which isn't installed."]})),
+            Err(e) => job_msg(&qt, id, json!({"id": id, "title": title, "state": "failed", "errors": [e]})),
         }
         let s = serde_json::to_string(&vec![dest_dir.to_string_lossy()]).unwrap();
         let _ = qt.queue(move |g| g.folders_touched(QString::from(s.as_str())));
@@ -453,23 +390,13 @@ pub fn compress_job(qt: CxxQtThread<ffi::Grove>, id: i32, paths: Vec<PathBuf>, f
         }
         let title = format!("Compressing into “{}”", out.file_name().unwrap().to_string_lossy());
         job_msg(&qt, id, json!({"id": id, "title": title, "state": "running", "indeterminate": true}));
-        let mut cmd = std::process::Command::new("bsdtar");
-        cmd.arg("-a").arg("-cf").arg(&out).arg("-C").arg(&dir);
-        for p in &paths {
-            if let Some(n) = p.file_name() {
-                cmd.arg(n);
-            }
-        }
-        match cmd.output() {
-            Ok(o) if o.status.success() => {
+        let fmt = if format == "tar.zst" { grove_core::libarchive::Format::TarZst } else { grove_core::libarchive::Format::Zip };
+        match grove_core::libarchive::create(&out, &paths, fmt, &std::sync::atomic::AtomicBool::new(false)) {
+            Ok(()) => {
                 crate::controller::push_history_any("Compress", grove_core::ops::Action::Exists { paths: vec![out.clone()] });
                 job_msg(&qt, id, json!({"id": id, "title": title, "state": "done", "results": [out], "dest": dir}));
             }
-            Ok(o) => {
-                let _ = std::fs::remove_file(&out);
-                job_msg(&qt, id, json!({"id": id, "title": title, "state": "failed", "errors": [format!("Couldn't compress: {}", String::from_utf8_lossy(&o.stderr).trim())]}))
-            }
-            Err(_) => job_msg(&qt, id, json!({"id": id, "title": title, "state": "failed", "errors": ["Compressing needs bsdtar (libarchive), which isn't installed."]})),
+            Err(e) => job_msg(&qt, id, json!({"id": id, "title": title, "state": "failed", "errors": [format!("Couldn't compress: {e}")]})),
         }
         let s = serde_json::to_string(&vec![dir.to_string_lossy()]).unwrap();
         let _ = qt.queue(move |g| g.folders_touched(QString::from(s.as_str())));
@@ -524,17 +451,15 @@ pub fn extract_member(archive: &str, inner: &str) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if single_of(archive).is_some() {
         let out = dir.join(inner);
-        bsdcat_to(archive, &out)?;
+        decompress_to(archive, &out)?;
         return Ok(out);
     }
     if needs_7z(archive) {
         extract_7z(archive, &dir, &[inner]).map_err(|e| format!("Couldn't take “{inner}” out of the archive: {e}"))?;
         return Ok(dir.join(inner));
     }
-    let o = std::process::Command::new("bsdtar").arg("-xf").arg(archive).arg("-C").arg(&dir).arg(inner).output().map_err(|e| e.to_string())?;
-    if !o.status.success() {
-        return Err(format!("Couldn't take “{inner}” out of the archive: {}", String::from_utf8_lossy(&o.stderr).trim()));
-    }
+    grove_core::libarchive::extract(Path::new(archive), &dir, &[inner], &std::sync::atomic::AtomicBool::new(false))
+        .map_err(|e| format!("Couldn't take “{inner}” out of the archive: {e}"))?;
     Ok(dir.join(inner))
 }
 
@@ -553,19 +478,14 @@ mod tests {
         assert_eq!(children(&e, "").len(), 2);
     }
     #[test]
-    fn parses_bsdtar() {
-        let t = "drwxr-xr-x  0 ben    users       0 Jan  5 12:00 dir/\n-rw-r--r--  0 ben    users    1234 Jan  5  2020 dir/a file.txt\n-rw-r--r--  0 0      0          5 Mar  1 09:00 top.md\n";
-        let e = parse_listing(t);
-        assert_eq!(e.len(), 3);
-        assert_eq!(e[1].path, "dir/a file.txt");
-        assert_eq!(e[1].size, 1234);
-        assert!(e[0].is_dir);
+    fn children_of() {
+        let ent = |p: &str, d: bool| ArchEntry { path: p.into(), size: 1, is_dir: d, mtime_text: String::new() };
+        let e = vec![ent("dir", true), ent("dir/a file.txt", false), ent("top.md", false)];
         let top = children(&e, "");
         assert_eq!(top.iter().map(|x| x.path.as_str()).collect::<Vec<_>>(), vec!["dir", "top.md"]);
-        let inner = children(&e, "dir");
-        assert_eq!(inner.len(), 1);
+        assert_eq!(children(&e, "dir").len(), 1);
         // Folders implied only by paths.
-        let implied = parse_listing("-rw-r--r--  0 a b 1 Jan 1 2020 x/y/z.txt\n");
+        let implied = vec![ent("x/y/z.txt", false)];
         assert_eq!(children(&implied, "")[0].path, "x");
         assert!(children(&implied, "x")[0].is_dir);
     }

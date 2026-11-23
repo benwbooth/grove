@@ -2,7 +2,7 @@
 //! tools: PDF pages (pdftoppm), pictures (vipsthumbnail, ImageMagick),
 //! video frames and audio cover art / waveforms (ffmpeg), covers inside
 //! EPUBs and comic archives, office documents' embedded thumbnails and
-//! text (bsdtar), and office documents as PDF (LibreOffice, when it's
+//! text (libarchive), and office documents as PDF (LibreOffice, when it's
 //! installed). Every call blocks: run them on a worker. Each one gives up
 //! when `cancel` is set (the item scrolled away) or after a timeout.
 
@@ -281,43 +281,21 @@ pub fn player_waveform(path: &Path, w: u32, h: u32, base: &str, played: &str, ca
 
 // ---------- archives: EPUB, comics, office documents ----------
 
-/// The names inside an archive (bsdtar -t).
+/// The names inside an archive (files only; libarchive, linked).
 pub fn archive_names(path: &Path, cancel: &AtomicBool) -> Vec<String> {
-    if which("bsdtar").is_none() {
-        return vec![];
-    }
-    let out = temp_file("txt");
-    let argv = vec!["bsdtar".into(), "-tf".into(), s(path)];
-    let ok = run(&argv, Some(&out), cancel, Duration::from_secs(30));
-    let text = std::fs::read_to_string(&out).unwrap_or_default();
-    let _ = std::fs::remove_file(&out);
-    if !ok && text.is_empty() {
-        return vec![];
-    }
-    text.lines().map(|l| l.trim_start_matches("./").to_string()).filter(|l| !l.is_empty() && !l.ends_with('/')).collect()
+    crate::libarchive::names(path, cancel)
 }
 
 /// One member of an archive, written to a temporary file (with `ext`).
 pub fn archive_member(path: &Path, name: &str, ext: &str, cancel: &AtomicBool) -> Option<PathBuf> {
-    which("bsdtar")?;
+    let bytes = crate::libarchive::read_member(path, name, 512 << 20, cancel)?;
     let out = temp_file(ext);
-    // bsdtar's member arguments are patterns: escape the pattern characters.
-    let mut pat = String::new();
-    for c in name.chars() {
-        if matches!(c, '*' | '?' | '[' | ']' | '\\') {
-            pat.push('\\');
-        }
-        pat.push(c);
-    }
-    let argv = vec!["bsdtar".into(), "-xOf".into(), s(path), pat];
-    made(run(&argv, Some(&out), cancel, Duration::from_secs(30)), out)
+    std::fs::write(&out, bytes).ok()?;
+    Some(out)
 }
 
 fn archive_text(path: &Path, name: &str, cancel: &AtomicBool) -> Option<String> {
-    let f = archive_member(path, name, "xml", cancel)?;
-    let t = std::fs::read(&f).ok().map(|b| String::from_utf8_lossy(&b).into_owned());
-    let _ = std::fs::remove_file(&f);
-    t
+    crate::libarchive::read_member(path, name, 64 << 20, cancel).map(|b| String::from_utf8_lossy(&b).into_owned())
 }
 
 pub fn is_picture_name(n: &str) -> bool {

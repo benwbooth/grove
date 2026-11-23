@@ -14,8 +14,11 @@
       qtEnvFor = pkgs: pkgs.qt6.env "qt-grove-${pkgs.qt6.qtbase.version}" ((builtins.tail (qtFor pkgs)) ++ [ pkgs.libGL ]);
       # Small standard tools grove runs (thumbnails, archives, remote
       # places, devices, git status). All optional at run time.
+      # Libraries grove links instead of running their command-line tools
+      # (docs/NO_EXTERNAL_TOOLS.md).
+      linkedFor = pkgs: with pkgs; [ libarchive ];
       runtimeFor = pkgs: with pkgs; [
-        ffmpegthumbnailer libheif libarchive git sshfs rclone simple-mtpfs
+        ffmpegthumbnailer libheif git sshfs rclone simple-mtpfs
         poppler-utils vips imagemagick djvulibre mupdf ghostscript magika-cli pandoc _7zz
         udisks fuse3 avahi cifs-utils smbnetfs ffmpeg-headless xorriso dvdplusrwtools
       ];
@@ -69,7 +72,8 @@
             version = (pkgs.lib.importTOML ./Cargo.toml).package.version;
             inherit src cargoDeps;
             nativeBuildInputs = [ pkgs.pkg-config pkgs.qt6.wrapQtAppsHook pkgs.qt6.qtbase pkgs.rsync pkgs.makeWrapper ];
-            buildInputs = qtFor pkgs ++ [ qtEnv pkgs.libGL ];
+            # Linked libraries (grove runs no external tools for these).
+            buildInputs = qtFor pkgs ++ [ qtEnv pkgs.libGL ] ++ linkedFor pkgs;
             # cxx-qt wants every Qt module under one prefix.
             env.QMAKE = "${qtEnv}/bin/qmake";
             preBuild = ''
@@ -122,6 +126,7 @@
         {
           default = pkgs.mkShell {
             packages = [ pkgs.cargo pkgs.rustc pkgs.clippy pkgs.rustfmt pkgs.pkg-config qtEnv pkgs.libGL pkgs.git pkgs.imagemagick pkgs.xvfb-run ] ++ runtimeFor pkgs;
+            buildInputs = linkedFor pkgs;
             QMAKE = "${qtEnv}/bin/qmake";
             # Link with this shell's compiler (a system clang links against the
             # system glibc and the binary can't load this nixpkgs' Qt).

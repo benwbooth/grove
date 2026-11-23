@@ -4,7 +4,7 @@
 //!   DjVu                          -> ddjvu (djvulibre)
 //!   EPUB, MOBI, FB2, XPS, CBZ     -> mutool convert (MuPDF; books reflowed)
 //!   PostScript, EPS               -> ps2pdf (Ghostscript)
-//!   CBR, CB7, CBT (comics)        -> repacked as CBZ (bsdtar), then mutool
+//!   CBR, CB7, CBT (comics)        -> repacked as CBZ (libarchive), then mutool
 //! Office documents go through LibreOffice (previews::office_pdf).
 
 use std::path::{Path, PathBuf};
@@ -69,16 +69,20 @@ pub fn to_pdf(path: &str) -> Result<PathBuf, String> {
         Conv::Mupdf => run("mutool", &[std::ffi::OsStr::new("convert"), std::ffi::OsStr::new("-o"), &os(&part), &os(p)]),
         Conv::Ps => run("ps2pdf", &[&os(p), &os(&part)]),
         Conv::ComicRepack => {
+            // CBR/CB7/CBT: the pages into a zip (libarchive), which MuPDF reads.
             let cbz = out.with_extension("cbz");
-            let r = Command::new("bsdtar")
-                .args(["--format", "zip", "-s", ",^\\./,,", "-cf"])
-                .arg(&cbz)
-                .arg(format!("@{}", p.display()))
-                .output()
-                .map_err(|_| "Viewing comics needs bsdtar (libarchive).".to_string())
-                .and_then(|o| if o.status.success() { Ok(()) } else { Err(format!("Couldn't read the comic: {}", String::from_utf8_lossy(&o.stderr).trim())) })
+            let tmp = out.with_extension("pages");
+            let never = std::sync::atomic::AtomicBool::new(false);
+            let r = grove_core::libarchive::extract(p, &tmp, &[], &never)
+                .and_then(|_| {
+                    let mut pages: Vec<PathBuf> = std::fs::read_dir(&tmp).map_err(|e| e.to_string())?.flatten().map(|e| e.path()).collect();
+                    pages.sort();
+                    grove_core::libarchive::create(&cbz, &pages, grove_core::libarchive::Format::Zip, &never)
+                })
+                .map_err(|e| format!("Couldn't read the comic: {e}"))
                 .and_then(|_| run("mutool", &[std::ffi::OsStr::new("convert"), std::ffi::OsStr::new("-o"), &os(&part), &os(&cbz)]));
             let _ = std::fs::remove_file(&cbz);
+            let _ = std::fs::remove_dir_all(&tmp);
             r
         }
     };

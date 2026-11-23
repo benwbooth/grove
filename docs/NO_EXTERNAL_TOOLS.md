@@ -7,8 +7,8 @@ separate privileged/FUSE service is needed (drives).
 
 | Area | Was | Becomes | Status |
 |---|---|---|---|
-| Archives: list, extract, members | bsdtar, bsdcat | libarchive linked (compress-tools) | todo |
-| Compress (zip, tar.zst) | bsdtar | zip, tar, zstd crates | todo |
+| Archives: list, extract, members | bsdtar, bsdcat | libarchive linked (core/src/libarchive.rs) | done |
+| Compress (zip, tar.zst) | bsdtar | libarchive linked | done |
 | .msi / .cab | 7zz | msi + cab crates | todo |
 | .dmg (HFS+, APFS) | 7zz | dmgwiz + hfsplus + apfs crates | todo |
 | Office text, docx/odt pages | pandoc | own OOXML/ODF reader (quick-xml + zip) to HTML | todo |
