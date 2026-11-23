@@ -173,10 +173,64 @@ ApplicationWindow {
         })
     }
     function askConflict(id, info) { conflict.ask(id, info) }
+    // Get Info and Disk Usage windows open now (for the session).
+    property var infoWins: []
+    property var duWins: []
     function showInfo(paths) {
         for (const p of paths.slice(0, 10)) {
             const w = infoComp.createObject(null, { app: app, path: p })
+            infoWins = infoWins.concat([w])
             w.show()
+        }
+    }
+    // Everything about this window for the session: its tabs (folders,
+    // scroll, open folders, viewed files), size, the tab in front, the side
+    // panel's file, Quick Look, and its Get Info and Disk Usage windows.
+    function windowState() {
+        infoWins = infoWins.filter(w => w && w.visible)
+        duWins = duWins.filter(w => w && w.visible)
+        const side = infoPanel.visible && infoPanel.viewerItem ? infoPanel.viewerItem.viewState() : null
+        return {
+            states: tabStates(),
+            tab: tabBar.currentIndex,
+            w: Math.round(bw.width), h: Math.round(bw.height),
+            max: bw.visibility === Window.Maximized, full: bw.visibility === Window.FullScreen,
+            side: side,
+            ql: ql.viewState(),
+            info: infoWins.map(w => w.path),
+            du: duWins.map(w => w.path)
+        }
+    }
+    // Back as it was: called once the tabs are made.
+    function restoreWindow(s) {
+        if (s.w > 200 && s.h > 150) { bw.width = s.w; bw.height = s.h }
+        if (s.max) bw.showMaximized()
+        else if (s.full) bw.showFullScreen()
+        if (s.tab >= 0 && s.tab < tabs.count) tabBar.currentIndex = s.tab
+        if (s.info && s.info.length) showInfo(s.info)
+        for (const p of (s.du || [])) showDiskUsage(p)
+        if (s.side || s.ql) { restoreExtras = { side: s.side, ql: s.ql, tries: 0 }; extrasTimer.start() }
+    }
+    property var restoreExtras: null
+    Timer {
+        id: extrasTimer
+        interval: 400
+        onTriggered: {
+            const r = bw.restoreExtras
+            const p = bw.activePane
+            if (!r || !p) return
+            if (p.model.loading && r.tries++ < 20) { start(); return }
+            if (r.side && infoPanel.viewerItem) infoPanel.viewerItem.restoreView(r.side)
+            if (r.ql) {
+                const row = p.model.rowOf(r.ql.path)
+                if (row >= 0) {
+                    p.model.select(row, "set")
+                    ql.pane = p
+                    ql.showItem(p.itemAt(row))
+                    ql.restoreView(r.ql)
+                }
+            }
+            bw.restoreExtras = null
         }
     }
     function quickLook(pane) {
@@ -273,6 +327,7 @@ ApplicationWindow {
         }
         if (!p || p.indexOf("/") !== 0) p = StandardPaths.writableLocation(StandardPaths.HomeLocation).toString().replace("file://", "")
         const w = duComp.createObject(null, { app: app, win: bw, path: p })
+        duWins = duWins.concat([w])
         w.show(); w.raise(); w.requestActivate()
     }
     Component { id: chooserComp; FileChooser {} }
@@ -437,6 +492,7 @@ ApplicationWindow {
                 onSavedWChanged: dragW = 0
                 width: dragW > 0 ? dragW : savedW
                 property var item: null
+                readonly property var viewerItem: sidePreview.viewer
                 // Shown again (moved here from under the files): the selection now.
                 onVisibleChanged: if (visible) refresh()
                 Rectangle { width: 1; height: parent.height; color: infoEdge.containsMouse || infoEdge.pressed ? Theme.accent : Theme.separator }
@@ -481,6 +537,7 @@ ApplicationWindow {
                     onClicked: bw.placeInfo(true)
                 }
                 PreviewPanel {
+                    id: sidePreview
                     anchors.fill: parent
                     anchors.bottomMargin: 50
                     pane: bw.activePane
@@ -1366,6 +1423,10 @@ ApplicationWindow {
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
         else if (cmd === "previewdrag") p.previewDrag(Number(arg))
         else if (cmd === "extract") p.extract()
+        else if (cmd === "viewscroll") { const v = p.viewLoaderItem(); if (v && v.restoreScroll) v.restoreScroll({ y: Number(arg), x: Number(arg) }) }
+        else if (cmd === "previewscroll") { const pv = p.previewViewer(); if (pv && pv.item) pv.restoreView({ path: pv.item.path, doc: { y: Number(arg) }, pdf: { y: Number(arg) } }) }
+        else if (cmd === "savesession") app.saveSession()
+        else if (cmd === "dumpstate") console.warn("grove test state", JSON.stringify(bw.windowState()))
         else if (cmd === "makeiso") app.grove.burn(JSON.stringify({ paths: [p.path], iso: arg }))
         else if (cmd === "compress") p.compress(arg || "zip")
         else if (cmd === "colscroll") { const v = p.viewLoaderItem(); if (v && v.testScroll) v.testScroll(Number(arg)) }

@@ -77,6 +77,7 @@ FocusScope {
     FolderModel {
         id: fm
         onLoaded: {
+            if (pane.pendingRestore) restoreTimer.start()
             if (pane.pendingSelect.length) {
                 fm.selectPaths(JSON.stringify(pane.pendingSelect))
                 if (pane.view && pane.view.positionAt) pane.view.positionAt(fm.currentRow)
@@ -222,13 +223,65 @@ FocusScope {
     }
     // Everything a tab carries to another window: folder, history, view.
     function tabState() {
-        return { path: searching ? folderBeforeSearch : path, back: backStack, fwd: fwdStack, view: viewState(), selected: selectedPaths() }
+        const t = { path: searching ? folderBeforeSearch : path, back: backStack, fwd: fwdStack, view: viewState(), selected: selectedPaths() }
+        // Where it was scrolled, which folders were open in the list, and the
+        // file being viewed (its scroll, page or playback position).
+        if (!searching) {
+            const v = viewLoader.item
+            if (v && v.scrollState) t.scroll = v.scrollState()
+            const ex = expandedPaths()
+            if (ex.length) t.expanded = ex
+            const pv = previewViewer()
+            const ps = pv ? pv.viewState() : null
+            if (ps) t.preview = ps
+        }
+        return t
     }
     function restoreTabState(t) {
+        pendingRestore = (t.scroll || t.expanded || t.preview) ? { scroll: t.scroll, expanded: t.expanded || [], preview: t.preview, tries: 0 } : null
         navigate(t.path, { noHistory: true, select: t.selected || [] })
         backStack = t.back || []
         fwdStack = t.fwd || []
         if (t.view) applyViewState(t.view)
+    }
+    // The previewed file's viewer: the list/grid views' pane under the
+    // files, or the column view's preview column.
+    function previewViewer() {
+        if (listPreview.item && listPreview.item.viewer) return listPreview.item.viewer
+        const v = viewLoader.item
+        return v && v.previewViewer ? v.previewViewer() : null
+    }
+    function expandedPaths() {
+        if (viewMode !== "list") return []
+        const out = []
+        for (let r = 0; r < fm.count; r++) { const it = itemAt(r); if (it && it.expanded) out.push(it.path) }
+        return out
+    }
+    // The session's scroll, open folders and viewer, once the folder is in
+    // (open folders list in the background: tried again until they're there).
+    property var pendingRestore: null
+    Timer { id: restoreTimer; interval: 250; onTriggered: pane.applyRestore() }
+    function applyRestore() {
+        const r = pendingRestore
+        if (!r || fm.loading) return
+        let waiting = false
+        for (const p of r.expanded) {
+            const row = fm.rowOf(p)
+            if (row < 0) { waiting = true; continue }
+            const it = itemAt(row)
+            if (it && !it.expanded) fm.toggleExpanded(row)
+        }
+        r.expanded = r.expanded.filter(p => fm.rowOf(p) < 0)
+        r.tries++
+        if (waiting && r.tries < 12) { restoreTimer.start(); return }
+        const v = viewLoader.item
+        if (r.scroll && v && v.restoreScroll) v.restoreScroll(r.scroll)
+        if (r.preview) {
+            const pv = previewViewer()
+            if (pv) pv.restoreView(r.preview)
+            else if (r.tries < 12) { restoreTimer.start(); return }
+        }
+        pendingRestore = null
     }
     function viewLoaderItem() { return viewLoader.item }
     function setView(mode) {

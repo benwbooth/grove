@@ -8,6 +8,7 @@ Item {
     property var pane
     property var item: null
     property bool compact: false
+    property alias viewer: viewer
     property var info: ({})
     // Archives and compressed files: sizes packed and unpacked.
     property var arch: null

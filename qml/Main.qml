@@ -24,19 +24,33 @@ Item {
     Component { id: chooserComp; FileChooser {} }
 
     // Windows and tabs, saved as they change, restored at the next start.
+    // Everything, so a restart comes back as it was: each window's tabs
+    // (folders, history, views, selection, scroll, open folders, the files
+    // being viewed and where in them), size, Quick Look, Get Info and Disk
+    // Usage windows, and Grove Player windows with their playback position.
+    // Tests: GROVE_SESSION_TEST=1 saves and restores in screenshot runs too.
+    readonly property bool sessionOn: screenshot === "" || grove.env("GROVE_SESSION_TEST") === "1"
     function saveSession() {
-        if (screenshot !== "" || portalMode) return
+        if (!sessionOn || portalMode) return
         const ws = []
-        for (const w of windows) ws.push({ tabs: w.tabPaths(), states: w.tabStates() })
-        if (ws.length) grove.saveSession(JSON.stringify({ windows: ws }))
+        for (const w of windows) { const st = w.windowState(); st.tabs = w.tabPaths(); ws.push(st) }
+        players = players.filter(p => p && p.visible)
+        const ps = players.map(p => ({ path: p.path, pos: p.position() }))
+        if (ws.length) grove.saveSession(JSON.stringify({ windows: ws, players: ps }))
     }
     Timer { id: sessionTimer; interval: 2000; onTriggered: app.saveSession() }
+    // Saved as things change too (scroll, playback): a crash or logout keeps it.
+    Timer { interval: 15000; repeat: true; running: app.windows.length > 0 && app.sessionOn; onTriggered: app.saveSession() }
+    Connections { target: Qt.application; function onAboutToQuit() { app.saveSession() } }
+    property var players: []
 
     function openWindowWithStates(states) { return openWindow([], [], states) }
     function openWindow(paths, selectPaths, states) {
         const w = winComp.createObject(null, { app: app, initialPaths: paths || [], initialSelect: selectPaths || [], initialStates: states || [] })
         windows.push(w)
         w.closing.connect(function () {
+            // The last window: save first, so the session keeps it.
+            if (windows.length === 1) saveSession()
             windows = windows.filter(x => x !== w)
             if (activeWindow === w) activeWindow = windows.length ? windows[windows.length - 1] : null
         })
@@ -52,6 +66,7 @@ Item {
     function play(paths) {
         for (const p of paths) {
             const w = playerComp.createObject(null, { app: app, path: p })
+            players = players.concat([w])
             w.show(); w.raise(); w.requestActivate()
         }
         if (screenshot !== "") playShot.start()
@@ -202,11 +217,18 @@ Item {
         else if (!service) {
             let sess = null
             try { sess = JSON.parse(grove.session() || "null") } catch (e) {}
-            if (settings.restore_session !== false && sess && sess.windows && sess.windows.length && screenshot === "")
+            if (settings.restore_session !== false && sess && sess.windows && sess.windows.length && sessionOn)
                 for (const w of sess.windows) {
                     const st = (w.states || []).filter(t => t && t.path && t.path.indexOf("/") === 0)
-                    if (st.length) openWindowWithStates(st)
-                    else openWindow(w.tabs.filter(t => t.indexOf("/") === 0), [])
+                    const win = st.length ? openWindowWithStates(st) : openWindow(w.tabs.filter(t => t.indexOf("/") === 0), [])
+                    if (win && win.restoreWindow) win.restoreWindow(w)
+                }
+            if (settings.restore_session !== false && sess && sess.players && sessionOn)
+                for (const pl of sess.players) {
+                    if (!pl.path) continue
+                    const pw = playerComp.createObject(null, { app: app, path: pl.path, startAt: pl.pos || 0 })
+                    players = players.concat([pw])
+                    pw.show()
                 }
             else openWindow([grove.home()])
         }

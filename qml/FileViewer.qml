@@ -21,12 +21,32 @@ Item {
     // Binary files: a card; their bytes or text only on request.
     property bool hexAsked: false
     property bool textAsked: false
-    onPvChanged: { hexAsked = false; textAsked = false }
+    onPvChanged: { hexAsked = false; textAsked = false; if (pendingView) Qt.callLater(applyPending) }
     // Whether there's more to show than a thumbnail.
     readonly property bool rich: ["code", "markdown", "html", "office", "table", "pdf", "media", "image"].indexOf(pv.kind) >= 0 || hexAsked || textAsked || !!pv.convert
     readonly property string thumbSrc: item && item.thumb && path ? "image://thumb/" + encodeURIComponent(path) + "?m=" + (item.mtime || 0) : ""
 
     onItemChanged: Qt.callLater(load)
+    // The session: the file shown and where in it (scroll, page, playback).
+    property var pendingView: null
+    property real pendingPos: -1
+    function viewState() {
+        if (!item || !item.path) return null
+        const s = { path: item.path }
+        if (docView.visible) s.doc = docView.viewState()
+        if (pdfLoader.item && pdfLoader.item.viewState) s.pdf = pdfLoader.item.viewState()
+        if (pv.kind === "media" && player.position > 0) s.pos = player.position
+        return s
+    }
+    function restoreView(s) { pendingView = s; Qt.callLater(applyPending) }
+    function applyPending() {
+        const s = pendingView
+        if (!s || !item || item.path !== s.path || !pv.kind) return
+        if (s.doc && docView.visible) docView.restoreView(s.doc)
+        if (s.pdf && pdfLoader.item && pdfLoader.item.restoreView) pdfLoader.item.restoreView(s.pdf)
+        if (s.pos && pv.kind === "media") pendingPos = s.pos
+        pendingView = null
+    }
     // Shown again (a panel moved or reopened): load what's selected now.
     onActiveChanged: { if (!active) player.stop(); Qt.callLater(load) }
     // The previous file stays on screen until the next one's details are in
@@ -103,6 +123,7 @@ Item {
     PreviewSpinner { image: pic; size: 18; anchors.centerIn: parent }
 
     DocView {
+        id: docView
         anchors.fill: parent
         visible: fv.pv.kind === "code" || fv.pv.kind === "markdown" || fv.pv.kind === "html" || (fv.pv.kind === "office" && !!fv.pv.hasText) || (fv.pv.kind === "other" && fv.textAsked)
         active: visible && fv.active
@@ -133,8 +154,10 @@ Item {
         app: fv.app
     }
     Loader {
+        id: pdfLoader
         anchors.fill: parent
         active: fv.pv.kind === "pdf" && !!fv.pv.paged && fv.active
+        onLoaded: if (fv.pendingView) Qt.callLater(fv.applyPending)
         sourceComponent: PdfPages { src: fv.pv.src || ""; pages: fv.pv.pages || 0; sizes: fv.pv.sizes || []; mtime: fv.item ? fv.item.mtime || 0 : 0 }
     }
 
@@ -146,6 +169,8 @@ Item {
         audioOutput: AudioOutput {}
         // A video shows its first frame.
         onSourceChanged: if (source != "" && fv.pv.video) { play(); pause() }
+        // Back where it was (the session), paused.
+        onMediaStatusChanged: if (fv.pendingPos >= 0 && (mediaStatus === MediaPlayer.LoadedMedia || mediaStatus === MediaPlayer.BufferedMedia)) { position = fv.pendingPos; fv.pendingPos = -1 }
     }
     VideoOutput { id: video; anchors.fill: parent; anchors.bottomMargin: 40; visible: fv.pv.kind === "media" && !!fv.pv.video }
     // Music: the waveform with a moving playhead, above the controls.

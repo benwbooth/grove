@@ -130,4 +130,8 @@ Item {
                 angleDelta: Qt.point(e.angleDelta.x || e.angleDelta.y, 0), pixelDelta: Qt.point(e.pixelDelta.x || e.pixelDelta.y, 0) })
         }
     }
+
+    // The session: where the strip was scrolled to.
+    function scrollState() { return { x: Math.round(strip.contentX) } }
+    function restoreScroll(s) { strip.contentX = Math.max(0, Math.min(s.x || 0, strip.contentWidth - strip.width)) }
 }

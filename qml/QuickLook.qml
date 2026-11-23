@@ -18,7 +18,7 @@ Window {
     // A binary file was asked to show as hex or as text (reset per file).
     property bool hexAsked: false
     property bool textAsked: false
-    onPvChanged: { hexAsked = false; textAsked = false }
+    onPvChanged: { hexAsked = false; textAsked = false; if (pendingView) Qt.callLater(applyPending) }
     // Editing: "" (viewing), "markup" (pictures), "trim" (video and audio).
     property string editing: ""
     // An office document's pages are being made (LibreOffice).
@@ -61,6 +61,28 @@ Window {
     title: item ? item.name + " — Quick Look" : "Quick Look"
     transientParent: win
 
+    // The session: the file in Quick Look and where in it (restored paused).
+    property var pendingView: null
+    property real pendingPos: -1
+    function viewState() {
+        if (!visible || !item || !item.path) return null
+        const s = { path: item.fromArchive || item.path }
+        if (codeDoc.visible) s.doc = codeDoc.viewState()
+        else if (officeDoc.visible) s.doc = officeDoc.viewState()
+        if (pdfLoader.item && pdfLoader.item.viewState) s.pdf = pdfLoader.item.viewState()
+        if (pv.kind === "media" && player.position > 0) s.pos = player.position
+        return s
+    }
+    function restoreView(s) { pendingView = s; Qt.callLater(applyPending) }
+    function applyPending() {
+        const s = pendingView
+        if (!s || !item || !pv.kind || pv.kind === "loading") return
+        if (s.doc && codeDoc.visible) codeDoc.restoreView(s.doc)
+        if (s.doc && officeDoc.visible) officeDoc.restoreView(s.doc)
+        if (s.pdf && pdfLoader.item && pdfLoader.item.restoreView) pdfLoader.item.restoreView(s.pdf)
+        if (s.pos && pv.kind === "media") pendingPos = s.pos
+        pendingView = null
+    }
     function showItem(it) {
         if (editing !== "") stopEditing()
         item = it
@@ -286,7 +308,8 @@ Window {
                     source: ql.pv.kind === "media" ? "file://" + encodeURI(ql.item.path).replace(/#/g, "%23") : ""
                     videoOutput: video
                     audioOutput: AudioOutput {}
-                    onSourceChanged: if (source != "") play()
+                    onSourceChanged: if (source != "" && ql.pendingPos < 0) play()
+                    onMediaStatusChanged: if (ql.pendingPos >= 0 && (mediaStatus === MediaPlayer.LoadedMedia || mediaStatus === MediaPlayer.BufferedMedia)) { position = ql.pendingPos; ql.pendingPos = -1 }
                 }
                 VideoOutput { id: video; anchors.fill: parent; anchors.bottomMargin: ql.editing === "trim" ? 80 : 44; visible: !!ql.pv.video
                     // Double-click: full screen (again: back).
@@ -401,6 +424,7 @@ Window {
                 id: pdfLoader
                 anchors.fill: parent
                 active: ql.pv.kind === "pdf"
+                onLoaded: if (ql.pendingView) Qt.callLater(ql.applyPending)
                 // (Never QtPdf by accident while switching: its first use
                 // reads every system font, seconds on the UI thread.)
                 sourceComponent: ql.pv.kind !== "pdf" ? null : ql.pv.paged ? pagedPdf : qtPdf
@@ -484,6 +508,7 @@ Window {
                     GLabel { text: "Making a preview of the pages with LibreOffice…"; color: Theme.fgSecondary; anchors.verticalCenter: parent.verticalCenter }
                 }
                 DocView {
+                    id: officeDoc
                     anchors.fill: parent
                     anchors.topMargin: convRow.height
                     visible: !!ql.pv.hasText

@@ -421,4 +421,8 @@ Item {
         onWheel: (e) => kinetic.wheel(e)
     }
     PointHandler { acceptedButtons: Qt.AllButtons; onActiveChanged: if (active) kinetic.stop() }
+
+    // The session: where the list was scrolled to.
+    function scrollState() { return { y: Math.round(list.contentY) } }
+    function restoreScroll(s) { list.contentY = Math.max(0, Math.min(s.y || 0, list.contentHeight - list.height)) }
 }

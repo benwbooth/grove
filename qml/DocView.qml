@@ -49,6 +49,24 @@ Item {
     onActiveChanged: Qt.callLater(reload)
     Connections { target: Theme; function onDarkChanged() { if (dv.active) dv.reload() } }
 
+    // The session: where the reader was (restored once the text is there).
+    property var pendingView: null
+    function viewState() { return { y: Math.round(list.contentY), x: Math.round(list.contentX) } }
+    function restoreView(s) { pendingView = s; Qt.callLater(tryRestore) }
+    function tryRestore() {
+        const s = pendingView
+        if (!s) return
+        const maxY = Math.max(0, list.contentHeight - list.height)
+        // Still reading, or not laid out that far yet: wait for more (the
+        // list's height changes as blocks are laid out).
+        if (s.y > maxY && (doc.loading || list.count === 0 || maxY <= 0)) return
+        list.contentY = Math.min(s.y || 0, maxY)
+        list.contentX = Math.min(s.x || 0, Math.max(0, list.contentWidth - list.width))
+        pendingView = null
+    }
+    Connections { target: list; function onContentHeightChanged() { if (dv.pendingView) dv.tryRestore() } }
+    Connections { target: doc; function onLoadingChanged() { if (dv.pendingView) Qt.callLater(dv.tryRestore) } }
+
     // Tests (GROVE_TEST qlview=...): "end", "top", "dump".
     function testAction(a) {
         if (a === "end") list.positionViewAtEnd()

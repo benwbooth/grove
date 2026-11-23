@@ -122,6 +122,7 @@ Window {
                 ToggleRow { label: "Show previews (thumbnails)"; help: "Pictures, videos and PDFs show their contents instead of an icon."; key: "show_thumbnails" }
                 ToggleRow { label: "Thumbnails in list view"; help: "Small previews next to names in list view too."; key: "list_thumbnails" }
                 ToggleRow { label: "Previews in tooltips"; help: "Hovering an item shows a bigger preview with its kind, size and date (Dolphin)."; key: "preview_tooltips" }
+                ToggleRow { label: "Reopen as you left it"; help: "When grove starts: its windows, tabs, folders, scroll positions, open folders, the files you were viewing (and where in them), Quick Look, Get Info, Disk Usage and player windows."; key: "restore_session" }
                 ToggleRow { label: "Status bar"; help: "The line at the bottom with item counts and the icon size slider."; key: "show_status_bar" }
                 ToggleRow { label: "Toolbar as title bar"; help: "Window buttons at the right of grove's toolbar, no separate title bar. Off adds the desktop's title bar on top (applies to new windows)."; key: "client_decorations" }
                 ToggleRow { label: "Version control badges"; help: "Mark repositories (git, Mercurial, Subversion, Jujutsu, Fossil, Bazaar) and every file in them: ✓ unchanged, M changed, A added, ? untracked, – ignored."; key: "show_git_status" }

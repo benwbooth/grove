@@ -432,4 +432,8 @@ Item {
         acceptedModifiers: Qt.ControlModifier
         onWheel: (e) => root.pane.zoom(e.angleDelta.y > 0 ? 1 : -1)
     }
+
+    // The session: where the grid was scrolled to.
+    function scrollState() { return { y: Math.round(grid.contentY) } }
+    function restoreScroll(s) { grid.contentY = Math.max(0, Math.min(s.y || 0, grid.contentHeight - grid.height)) }
 }

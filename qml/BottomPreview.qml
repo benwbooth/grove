@@ -11,6 +11,7 @@ Rectangle {
     property var pane
     property var item: null
     property var info: ({})
+    property alias viewer: viewer
     // Height while dragging (saved when the drag ends).
     property real dragH: 0
     readonly property real savedH: pane && pane.app && pane.app.settings.list_preview_height > 0 ? pane.app.settings.list_preview_height : 260

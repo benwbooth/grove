@@ -428,11 +428,30 @@ Item {
             }
 
             // The preview column.
+            property alias previewLoader: previewLoader
             Loader {
+                id: previewLoader
                 anchors.fill: parent
                 active: column.isPreview && root.current !== null && !root.current.isDir
                 sourceComponent: PreviewPanel { pane: root.pane; item: root.current }
             }
         }
+    }
+
+    // The session: the strip's scroll and the current column's.
+    function scrollState() {
+        const c = strip.itemAtIndex(chain.length - 1)
+        return { x: Math.round(strip.contentX), y: c && c.list ? Math.round(c.list.contentY) : 0 }
+    }
+    function restoreScroll(s) {
+        autoGlideUntil = 0
+        strip.contentX = Math.max(0, Math.min(s.x || 0, strip.contentWidth - strip.width))
+        const c = strip.itemAtIndex(chain.length - 1)
+        if (c && c.list) c.list.contentY = Math.max(0, Math.min(s.y || 0, c.list.contentHeight - c.list.height))
+    }
+    // The preview column's viewer (the file shown there).
+    function previewViewer() {
+        const c = strip.itemAtIndex(cols.count - 1)
+        return c && c.previewLoader && c.previewLoader.item ? c.previewLoader.item.viewer : null
     }
 }

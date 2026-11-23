@@ -13,6 +13,9 @@ Window {
     id: pw
     property var app
     property string path: ""
+    // The session: start here, paused (no sound on its own at login).
+    property real startAt: -1
+    function position() { return player.position }
     readonly property string fileName: path.substring(path.lastIndexOf("/") + 1)
     readonly property bool isVideo: player.hasVideo
     color: "black"
@@ -41,7 +44,10 @@ Window {
         source: pw.path ? "file://" + encodeURI(pw.path).replace(/#/g, "%23") : ""
         videoOutput: video
         audioOutput: AudioOutput { id: audio; volume: 0.8 }
-        onMediaStatusChanged: if (mediaStatus === MediaPlayer.LoadedMedia) { pw.fitToVideo(); play() }
+        onMediaStatusChanged: if (mediaStatus === MediaPlayer.LoadedMedia) {
+            pw.fitToVideo()
+            if (pw.startAt >= 0) { position = pw.startAt; pw.startAt = -1; play(); pause() } else play()
+        }
         onMetaDataChanged: pw.fitToVideo()
         onErrorOccurred: (err, msg) => errorText.text = msg
     }

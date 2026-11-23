@@ -10,6 +10,19 @@ Item {
     property real mtime: 0
     property int pages: 0
     property var sizes: []          // [[w, h] points] per page (or just the first)
+    // The session: the reader's place in the document.
+    property var pendingView: null
+    function viewState() { return { y: Math.round(list.contentY) } }
+    function restoreView(s) { pendingView = s; Qt.callLater(tryRestore) }
+    function tryRestore() {
+        const s = pendingView
+        if (!s) return
+        const maxY = Math.max(0, list.contentHeight - list.height)
+        if (s.y > maxY && maxY <= 0) return
+        list.contentY = Math.min(s.y || 0, maxY)
+        pendingView = null
+    }
+    Connections { target: list; function onContentHeightChanged() { if (pp.pendingView) pp.tryRestore() } }
     readonly property int current: Math.max(1, Math.min(pages, list.indexAt(list.width / 2, list.contentY + list.height / 3) + 1))
     // Width the pages are drawn at, in steps so resizing doesn't redraw
     // on every pixel.
