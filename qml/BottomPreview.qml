@@ -60,7 +60,8 @@ Rectangle {
             onPositionChanged: (m) => {
                 if (!pressed) return
                 const y = mapToItem(null, 0, m.y).y
-                const maxH = bp.parent ? bp.parent.height - 120 : 800
+                // (Not bp.parent: that is the Loader, as tall as this pane.)
+                const maxH = bp.pane ? bp.pane.height - 160 : 800
                 bp.dragH = Math.max(120, Math.min(maxH, startH - (y - startY)))
             }
             onReleased: { if (bp.dragH > 0) { bp.pane.win.setSetting("list_preview_height", Math.round(bp.dragH)); } }
