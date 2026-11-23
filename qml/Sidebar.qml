@@ -336,11 +336,11 @@ Item {
                         required property var modelData
                         label: modelData.name; icon: modelData.icon
                         dim: true
-                        tip: "Saved server — click to connect"
+                        tip: modelData.account ? "Saved server (Settings › Accounts) — click to connect" : "Saved server — click to connect"
                         onActivated: sb.win.connectSaved(modelData)
                         key: "server:" + modelData.name
                         customMenu: true
-                        onMenu: serverMenu.openFor(modelData.name)
+                        onMenu: serverMenu.openFor(modelData.name, modelData.account || "")
                     }
                 }
                 Place {
@@ -431,8 +431,14 @@ Item {
     GMenu {
         id: serverMenu
         property string name: ""
-        function openFor(n) { name = n; popup() }
-        GMenuItem { text: "Forget This Server"; iconName: "list-remove"; onTriggered: Async.call(sb.app.grove, k => sb.app.grove.forgetServer(k, serverMenu.name), r => sb.reload()) }
+        // Its account in hearth's Settings > Accounts ("" for grove's own).
+        property string account: ""
+        function openFor(n, a) { name = n; account = a || ""; popup() }
+        GMenuItem { text: "Edit in Settings › Accounts…"; iconName: "document-edit|preferences-system-users"; visible: serverMenu.account !== ""; height: visible ? implicitHeight : 0
+            tip: "Change its address, user or password in hearth's Settings, where your accounts are kept for all your apps"
+            onTriggered: sb.win.openAccounts(serverMenu.account, () => sb.win.toast("error", "hearth's Settings couldn't be opened.")) }
+        GMenuItem { text: "Forget This Server"; iconName: "list-remove"; tip: serverMenu.account ? "Remove it from Settings › Accounts (for all your apps) and from the sidebar" : "Remove it from the sidebar and its password from the keyring"
+            onTriggered: Async.call(sb.app.grove, k => sb.app.grove.forgetServer(k, serverMenu.name), r => { if (r.error) sb.win.toast("error", r.error); sb.reload() }) }
         HideItem {}
     }
     GMenu {

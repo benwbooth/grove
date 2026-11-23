@@ -4,8 +4,10 @@
 //!   SMB   -> rclone (its smb backend; no root needed)
 //!   WebDAV / cloud (Google Drive... from `rclone config`) -> rclone mount
 //!   Phones (MTP) -> simple-mtpfs (or jmtpfs)
-//! Saved servers live in ~/.config/grove/servers.json; passwords in the
-//! keyring (Secret Service).
+//! Saved servers live in hearth's accounts service (Settings > Accounts,
+//! see accounts.rs) when it's there: SFTP/SMB/WebDAV servers and their
+//! passwords. Without it, and for rclone drives and phones, in
+//! ~/.config/grove/servers.json with passwords in the keyring (Secret Service).
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -59,18 +61,29 @@ fn is_mounted(p: &std::path::Path) -> bool {
 }
 
 pub fn saved() -> Value {
-    let v: Vec<Value> = load()
+    let icon = |kind: &str| match kind {
+        "mtp" => "phone|smartphone",
+        "rclone" | "webdav" => "folder-cloud|network-server",
+        _ => "network-server|folder-network",
+    };
+    let service = crate::accounts::servers();
+    let mut v: Vec<Value> = load()
         .into_iter()
+        // With the accounts service, its servers replace grove's own
+        // SFTP/SMB/WebDAV ones (rclone drives and phones stay grove's).
+        .filter(|s| service.is_none() || !crate::accounts::is_service_protocol(&s.kind))
         .map(|s| {
             let mp = mount_point(&s.name);
-            let icon = match s.kind.as_str() {
-                "mtp" => "phone|smartphone",
-                "rclone" | "webdav" => "folder-cloud|network-server",
-                _ => "network-server|folder-network",
-            };
-            json!({"name": s.name, "kind": s.kind, "host": s.host, "user": s.user, "path": s.path, "icon": icon, "mounted": is_mounted(&mp), "mount": mp})
+            json!({"name": s.name, "kind": s.kind, "host": s.host, "user": s.user, "path": s.path, "port": s.port, "icon": icon(&s.kind), "mounted": is_mounted(&mp), "mount": mp})
         })
         .collect();
+    for mut a in service.unwrap_or_default() {
+        let mp = mount_point(a["name"].as_str().unwrap_or(""));
+        a["icon"] = json!(icon(a["kind"].as_str().unwrap_or("")));
+        a["mounted"] = json!(is_mounted(&mp));
+        a["mount"] = json!(mp);
+        v.push(a);
+    }
     json!(v)
 }
 
@@ -107,9 +120,19 @@ pub fn connect(j: &str) -> Value {
             }
         };
     }
-    let mut password = v["password"].as_str().unwrap_or("").to_string();
+    // With hearth's accounts service: a saved server's password comes from
+    // it, and remembering a server saves it there.
+    let service = crate::accounts::available() && crate::accounts::is_service_protocol(&s.kind);
+    let account = v["account"].as_str().map(str::to_string).filter(|a| !a.is_empty()).or_else(|| {
+        if service { crate::accounts::server_by_name(&s.name).and_then(|a| a["id"].as_str().map(str::to_string)) } else { None }
+    });
+    let typed = v["password"].as_str().unwrap_or("").to_string();
+    let mut password = typed.clone();
     if password.is_empty() {
-        password = crate::secrets::lookup(&s.name).unwrap_or_default();
+        password = match (&account, service) {
+            (Some(id), true) => crate::accounts::password(id).unwrap_or_default(),
+            _ => crate::secrets::lookup(&s.name).unwrap_or_default(),
+        };
     }
     let mp = mount_point(&s.name);
     if is_mounted(&mp) {
@@ -128,7 +151,21 @@ pub fn connect(j: &str) -> Value {
     };
     match r {
         Ok(()) => {
-            if v["remember"].as_bool().unwrap_or(true) {
+            let from_sidebar = v["account"].as_str().is_some_and(|a| !a.is_empty()) && typed.is_empty();
+            if v["remember"].as_bool().unwrap_or(true) && service {
+                if from_sidebar {
+                    // Already saved there, nothing new to keep.
+                    return json!({"ok": true, "path": mp});
+                }
+                let pw = v["savePassword"].as_bool().unwrap_or(false).then_some(typed.as_str());
+                let mut rec = crate::accounts::server_record(&s, pw);
+                if let Some(id) = &account {
+                    rec["id"] = json!(id);
+                }
+                if let Err(e) = crate::accounts::save(&rec) {
+                    crate::controller::notify_any("info", &format!("Couldn't save the server in Settings › Accounts: {}", e.message()));
+                }
+            } else if v["remember"].as_bool().unwrap_or(true) {
                 let mut all = load();
                 all.retain(|x| x.name != s.name);
                 all.push(s.clone());
@@ -260,6 +297,16 @@ fn mount_mtp(s: &Server, mp: &std::path::Path) -> Result<(), String> {
 }
 
 pub fn forget(name: &str) -> Value {
+    // A server from hearth's accounts service: forget it there. grove's own
+    // copy (servers.json, keyring) stays untouched, for going back.
+    if crate::accounts::available() {
+        if let Some(a) = crate::accounts::server_by_name(name) {
+            return match crate::accounts::remove(a["id"].as_str().unwrap_or("")) {
+                Ok(()) => json!({"ok": true}),
+                Err(e) => json!({"error": e.message()}),
+            };
+        }
+    }
     let mut all = load();
     all.retain(|x| x.name != name);
     save(&all);
@@ -465,14 +512,19 @@ pub fn google_drives() -> Vec<String> {
 /// A Google Docs/Sheets/Slides link file's document, exported by rclone
 /// (by its file id: .docx, .xlsx, .pptx, .pdf), cached by the link file's
 /// time. Tries each Google Drive remote until one has it.
-pub fn gdoc_export(path: &std::path::Path, settings: &grove_core::settings::Settings) -> Result<std::path::PathBuf, String> {
-    let link = grove_core::gdocs::link(path).ok_or("This isn't a Google Docs link file.")?;
-    let kind = grove_core::gdocs::kind(&path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).ok_or("Not a Google file.")?;
+///
+/// The error is {error} plus, with hearth's accounts service, {service:
+/// true, reason: signedout|notallowed|none, account} for the preview's
+/// sign-in buttons.
+pub fn gdoc_export(path: &std::path::Path, settings: &grove_core::settings::Settings) -> Result<std::path::PathBuf, Value> {
+    let fail = |m: String| json!({"error": m});
+    let link = grove_core::gdocs::link(path).ok_or_else(|| fail("This isn't a Google Docs link file.".into()))?;
+    let kind = grove_core::gdocs::kind(&path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).ok_or_else(|| fail("Not a Google file.".into()))?;
     if kind.export.is_empty() {
-        return Err(format!("{} can't be exported for a preview; open it in the browser.", kind.app));
+        return Err(fail(format!("{} can't be exported for a preview; open it in the browser.", kind.app)));
     }
     if link.file_id.is_empty() {
-        return Err("The link file has no document id.".into());
+        return Err(fail("The link file has no document id.".into()));
     }
     let mtime = std::fs::metadata(path).map(|m| std::os::unix::fs::MetadataExt::mtime(&m)).unwrap_or(0);
     let dir = grove_core::util::cache_home().join("grove/gdocs").join(format!("{}-{mtime}", link.file_id));
@@ -480,7 +532,9 @@ pub fn gdoc_export(path: &std::path::Path, settings: &grove_core::settings::Sett
         return Ok(f);
     }
     let _ = std::fs::create_dir_all(&dir);
-    // grove's own Google sign-in first: the link's account, else any.
+    let service = crate::accounts::available();
+    // grove's own Google sign-ins (after the accounts service's, when it's
+    // there): the link's account, else any.
     let accounts: Vec<String> = {
         let mut a = settings.google_accounts.clone();
         a.sort_by_key(|x| x != &link.email);
@@ -494,31 +548,66 @@ pub fn gdoc_export(path: &std::path::Path, settings: &grove_core::settings::Sett
     };
     let stem: String = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "document".into()).chars().filter(|c| *c != '/').collect();
     let mut last = String::new();
+    let write = |bytes: Vec<u8>| -> Result<std::path::PathBuf, Value> {
+        let out = dir.join(format!("{stem}.{}", kind.export));
+        std::fs::write(&out, bytes).map_err(|e| fail(e.to_string()))?;
+        Ok(out)
+    };
+    // hearth's accounts service: any Google account allowed to read files
+    // (the link's account first). Its sign-in trouble decides the buttons.
+    let mut signin: Option<Value> = None;
+    if service {
+        let gs = crate::accounts::google_file_accounts(&link.email);
+        if gs.is_empty() {
+            signin = Some(json!({"service": true, "reason": "none", "account": "",
+                "error": "Sign in with Google in Settings › Accounts to see what's in Google documents here."}));
+        }
+        for g in gs {
+            let id = g["id"].as_str().unwrap_or("").to_string();
+            let email = g["email"].as_str().unwrap_or("").to_string();
+            let r = crate::accounts::access_token(&id, "files").map_err(|e| (e.reason(), e.message().to_string())).and_then(|t| {
+                crate::google::export_with(t["token"].as_str().unwrap_or(""), &email, &link.file_id, mime).map_err(|e| ("failed", e))
+            });
+            match r {
+                Ok(bytes) => return write(bytes),
+                Err((reason, msg)) => {
+                    if reason != "failed" && signin.as_ref().is_none_or(|s| s["reason"] == "failed") {
+                        signin = Some(json!({"service": true, "reason": reason, "account": id, "error": msg}));
+                    } else if signin.is_none() {
+                        signin = Some(json!({"service": true, "reason": "failed", "account": id, "error": msg}));
+                    }
+                    last = msg;
+                }
+            }
+        }
+    }
     for a in &accounts {
         match crate::google::export(settings, a, &link.file_id, mime) {
-            Ok(bytes) => {
-                let out = dir.join(format!("{stem}.{}", kind.export));
-                std::fs::write(&out, bytes).map_err(|e| e.to_string())?;
-                return Ok(out);
-            }
+            Ok(bytes) => return write(bytes),
             Err(e) => last = e,
         }
     }
     let remotes = google_drives();
     if remotes.is_empty() {
         let _ = std::fs::remove_dir_all(&dir);
-        return Err(if last.is_empty() { "Sign in with Google to see what's in Google documents here.".into() } else { last });
+        if let Some(s) = signin {
+            return Err(s);
+        }
+        return Err(fail(if last.is_empty() { "Sign in with Google to see what's in Google documents here.".into() } else { last }));
     }
     for r in remotes {
         let o = Command::new("rclone")
             .args(["backend", "copyid", &format!("{r}:"), &link.file_id, &format!("{}/", dir.display()), "--drive-export-formats", kind.export])
             .output()
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| fail(e.to_string()))?;
         if let Some(f) = std::fs::read_dir(&dir).ok().and_then(|rd| rd.flatten().map(|e| e.path()).find(|p| p.is_file())) {
             return Ok(f);
         }
         last = String::from_utf8_lossy(&o.stderr).lines().last().unwrap_or("").to_string();
     }
     let _ = std::fs::remove_dir_all(&dir);
-    Err(if last.is_empty() { "Google Drive didn't send the document.".into() } else { format!("Google Drive didn't send it: {last}") })
+    if let Some(s) = signin.filter(|s| s["reason"] != "failed") {
+        return Err(s);
+    }
+    Err(fail(if last.is_empty() { "Google Drive didn't send the document.".into() } else { format!("Google Drive didn't send it: {last}") }))
 }

@@ -93,6 +93,10 @@ pub mod ffi {
         /// The portal wants a file chooser (JSON request).
         #[qsignal]
         fn chooser_request(self: Pin<&mut Grove>, json: QString);
+        /// hearth's accounts service (Settings > Accounts) appeared, went
+        /// away, or its accounts changed.
+        #[qsignal]
+        fn accounts_changed(self: Pin<&mut Grove>, available: bool);
 
         #[qinvokable]
         fn start(self: Pin<&mut Grove>);
@@ -326,6 +330,20 @@ pub mod ffi {
         #[qinvokable]
         #[cxx_name = "googleSignOut"]
         fn google_sign_out(self: Pin<&mut Grove>, email: &QString);
+        /// Whether hearth's accounts service is there (what grove last saw).
+        #[qinvokable]
+        #[cxx_name = "accountsAvailable"]
+        fn accounts_available(self: &Grove) -> bool;
+        /// Open hearth's Settings > Accounts (at an account id): {ok}; ok
+        /// false means hearth can't show it (use grove's own setup).
+        #[qinvokable]
+        #[cxx_name = "accountsOpenSettings"]
+        fn accounts_open_settings(self: &Grove, key: &QString, account: &QString);
+        /// Sign in again through the accounts service (the browser opens):
+        /// {session} or {error}; success shows as accountsChanged.
+        #[qinvokable]
+        #[cxx_name = "accountsSignIn"]
+        fn accounts_sign_in(self: &Grove, key: &QString, provider: &QString, account: &QString);
         /// Open a web address in the default browser.
         #[qinvokable]
         #[cxx_name = "openUrl"]

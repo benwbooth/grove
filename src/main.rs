@@ -9,6 +9,7 @@
 //!   grove --screenshot FILE  (tests) grab the first window and quit;
 //!                            GROVE_TEST="view=list;ql" runs steps first
 
+mod accounts;
 mod actions;
 mod archive;
 mod burn;

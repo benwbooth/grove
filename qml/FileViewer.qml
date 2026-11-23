@@ -81,6 +81,9 @@ Item {
         function onGoogleSignInsChanged() { if (fv.gdoc && fv.gdocError !== "") { fv.loadedKey = ""; fv.load() } }
     }
     property string gdocError: ""
+    // With hearth's accounts service: why it couldn't sign in ({reason:
+    // signedout|notallowed|none, account}), for its buttons.
+    property var gdocSignIn: null
     property bool gdocLoading: false
     function show(local, want) {
         const life = fv.life
@@ -89,6 +92,7 @@ Item {
             if (r.kind === "gdoc") {
                 fv.gdoc = r
                 fv.gdocError = ""
+                fv.gdocSignIn = null
                 fv.path = local
                 fv.pv = r
                 if (r.canExport) {
@@ -97,7 +101,7 @@ Item {
                         if (!life.alive || !fv.item || fv.item.path !== want) return
                         fv.gdocLoading = false
                         if (e.path) fv.showExported(e.path, want)
-                        else fv.gdocError = e.error || ""
+                        else { fv.gdocError = e.error || ""; fv.gdocSignIn = e.service ? e : null }
                     })
                 }
                 return
@@ -148,7 +152,19 @@ Item {
             spacing: 6
             PushButton { text: fv.gdoc ? "Open in " + fv.gdoc.app : ""; tip: "Open it in your web browser"; onClicked: fv.app.grove.openUrl(fv.gdoc.url) }
             PushButton {
-                visible: fv.gdocError.indexOf("Sign in") === 0
+                visible: !!fv.gdocSignIn && (fv.gdocSignIn.reason === "signedout" || fv.gdocSignIn.reason === "notallowed")
+                text: "Sign In Again"
+                tip: "Sign in to this Google account again in the browser (and allow reading your files): the document then shows here"
+                onClicked: if (fv.app.activeWindow) fv.app.activeWindow.accountSignInAgain(fv.gdocSignIn.account)
+            }
+            PushButton {
+                visible: !!fv.gdocSignIn && fv.gdocSignIn.reason !== "failed"
+                text: "Open Settings"
+                tip: "Your accounts are in hearth's Settings › Accounts, for all your apps"
+                onClicked: if (fv.app.activeWindow) fv.app.activeWindow.openAccounts(fv.gdocSignIn.account || "setup:google", () => fv.app.activeWindow.googleSheetStart())
+            }
+            PushButton {
+                visible: !fv.gdocSignIn && fv.gdocError.indexOf("Sign in") === 0
                 text: "Sign in with Google…"
                 tip: "Sign in to your Google account in the browser: Google documents then show here"
                 onClicked: if (fv.app.activeWindow) fv.app.activeWindow.googleSignIn()

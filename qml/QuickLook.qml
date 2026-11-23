@@ -114,7 +114,7 @@ Window {
                     Async.call(app.grove, k => app.grove.gdocExport(k, p), e => {
                         if (!ql.item || ql.item.path !== p) return
                         if (e.path) ql.showItem(Object.assign({}, it, { path: e.path, gdocUrl: r.url, gdocApp: r.app }))
-                        else ql.pv = Object.assign({}, r, { gdocError: e.error || "" })
+                        else ql.pv = Object.assign({}, r, { gdocError: e.error || "", gdocSignIn: e.service ? e : null })
                     })
                 return
             }
@@ -317,7 +317,11 @@ Window {
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 6
                     PushButton { text: "Open in " + (ql.pv.app || "Google"); tip: "Open it in your web browser"; onClicked: ql.app.grove.openUrl(ql.pv.url) }
-                    PushButton { visible: (ql.pv.gdocError || "").indexOf("Sign in") === 0; text: "Sign in with Google…"; tip: "Sign in to your Google account in the browser: Google documents then show here"; onClicked: ql.win.googleSignIn() }
+                    PushButton { visible: !!ql.pv.gdocSignIn && (ql.pv.gdocSignIn.reason === "signedout" || ql.pv.gdocSignIn.reason === "notallowed"); text: "Sign In Again"
+                                 tip: "Sign in to this Google account again in the browser (and allow reading your files): the document then shows here"; onClicked: ql.win.accountSignInAgain(ql.pv.gdocSignIn.account) }
+                    PushButton { visible: !!ql.pv.gdocSignIn && ql.pv.gdocSignIn.reason !== "failed"; text: "Open Settings"
+                                 tip: "Your accounts are in hearth's Settings › Accounts, for all your apps"; onClicked: ql.win.openAccounts(ql.pv.gdocSignIn.account || "setup:google", () => ql.win.googleSheetStart()) }
+                    PushButton { visible: !ql.pv.gdocSignIn && (ql.pv.gdocError || "").indexOf("Sign in") === 0; text: "Sign in with Google…"; tip: "Sign in to your Google account in the browser: Google documents then show here"; onClicked: ql.win.googleSignIn() }
                 }
             }
             PushButton {

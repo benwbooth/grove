@@ -248,12 +248,29 @@ ApplicationWindow {
     }
     function batchRename(paths) { renameSheet.start(paths) }
     function connectServer() { connectSheet.start() }
-    function addCloudDrive() { connectSheet.close(); cloudSheet.start() }
+    // With hearth's accounts service, cloud drives and Google sign-in are
+    // set up in hearth's Settings > Accounts; grove's own sheets are the
+    // fallback when it isn't there (or can't open Settings).
+    function addCloudDrive() { connectSheet.close(); if (app.accountsService) openAccounts("add", () => cloudSheet.start()); else cloudSheet.start() }
     // Sign in with Google (Google Docs/Sheets/Slides previews), with its setup.
-    function googleSignIn() { googleSheet.start() }
+    function googleSignIn() { if (app.accountsService) openAccounts("setup:google", () => googleSheet.start()); else googleSheet.start() }
+    function googleSheetStart() { googleSheet.start() }
+    // account: an account id, or one of Settings' pages: "add", "server"
+    // (add a file server), "setup:google".
+    function openAccounts(account, fallback) {
+        Async.call(app.grove, k => app.grove.accountsOpenSettings(k, account || ""), r => { if (!r.ok && fallback) fallback() })
+    }
+    // A Google account whose sign-in ended: the accounts service signs in
+    // again in the browser (previews try again by themselves afterwards).
+    function accountSignInAgain(account) {
+        Async.call(app.grove, k => app.grove.accountsSignIn(k, "google", account || ""), r => {
+            if (r.error) toast("error", r.error)
+            else toast("info", "Sign in to Google in your browser…")
+        })
+    }
     function connectSaved(s) {
         toast("info", "Connecting to “" + s.name + "”…")
-        Async.call(app.grove, k => app.grove.connectServer(k, JSON.stringify({ name: s.name, kind: s.kind, host: s.host, user: s.user, path: s.path, remember: true })), r => {
+        Async.call(app.grove, k => app.grove.connectServer(k, JSON.stringify({ name: s.name, kind: s.kind, host: s.host, user: s.user, path: s.path, port: s.port || 0, account: s.account || "", remember: true })), r => {
             if (r.error) { toast("error", r.error); connectSheet.start(s) }
             else go(r.path)
         })
@@ -1040,7 +1057,7 @@ ApplicationWindow {
                 { separator: true },
                 { id: "gotofolder", icon: "go-jump", text: "Go to Folder…", shortcut: k("gotofolder") },
                 { id: "connect", icon: "network-connect", text: "Connect to Server…", shortcut: k("connect") },
-                { id: "cloud", icon: "folder-cloud", text: "Add Cloud Drive…" },
+                { id: "cloud", icon: app.accountsService ? "preferences-system-users|folder-cloud" : "folder-cloud", text: app.accountsService ? "Open Settings › Accounts…" : "Add Cloud Drive…" },
                 { separator: true },
                 { id: "terminal", icon: "utilities-terminal", text: "Open in Terminal", shortcut: k("terminal"), enabled: ok },
                 { id: "diskusage", icon: "filelight", text: "Disk Usage…", shortcut: k("diskusage") }
@@ -1468,6 +1485,9 @@ ApplicationWindow {
         else if (cmd === "previewscroll") { const pv = p.previewViewer(); if (pv && pv.item) pv.restoreView({ path: pv.item.path, doc: { y: Number(arg) }, pdf: { y: Number(arg) } }) }
         else if (cmd === "savesession") app.saveSession()
         else if (cmd === "googlesignedin") app.googleSignIns++
+        else if (cmd === "forget") Async.call(app.grove, k => app.grove.forgetServer(k, arg), r => console.warn("grove test forget", JSON.stringify(r)))
+        else if (cmd === "accountsui") openAccounts(arg || "", () => console.warn("grove test accounts fallback"))
+        else if (cmd === "accountsdump") console.warn("grove test accounts", app.accountsService, JSON.stringify((sidebar.places.servers || []).map(s => [s.name, s.kind, s.account || ""])))
         else if (cmd === "google") { googleSheet.start(); if (arg) googleSheet.step = Number(arg) }
         else if (cmd === "previewzoom") { const pv = p.previewViewer(); if (pv) pv.testZoom(Number(arg)) }
         else if (cmd === "infodump") Async.call(app.grove, k => app.grove.info(k, arg), r => console.warn("grove test info", JSON.stringify(r)))
@@ -1534,6 +1554,7 @@ ApplicationWindow {
         else if (cmd === "settings") { if (arg) settingsWin.page = arg; showSettings() }
         else if (cmd === "help") showHelp(arg || "")
         else if (cmd === "connect") connectServer()
+        else if (cmd === "connectkind") connectSheet.kind = arg
         else if (cmd === "rename") batchRename(p.selectedPaths())
         else if (cmd === "conflict") conflict.ask(-1, { source: arg, target: arg, source_is_dir: false, target_is_dir: false, source_size: 1200, target_size: 3400, source_mtime: 1700000000, target_mtime: 1690000000 })
         else if (cmd === "zoom") p.iconSize = Number(arg)

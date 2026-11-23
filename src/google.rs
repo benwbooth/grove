@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 const AUTH: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN: &str = "https://oauth2.googleapis.com/token";
-const SCOPES: &str = "openid email https://www.googleapis.com/auth/drive.readonly";
+pub const SCOPES: &str = "openid email https://www.googleapis.com/auth/drive.readonly";
 
 fn b64url(b: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -62,7 +62,7 @@ fn pct(s: &str) -> String {
     percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC).to_string()
 }
 
-fn keyring_key(email: &str) -> String {
+pub fn keyring_key(email: &str) -> String {
     format!("google-oauth:{email}")
 }
 
@@ -195,6 +195,11 @@ fn access_token(settings: &grove_core::settings::Settings, email: &str) -> Resul
 /// Export a Google document as `mime` (Drive API files.export).
 pub fn export(settings: &grove_core::settings::Settings, email: &str, file_id: &str, mime: &str) -> Result<Vec<u8>, String> {
     let token = access_token(settings, email)?;
+    export_with(&token, email, file_id, mime)
+}
+
+/// Export with an access token from elsewhere (hearth's accounts service).
+pub fn export_with(token: &str, email: &str, file_id: &str, mime: &str) -> Result<Vec<u8>, String> {
     let url = format!("https://www.googleapis.com/drive/v3/files/{}/export?mimeType={}", pct(file_id), pct(mime));
     let mut r = ureq::get(&url).header("Authorization", &format!("Bearer {token}")).call().map_err(|e| match e {
         ureq::Error::StatusCode(404) => format!("{email} can't see this document (signed in to the right account?)."),

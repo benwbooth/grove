@@ -19,6 +19,10 @@ Item {
     // Goes up on each Google sign-in: previews of Google documents that
     // couldn't be fetched try again.
     property int googleSignIns: 0
+    // hearth's accounts service (Settings > Accounts) is there: saved
+    // servers and Google sign-ins come from it, and setting them up opens
+    // hearth's Settings instead of grove's own sheets.
+    property bool accountsService: false
     property var closedTabs: []
     // The tab being dragged ({win, index}) while a tab drag is under way.
     property var dragTab: null
@@ -149,6 +153,9 @@ Item {
             else app.grove.answerConflict(id, "skip", false)
         }
         function onNotify(level, message) { app.notifyAll(level, message) }
+        // Accounts changed (a sign-in, a new server…): Google previews that
+        // couldn't be fetched try again.
+        function onAccountsChanged(available) { app.accountsService = available; app.googleSignIns++ }
         function onFoldersTouched(json) {
             const dirs = JSON.parse(json)
             for (const w of app.windows) w.foldersTouched(dirs)

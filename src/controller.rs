@@ -224,6 +224,15 @@ impl ffi::Grove {
                 });
             }
         });
+        // hearth's accounts service: saved servers and Google sign-ins.
+        let qt = self.qt_thread();
+        crate::accounts::watch(move |available| {
+            let _ = qt.queue(move |mut g| {
+                g.as_mut().accounts_changed(available);
+                let r = *g.places_revision() + 1;
+                g.as_mut().set_places_revision(r);
+            });
+        });
         if std::env::var_os("GROVE_PORTAL").is_some() {
             crate::portal::serve(self.qt_thread());
         } else {
@@ -1081,7 +1090,7 @@ impl ffi::Grove {
         let settings = self.rust().settings.clone();
         self.answer(key, move || match crate::remote::gdoc_export(&p, &settings) {
             Ok(f) => json!({"path": f.display().to_string()}),
-            Err(e) => json!({"error": e}),
+            Err(e) => e,
         });
     }
 
@@ -1117,6 +1126,23 @@ impl ffi::Grove {
         s.google_accounts.retain(|a| a != &e);
         self.as_mut().rust_mut().settings = s;
         self.save_settings();
+    }
+
+    pub fn accounts_available(&self) -> bool {
+        crate::accounts::available()
+    }
+
+    pub fn accounts_open_settings(&self, key: &QString, account: &QString) {
+        let a = account.to_string();
+        self.answer(key, move || json!({"ok": crate::accounts::open_settings(&a)}));
+    }
+
+    pub fn accounts_sign_in(&self, key: &QString, provider: &QString, account: &QString) {
+        let (p, a) = (provider.to_string(), account.to_string());
+        self.answer(key, move || match crate::accounts::sign_in(&p, &a) {
+            Ok(s) => json!({"session": s}),
+            Err(e) => json!({"error": e.message()}),
+        });
     }
 
     pub fn open_url(&self, url: &QString) {

@@ -99,7 +99,11 @@ Sheet {
         width: parent.width
         spacing: 6
         visible: cs.kind === "rclone"
-        PushButton { text: "Add Cloud Drive…"; tip: "Set up a new drive step by step: pick the service, sign in, done"; onClicked: cs.win.addCloudDrive() }
+        PushButton {
+            text: cs.app.accountsService ? "Open Settings › Accounts…" : "Add Cloud Drive…"
+            tip: cs.app.accountsService ? "Cloud drives and accounts are set up in hearth's Settings › Accounts, once for all your apps" : "Set up a new drive step by step: pick the service, sign in, done"
+            onClicked: cs.win.addCloudDrive()
+        }
         Repeater {
             model: cs.kind === "rclone" ? cs.drives : []
             Row {
@@ -115,8 +119,9 @@ Sheet {
     }
     Row {
         spacing: 16
-        GCheck { id: remember; text: "Remember this server"; checked: true; tip: "Keep it in the sidebar under Network" }
-        GCheck { id: savePw; text: "Save password in keyring"; visible: cs.kind !== "rclone" && cs.kind !== "mtp"; tip: "Stored with the desktop's Secret Service (KWallet), not in a file" }
+        GCheck { id: remember; text: "Remember this server"; checked: true
+            tip: cs.app.accountsService && cs.kind !== "rclone" && cs.kind !== "mtp" ? "Keep it in Settings › Accounts (for all your apps) and in the sidebar under Network" : "Keep it in the sidebar under Network" }
+        GCheck { id: savePw; text: "Save password in keyring"; visible: cs.kind !== "rclone" && cs.kind !== "mtp"; tip: cs.app.accountsService ? "Kept with the server in Settings › Accounts (in the desktop's keyring), not in a file" : "Stored with the desktop's Secret Service (KWallet), not in a file" }
     }
     Column {
         width: parent.width
