@@ -55,15 +55,16 @@ Window {
             aw.rebuild()
         })
     }
-    function openArchive(p) { path = p; password = ""; cwd = ""; sel = ({}); load() }
+    function openArchive(p) { path = p; password = ""; cwd = ""; sel = ({}); expanded = ({}); load() }
 
     // The rows of the folder shown: its files, and its folders (also those
     // only implied by paths) with their totals.
-    function rebuild() {
-        if (!listing) { rows = []; return }
-        const pre = cwd ? cwd + "/" : ""
+    // Folders opened in place with their disclosure triangles (path -> true).
+    property var expanded: ({})
+    // The items directly in folder `pre` ("" = top, else "dir/"), sorted,
+    // with folders that only appear in paths filled in and their totals.
+    function children(pre) {
         const byName = {}
-        const f = filter.toLowerCase()
         for (const it of listing.items) {
             if (pre && it.path.indexOf(pre) !== 0) continue
             const rest = it.path.substring(pre.length)
@@ -72,31 +73,87 @@ Window {
             const nm = slash < 0 ? rest : rest.substring(0, slash)
             let r = byName[nm]
             if (!r) {
-                r = byName[nm] = { name: nm, path: pre + nm, isDir: slash >= 0, size: 0, packed: 0, mtime: 0, method: "", crc: "", encrypted: false, mode: 0, files: 0, link: "" }
+                r = byName[nm] = { name: nm, path: pre + nm, isDir: slash >= 0, size: 0, packed: 0, mtime: 0, method: "", crc: "", encrypted: false, mode: 0, files: 0, link: "", depth: 0 }
             }
             if (slash < 0 && !it.isDir) {
                 Object.assign(r, { isDir: false, size: it.size, packed: it.packed, mtime: it.mtime, method: it.method, crc: it.crc, encrypted: it.encrypted, mode: it.mode, link: it.link })
             } else {
                 r.isDir = true
                 if (slash < 0) { r.mtime = it.mtime; r.mode = it.mode }
-                else if (!it.isDir) { r.size += it.size; r.packed += (it.packed || 0); r.files++; r.encrypted = r.encrypted || it.encrypted; if (it.mtime > r.mtime && !r.ownTime) r.mtime = Math.max(r.mtime, it.mtime) }
+                else if (!it.isDir) { r.size += it.size; r.packed += (it.packed || 0); r.files++; r.encrypted = r.encrypted || it.encrypted; r.mtime = Math.max(r.mtime, it.mtime) }
             }
         }
-        let out = Object.values(byName)
-        if (f) out = out.filter(r => r.name.toLowerCase().indexOf(f) >= 0)
+        return sorted(Object.values(byName))
+    }
+    function sorted(out) {
         const k = sortKey, d = sortDesc ? -1 : 1
-        out.sort((a, b) => {
+        return out.sort((a, b) => {
             if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
             let x = a[k], y = b[k]
             if (k === "name" || k === "method" || k === "crc") return d * String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: "base" })
             if (k === "encrypted") { x = x ? 1 : 0; y = y ? 1 : 0 }
             return d * ((x || 0) - (y || 0)) || a.name.localeCompare(b.name)
         })
+    }
+    // The rows shown: the folder's items, and inside every expanded folder
+    // its items, indented. A filter shows every match in the folder (all
+    // depths), each with its path.
+    function rebuild() {
+        if (!listing) { rows = []; return }
+        const pre = cwd ? cwd + "/" : ""
+        const f = filter.toLowerCase()
+        let out = []
+        if (f) {
+            const seen = {}
+            const walk = (p, depth) => {
+                for (const r of children(p)) {
+                    if (r.name.toLowerCase().indexOf(f) >= 0) { r.depth = 0; r.where = p.substring(pre.length); out.push(r) }
+                    if (r.isDir && depth < 64) walk(r.path + "/", depth + 1)
+                }
+            }
+            walk(pre, 0)
+        } else {
+            const walk = (p, depth) => {
+                for (const r of children(p)) {
+                    r.depth = depth
+                    r.open = r.isDir && !!expanded[r.path]
+                    out.push(r)
+                    if (r.open) walk(r.path + "/", depth + 1)
+                }
+            }
+            walk(pre, 0)
+        }
         rows = out
         const keep = {}
         for (const r of out) if (sel[r.path]) keep[r.path] = true
         sel = keep
         currentRow = Math.min(currentRow, rows.length - 1)
+    }
+    // Open or close a folder in place; `all` (Alt-click, as in Finder) does
+    // every folder inside it too.
+    function toggle(path, open, all) {
+        const e = Object.assign({}, expanded)
+        const want = open === undefined ? !e[path] : open
+        const set = p => { if (want) e[p] = true; else delete e[p] }
+        set(path)
+        if (all) for (const it of listing.items) {
+            const parts = it.path.split("/")
+            for (let i = 1; i < parts.length + (it.isDir ? 1 : 0); i++) {
+                const d = parts.slice(0, i).join("/")
+                if (d.indexOf(path + "/") === 0) set(d)
+            }
+        }
+        expanded = e
+        rebuild()
+    }
+    function expandAll(open) {
+        const e = {}
+        if (open && listing) for (const it of listing.items) {
+            const parts = it.path.split("/")
+            for (let i = 1; i < parts.length + (it.isDir ? 1 : 0); i++) e[parts.slice(0, i).join("/")] = true
+        }
+        expanded = e
+        rebuild()
     }
     onFilterChanged: rebuild()
     function sortBy(k) { if (sortKey === k) sortDesc = !sortDesc; else { sortKey = k; sortDesc = k === "size" || k === "packed" || k === "mtime" } rebuild() }
@@ -113,6 +170,16 @@ Window {
         sel = s
         currentRow = i
         list.positionViewAtIndex(i, ListView.Contain)
+    }
+    function keyDisclose(open, all) {
+        const r = rows[currentRow]
+        if (!r) return
+        if (r.isDir && (open ? !r.open || all : r.open)) { toggle(r.path, open, all); return }
+        if (!open && r.depth > 0) {
+            const parent = r.path.substring(0, r.path.lastIndexOf("/"))
+            for (let i = 0; i < rows.length; i++) if (rows[i].path === parent) { select(i, "set"); return }
+        }
+        if (!open && r.depth === 0) up()
     }
     function selectAll() { const s = {}; for (const r of rows) s[r.path] = true; sel = s }
     function selected() { return rows.filter(r => sel[r.path]).map(r => r.path) }
@@ -218,8 +285,14 @@ Window {
     Shortcut { sequence: "Up"; enabled: !renamePop.opened; onActivated: aw.select(Math.max(0, aw.currentRow - 1), "set") }
     Shortcut { sequence: "Shift+Down"; onActivated: aw.select(Math.min(aw.rows.length - 1, aw.currentRow + 1), "range") }
     Shortcut { sequence: "Shift+Up"; onActivated: aw.select(Math.max(0, aw.currentRow - 1), "range") }
-    Shortcut { sequence: "Right"; enabled: !renamePop.opened && !filterField.activeFocus; onActivated: { const r = aw.rows[aw.currentRow]; if (r && r.isDir) aw.enter(r.path) } }
-    Shortcut { sequence: "Left"; enabled: !renamePop.opened && !filterField.activeFocus; onActivated: aw.up() }
+    // Finder's list view: Right opens a folder in place, Left closes it (or
+    // goes to the folder it's in); Alt opens or closes everything inside.
+    Shortcut { sequences: ["Right", "Alt+Right"]; enabled: !renamePop.opened && !filterField.activeFocus; onActivated: aw.keyDisclose(true, false) }
+    Shortcut { sequences: ["Left"]; enabled: !renamePop.opened && !filterField.activeFocus; onActivated: aw.keyDisclose(false, false) }
+    Shortcut { sequences: ["Alt+Shift+Right"]; onActivated: aw.keyDisclose(true, true) }
+    Shortcut { sequences: ["Alt+Shift+Left"]; onActivated: aw.keyDisclose(false, true) }
+    Shortcut { sequence: "Ctrl+Alt+Right"; onActivated: aw.expandAll(true) }
+    Shortcut { sequence: "Ctrl+Alt+Left"; onActivated: aw.expandAll(false) }
 
     HelpWindow { id: helpWin; app: aw.app; query: "Archiver" }
 
@@ -309,6 +382,14 @@ Window {
                     }
                 }
             }
+            Row {
+                anchors.right: parent.right; anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2
+                visible: !!aw.listing && !aw.filter
+                GButton { text: "Expand All"; height: crumbs.height - 4; enabled: aw.rows.some(r => r.isDir && !r.open); tip: "Open every folder in place (Ctrl+Alt+Right)"; onClicked: aw.expandAll(true) }
+                GButton { text: "Collapse All"; height: crumbs.height - 4; enabled: Object.keys(aw.expanded).length > 0; tip: "Close every open folder (Ctrl+Alt+Left)"; onClicked: aw.expandAll(false) }
+            }
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.separator }
         }
 
@@ -380,13 +461,36 @@ Window {
                         Row {
                             width: aw.nameW
                             height: parent.height
-                            spacing: 6
-                            leftPadding: 4
+                            spacing: 4
+                            leftPadding: 4 + (row.modelData.depth || 0) * 16
+                            // Disclosure triangle: open the folder in place.
+                            Item {
+                                width: 14; height: parent.height
+                                visible: !aw.filter
+                                GLabel {
+                                    visible: row.modelData.isDir
+                                    anchors.centerIn: parent
+                                    text: "›"
+                                    font.pixelSize: Theme.title
+                                    color: row.ink2
+                                    rotation: row.modelData.open ? 90 : 0
+                                    Behavior on rotation { NumberAnimation { duration: 120 } }
+                                }
+                                MouseArea {
+                                    id: tri
+                                    anchors.fill: parent
+                                    enabled: row.modelData.isDir
+                                    hoverEnabled: true
+                                    onClicked: (e) => aw.toggle(row.modelData.path, undefined, (e.modifiers & Qt.AltModifier) !== 0)
+                                }
+                                GTip { visible: tri.containsMouse && row.modelData.isDir; text: (row.modelData.open ? "Collapse" : "Expand") + " (Right/Left; Alt-click: everything inside too)" }
+                            }
                             GIcon {
                                 size: 16; anchors.verticalCenter: parent.verticalCenter
                                 name: row.modelData.isDir ? "folder" : aw.iconFor(row.modelData.name)
                             }
-                            GLabel { text: row.modelData.name + (row.modelData.link && row.modelData.link !== "→" ? "  → " + row.modelData.link : ""); width: aw.nameW - 34; color: row.ink; anchors.verticalCenter: parent.verticalCenter }
+                            GLabel { text: row.modelData.name + (row.modelData.link && row.modelData.link !== "→" ? "  → " + row.modelData.link : "") + (row.modelData.where ? "   — " + row.modelData.where : "")
+                                     width: aw.nameW - 56 - (row.modelData.depth || 0) * 16; color: row.ink; anchors.verticalCenter: parent.verticalCenter }
                         }
                         component Cell: GLabel {
                             property real w: 80
@@ -571,6 +675,10 @@ Window {
     GMenu {
         id: rowMenu
         GMenuItem { text: "Open"; iconName: "document-open"; shortcutText: "Return"; onTriggered: aw.activate(aw.currentRow) }
+        GMenuItem { text: (aw.rows[aw.currentRow] || {}).open ? "Collapse" : "Expand"; iconName: "view-list-tree"; visible: !!(aw.rows[aw.currentRow] || {}).isDir; height: visible ? implicitHeight : 0
+                    shortcutText: (aw.rows[aw.currentRow] || {}).open ? "Left" : "Right"; tip: "Show or hide what's in this folder, in place"; onTriggered: aw.keyDisclose(!(aw.rows[aw.currentRow] || {}).open, false) }
+        GMenuItem { text: "Expand Everything Inside"; iconName: "view-list-tree"; visible: !!(aw.rows[aw.currentRow] || {}).isDir; height: visible ? implicitHeight : 0
+                    shortcutText: "Alt+Shift+Right"; onTriggered: aw.keyDisclose(true, true) }
         GMenuItem { text: "Extract…"; iconName: "archive-extract"; shortcutText: "Ctrl+E"; tip: "Extract what's selected, with options"; onTriggered: aw.extractSelected() }
         GMenuItem { text: "Copy To…"; iconName: "edit-copy"; shortcutText: "F5"; tip: "Straight into a folder you pick"; onTriggered: aw.copyTo() }
         GMenuSeparator {}
@@ -639,6 +747,8 @@ Window {
             for (const st of aw.app.grove.env("GROVE_ARC_TEST").split(";")) {
                 const [k, v] = st.split("=")
                 if (k === "enter") aw.enter(v)
+                else if (k === "expand") aw.toggle(v, true, false)
+                else if (k === "expandall") aw.expandAll(true)
                 else if (k === "select") { for (let i = 0; i < aw.rows.length; i++) if (aw.rows[i].name === v) aw.select(i, "toggle") }
                 else if (k === "info") aw.showInfo = true
                 else if (k === "menu") rowMenu.popup(200, 160)
