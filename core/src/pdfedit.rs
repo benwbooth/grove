@@ -81,6 +81,28 @@ pub fn render(path: &str, pw: &str, page: u32, width: u32, hide: &[i32]) -> Resu
     Ok((w as u32, h as u32, v))
 }
 
+/// Part of a page (`rect` in page space, points) as PNG bytes, drawn at
+/// `scale` pixels per point (Copy of a rectangular selection).
+pub fn region_png(path: &str, pw: &str, page: u32, page_w: f32, rect: [f32; 4], scale: f32) -> Result<Vec<u8>, String> {
+    let width = (page_w * scale).round().max(8.0) as u32;
+    let (w, h, px) = render(path, pw, page, width, &[])?;
+    let k = w as f32 / page_w.max(1.0);
+    let x0 = ((rect[0].min(rect[2]) * k).floor().max(0.0) as u32).min(w.saturating_sub(1));
+    let y0 = ((rect[1].min(rect[3]) * k).floor().max(0.0) as u32).min(h.saturating_sub(1));
+    let x1 = ((rect[0].max(rect[2]) * k).ceil() as u32).clamp(x0 + 1, w);
+    let y1 = ((rect[1].max(rect[3]) * k).ceil() as u32).clamp(y0 + 1, h);
+    let mut out = image::RgbaImage::new(x1 - x0, y1 - y0);
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let i = ((y * w + x) * 4) as usize;
+            out.put_pixel(x - x0, y - y0, image::Rgba([px[i], px[i + 1], px[i + 2], px[i + 3]]));
+        }
+    }
+    let mut buf = std::io::Cursor::new(Vec::new());
+    out.write_to(&mut buf, image::ImageFormat::Png).map_err(|e| e.to_string())?;
+    Ok(buf.into_inner())
+}
+
 /// Text selection between two points. mode: 0 characters, 1 words,
 /// 2 lines, 3 the whole page. {quads, text}
 pub fn select(path: &str, pw: &str, page: u32, a: (f32, f32), b: (f32, f32), mode: i32) -> Result<String, String> {
@@ -360,6 +382,22 @@ pub fn save(spec: &Spec, out: &Path) -> Result<(), String> {
         None => ("", "", true, true),
     };
     check(unsafe { grove_pdfw_save(h.0, cs(&out.to_string_lossy()).as_ptr(), cs(u).as_ptr(), cs(o).as_ptr(), pr as c_int, cp as c_int, e.as_mut_ptr() as *mut c_char, 512) }, &e)?;
+    Ok(())
+}
+
+/// A new PDF of pictures, one per page, each page `w` x `h` points
+/// (0: the picture's own size at its resolution).
+pub fn image_pdf(pics: &[(std::path::PathBuf, f32, f32)], out: &Path) -> Result<(), String> {
+    let mut e = vec![0u8; 512];
+    let h = unsafe { grove_pdfw_open(cs("").as_ptr(), cs("").as_ptr(), e.as_mut_ptr() as *mut c_char, 512) };
+    if h.is_null() {
+        return Err(err_text(&e));
+    }
+    let h = Handle(h);
+    for (p, w, hh) in pics {
+        check(unsafe { grove_pdfw_image_page(h.0, cs(&p.to_string_lossy()).as_ptr(), *w, *hh, e.as_mut_ptr() as *mut c_char, 512) }, &e)?;
+    }
+    check(unsafe { grove_pdfw_save(h.0, cs(&out.to_string_lossy()).as_ptr(), cs("").as_ptr(), cs("").as_ptr(), 1, 1, e.as_mut_ptr() as *mut c_char, 512) }, &e)?;
     Ok(())
 }
 
