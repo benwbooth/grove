@@ -1485,6 +1485,8 @@ ApplicationWindow {
         else if (cmd === "previewscroll") { const pv = p.previewViewer(); if (pv && pv.item) pv.restoreView({ path: pv.item.path, doc: { y: Number(arg) }, pdf: { y: Number(arg) } }) }
         else if (cmd === "savesession") app.saveSession()
         else if (cmd === "googlesignedin") app.googleSignIns++
+        // The open dialog as the portal shows it (no answer goes out: no id).
+        else if (cmd === "chooser") { const c = app.openChooser({ mode: "open", title: "Open file", id: "" }); Qt.callLater(() => console.log("grove: chooser " + c.width + "x" + c.height)) }
         else if (cmd === "forget") Async.call(app.grove, k => app.grove.forgetServer(k, arg), r => console.warn("grove test forget", JSON.stringify(r)))
         else if (cmd === "accountsui") openAccounts(arg || "", () => console.warn("grove test accounts fallback"))
         else if (cmd === "accountsdump") console.warn("grove test accounts", app.accountsService, JSON.stringify((sidebar.places.servers || []).map(s => [s.name, s.kind, s.account || ""])))

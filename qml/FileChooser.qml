@@ -20,9 +20,32 @@ ApplicationWindow {
     // Used inside grove (a picture for View Options, a disc image...):
     // called with the chosen paths instead of answering the portal.
     property var onChosen: null
-    width: 960
-    height: 620
+    // Its own size, every time (the last one you left it at): the window
+    // manager otherwise gave it the size it remembers for grove's windows
+    // (a browser window's, almost the screen's height).
+    readonly property var wantSize: app && app.settings.chooser_size && app.settings.chooser_size.length === 2 ? app.settings.chooser_size : [960, 620]
+    width: wantSize[0]
+    height: wantSize[1]
     visible: false
+    property bool sized: false
+    onVisibleChanged: if (visible && !sized) sizeTimer.restart()
+    // (After the window manager's first configure, which sets its size.)
+    Timer {
+        id: sizeTimer
+        interval: 60
+        onTriggered: {
+            fc.sized = true
+            const w = Math.min(fc.wantSize[0], Math.round(fc.screen.desktopAvailableWidth * 0.95))
+            const h = Math.min(fc.wantSize[1], Math.round(fc.screen.desktopAvailableHeight * 0.9))
+            if (fc.width !== w || fc.height !== h) { fc.width = w; fc.height = h }
+        }
+    }
+    function rememberSize() {
+        if (!fc.sized || !app) return
+        const s = [Math.round(fc.width), Math.round(fc.height)]
+        const old = app.settings.chooser_size || []
+        if (old[0] !== s[0] || old[1] !== s[1]) app.grove.setSetting("chooser_size", JSON.stringify(s))
+    }
     color: Theme.window
     title: request.title || (saving ? "Save" : "Open")
 
@@ -74,7 +97,7 @@ ApplicationWindow {
         if (isDir) go(path)
         else accept([path])
     }
-    onClosing: if (!answered && !onChosen) app.grove.chooserDone(request.id, false, "[]", "{}")
+    onClosing: { rememberSize(); if (!answered && !onChosen) app.grove.chooserDone(request.id, false, "[]", "{}") }
 
     Item {
         anchors.fill: parent

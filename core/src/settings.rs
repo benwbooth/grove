@@ -123,6 +123,9 @@ pub struct Settings {
     /// Width of the side Information panel (0 = default).
     #[serde(default)]
     pub info_panel_width: u32,
+    /// The open/save dialog's size [w, h] (empty: 960×620).
+    #[serde(default)]
+    pub chooser_size: Vec<u32>,
     /// Dolphin's Folders panel (a tree) next to the sidebar.
     #[serde(default)]
     pub folders_panel: bool,

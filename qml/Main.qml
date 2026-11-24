@@ -29,6 +29,11 @@ Item {
 
     Component { id: winComp; BrowserWindow {} }
     Component { id: chooserComp; FileChooser {} }
+    function openChooser(req) {
+        const c = chooserComp.createObject(null, { app: app, request: req })
+        c.show(); c.raise(); c.requestActivate()
+        return c
+    }
 
     // Windows and tabs, saved as they change, restored at the next start.
     // Everything, so a restart comes back as it was: each window's tabs
@@ -182,11 +187,7 @@ Item {
             const dirs = JSON.parse(json)
             for (const w of app.windows) w.foldersTouched(dirs)
         }
-        function onChooserRequest(json) {
-            const req = JSON.parse(json)
-            const c = chooserComp.createObject(null, { app: app, request: req })
-            c.show(); c.raise(); c.requestActivate()
-        }
+        function onChooserRequest(json) { app.openChooser(JSON.parse(json)) }
     }
 
     // Finished jobs leave the list a few seconds later.
