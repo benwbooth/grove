@@ -15,6 +15,40 @@ GMenu {
     readonly property bool isArchive: pane.archiveLike(target)
     readonly property bool isDiskImage: /\.(iso|img|dmg)$/i.test(target.name || "")
     readonly property bool split: pane.win.currentTab && pane.win.currentTab.split
+    // Google Drive (canopy): the synced folder holding the item, its badge,
+    // and whether it's starred (asked for when the menu opens).
+    readonly property string cloudRoot: m.one && (target.path || "").indexOf("/") === 0 ? pane.cloudRootOf(target.path) : ""
+    readonly property bool inCloud: cloudRoot !== "" && target.path !== cloudRoot
+    readonly property string cloudCode: (target.cloud || "").split("/")[0]
+    property var cloudItem: null
+    readonly property bool canopyUp: !!pane.grove && pane.grove.canopyAvailable
+    function driveCall(action, arg, fn) {
+        const p = m.target.path
+        Async.call(m.pane.grove, k => m.pane.grove.cloudAction(k, action, p, arg || ""), r => {
+            if (r && r.error) m.pane.win.toast("error", r.error); else if (fn) fn(r || {})
+        })
+    }
+    function copyDriveLink() { driveCall("link", "", r => { if (r.url) { m.pane.grove.copyText(r.url); m.pane.win.toast("info", "Link to “" + (r.name || m.target.name) + "” copied.") } }) }
+    function viewOnDrive() { driveCall("link", "", r => { if (r.url) m.pane.grove.openUrl(r.url) }) }
+    function setStar(on) { driveCall("star", on ? "1" : "0", () => m.pane.win.toast("info", (on ? "Starred “" : "Unstarred “") + m.target.name + "” in Google Drive.")) }
+    function unsync() {
+        const name = m.target.name, pane = m.pane, p = m.target.path
+        pane.win.confirm("Remove “" + name + "” from this computer?",
+                         "It stays in Google Drive and stops syncing here. The copy on this computer goes to the Trash, so you can put it back.",
+                         "Remove", () => Async.call(pane.grove, k => pane.grove.cloudAction(k, "unsync", p, ""), r => {
+                             if (r && r.error) pane.win.toast("error", r.error)
+                             else { pane.win.toast("info", "“" + name + "” is only in Google Drive now."); pane.cloudBadges() }
+                         }), true)
+    }
+    onAboutToShow: {
+        cloudItem = null
+        if (inCloud) driveCall("file_status", "", r => m.cloudItem = r.item || null)
+        // The Google Drive submenu only shows inside a synced folder.
+        for (let i = 0; i < count; i++) {
+            const it = itemAt(i)
+            if (it && it.subMenu === driveMenu) { it.visible = m.inCloud; it.height = m.inCloud ? it.implicitHeight : 0 }
+        }
+    }
 
     GMenuItem { text: m.target.isDir ? "Open" : "Open"; iconName: "document-open"; shortcutText: Help.shown("Return"); enabled: !m.trash; onTriggered: m.pane.openSelected(false) }
     GMenuItem { text: "Open in New Tab"; iconName: "tab-new"; visible: !!m.target.isDir; height: visible ? implicitHeight : 0; shortcutText: Help.shown("Ctrl+Return"); onTriggered: m.pane.openSelected(true) }
@@ -162,6 +196,38 @@ GMenu {
         GMenuSeparator {}
         GMenuItem { text: "Pull"; iconName: "vcs-pull|go-down"; onTriggered: m.pane.win.gitAction("pull", m.pane.path, [], "") }
         GMenuItem { text: "Push"; iconName: "vcs-push|go-up"; onTriggered: m.pane.win.gitAction("push", m.pane.path, [], "") }
+    }
+    GMenu {
+        id: driveMenu
+        title: "Google Drive"
+        GMenuItem { text: "Copy Link"; iconName: "edit-copy|insert-link"; tip: "Put this item's Google Drive address on the clipboard"; onTriggered: m.copyDriveLink() }
+        GMenuItem { text: "View on Google Drive"; iconName: "internet-web-browser|applications-internet"; tip: "Open this item's page on drive.google.com in your browser"; onTriggered: m.viewOnDrive() }
+        GMenuItem { text: "Share…"; iconName: "document-share|send-to"; tip: "Choose who can see or edit it (opens canopy's Share sheet)"; onTriggered: m.driveCall("share", "") }
+        GMenuItem {
+            readonly property bool starred: !!m.cloudItem && !!m.cloudItem.starred
+            text: starred ? "Unstar" : "Star"
+            iconName: starred ? "starred-symbolic|rating" : "non-starred-symbolic|rating-unrated|rating"
+            enabled: !!m.cloudItem
+            tip: starred ? "Take it out of Starred in Google Drive" : "Add it to Starred in Google Drive, to find it quickly"
+            onTriggered: m.setStar(!starred)
+        }
+        GMenuSeparator {}
+        GMenuItem {
+            text: "Remove from This Computer…"
+            iconName: "edit-delete|user-trash"
+            enabled: m.cloudCode === "S"
+            tip: m.cloudCode === "S" ? "Stop syncing it here: it stays in Google Drive, the copy on this computer goes to the Trash (asks first)"
+                                     : "Only for items that are fully synced"
+            onTriggered: m.unsync()
+        }
+    }
+    GMenuItem {
+        text: "Sync with Google Drive…"
+        iconName: "folder-cloud|folder-sync|folder-remote"
+        visible: m.one && !!m.target.isDir && (m.target.path || "").indexOf("/") === 0 && m.cloudRoot === "" && !m.target.cloud && m.canopyUp
+        height: visible ? implicitHeight : 0
+        tip: "Keep this folder in Google Drive and in step with it (opens canopy)"
+        onTriggered: m.driveCall("add-folder", "")
     }
     GMenu {
         id: svc

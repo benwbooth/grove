@@ -19,6 +19,7 @@ pub struct GroveRust {
     pub(crate) redo_label: QString,
     pub(crate) places_revision: i32,
     pub(crate) settings_json: QString,
+    pub(crate) canopy_available: bool,
     settings: settings::Settings,
     views: HashMap<String, settings::FolderView>,
     next_job: i32,
@@ -32,6 +33,7 @@ impl Default for GroveRust {
             redo_label: QString::default(),
             places_revision: 0,
             settings_json: QString::from(serde_json::to_string(&s).unwrap().as_str()),
+            canopy_available: false,
             settings: s,
             views: startup().views.clone(),
             next_job: 1,
@@ -250,6 +252,16 @@ impl ffi::Grove {
                 g.as_mut().set_places_revision(r);
             });
         });
+        // canopy (Google Drive sync): its badges change as it syncs.
+        let (qa, qb) = (self.qt_thread(), self.qt_thread());
+        crate::canopy::watch(
+            move || {
+                let _ = qa.queue(|g| g.cloud_changed());
+            },
+            move |up| {
+                let _ = qb.queue(move |g| g.set_canopy_available(up));
+            },
+        );
         if std::env::var_os("GROVE_PORTAL").is_some() {
             crate::portal::serve(self.qt_thread());
         } else {
@@ -987,6 +999,16 @@ impl ffi::Grove {
     pub fn git_status(&self, key: &QString, dir: &QString) {
         let d = dir.to_string();
         self.answer(key, move || crate::vcs::status(&d));
+    }
+
+    pub fn cloud_status(&self, key: &QString, dir: &QString) {
+        let d = dir.to_string();
+        self.answer(key, move || crate::canopy::folder_status(&d));
+    }
+
+    pub fn cloud_action(&self, key: &QString, action: &QString, path: &QString, arg: &QString) {
+        let (a, p, arg) = (action.to_string(), path.to_string(), arg.to_string());
+        self.answer(key, move || crate::canopy::action(&a, &p, &arg));
     }
 
     pub fn quick_action(&self, key: &QString, action: &QString, paths: &QString, arg: &QString) {

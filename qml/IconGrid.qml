@@ -285,6 +285,7 @@ Item {
             required property string tags
             required property string tagColors
             required property string git
+            required property string cloud
             required property bool cut
             required property bool hidden
             required property string sizeText
@@ -297,7 +298,7 @@ Item {
                 grid: root
                 index: gd.index; name: gd.name; path: gd.path; isDir: gd.isDir; isLink: gd.isLink
                 selected: gd.selected; iconName: gd.iconName; thumb: gd.thumb; mtime: gd.mtime
-                tags: gd.tags; tagColors: gd.tagColors; git: gd.git; cut: gd.cut; hidden: gd.hidden
+                tags: gd.tags; tagColors: gd.tagColors; git: gd.git; cloud: gd.cloud; cut: gd.cut; hidden: gd.hidden
                 info: root.pane.usageOn ? root.pane.usageLabel(gd.path) : gd.isDir ? "" : (gd.dims !== "" ? gd.dims : gd.sizeText)
                 badge: gd.badge
             }
@@ -404,7 +405,7 @@ Item {
                         index: slot.row
                         name: slot.d.name || ""; path: slot.d.path || ""; isDir: !!slot.d.isDir; isLink: !!slot.d.isLink
                         selected: !!slot.d.selected; iconName: slot.d.icon || ""; thumb: !!slot.d.thumb; mtime: slot.d.mtime || 0
-                        tags: slot.d.tagText || ""; tagColors: slot.d.tagColors || ""; git: slot.d.git || ""; cut: !!slot.d.cut; hidden: !!slot.d.hidden
+                        tags: slot.d.tagText || ""; tagColors: slot.d.tagColors || ""; git: slot.d.git || ""; cloud: slot.d.cloud || ""; cut: !!slot.d.cut; hidden: !!slot.d.hidden
                         info: slot.d.isDir ? "" : (slot.d.dims || slot.d.sizeText || "")
                     }
                     Loader {

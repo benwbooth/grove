@@ -136,6 +136,7 @@ Window {
                 ToggleRow { label: "Status bar"; help: "The line at the bottom with item counts and the icon size slider."; key: "show_status_bar" }
                 ToggleRow { label: "Toolbar as title bar"; help: "Window buttons at the right of grove's toolbar, no separate title bar. Off adds the desktop's title bar on top (applies to new windows)."; key: "client_decorations" }
                 ToggleRow { label: "Version control badges"; help: "Mark repositories (git, Mercurial, Subversion, Jujutsu, Fossil, Bazaar) and every file in them: ✓ unchanged, M changed, A added, ? untracked, – ignored."; key: "show_git_status" }
+                ToggleRow { label: "Google Drive badges"; help: "In folders synced by canopy (Google Drive sync): ✓ synced, ↻ syncing, ✕ couldn't sync, ! changed in two places, – not synced. Right-click an item there for its Google Drive menu."; key: "show_cloud_status" }
             }
             Group {
                 title: "Files and folders"

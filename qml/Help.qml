@@ -185,6 +185,11 @@ QtObject {
         { id: "pvdelete", group: "Grove Preview", defaults: [], action: "Delete the selected shape, or the selected pages", fixed: "Delete", note: "" },
         { id: "pvshift", group: "Grove Preview", defaults: [], action: "Square shapes, 45° lines while drawing", fixed: "Shift+drag", note: "" },
         { id: "pvtext", group: "Grove Preview", defaults: [], action: "Select a word / a line", fixed: "Double-click / triple-click", note: "" },
+        { id: "gd.badges", group: "Google Drive (canopy)", defaults: [], action: "Sync badges on items in folders canopy syncs", fixed: "✓ ↻ ✕ ! –", note: "Synced, syncing, couldn't sync (open canopy to see why), changed in two places (open canopy to choose), not synced (an ignore rule). Hover one to read it; turn them off in Settings › General › Appearance › Google Drive badges" },
+        { id: "gd.link", group: "Google Drive (canopy)", defaults: [], action: "Copy an item's Google Drive link, or open it on the web", fixed: "right-click › Google Drive › Copy Link / View on Google Drive", note: "" },
+        { id: "gd.share", group: "Google Drive (canopy)", defaults: [], action: "Share an item, star it", fixed: "right-click › Google Drive › Share… / Star", note: "Share… opens canopy's Share sheet" },
+        { id: "gd.unsync", group: "Google Drive (canopy)", defaults: [], action: "Free up room: keep an item only in Google Drive", fixed: "right-click › Google Drive › Remove from This Computer…", note: "The copy here goes to the Trash; the one in Google Drive is kept" },
+        { id: "gd.add", group: "Google Drive (canopy)", defaults: [], action: "Sync a folder with Google Drive", fixed: "right-click a folder › Sync with Google Drive…", note: "Shown while canopy is running; opens canopy to pick the account and where it goes" },
         { id: "help", group: "Other", action: "Help and shortcuts", defaults: ["F1", "Ctrl+?", "Ctrl+Shift+/"], fixed: "", note: "Dolphin: F1  ·  Finder: ⇧⌘?" }
     ]
 

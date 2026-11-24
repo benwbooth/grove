@@ -14,6 +14,7 @@ mod actions;
 mod archive;
 mod archiver;
 mod burn;
+mod canopy;
 mod bridge;
 mod controller;
 mod mtp;

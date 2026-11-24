@@ -75,6 +75,9 @@ pub struct Settings {
     pub show_extensions: bool,
     #[serde(default = "t")]
     pub show_git_status: bool,
+    /// Google Drive sync badges from canopy (Ben's Google Drive client).
+    #[serde(default = "t")]
+    pub show_cloud_status: bool,
     /// Disk usage mode: every item's size and share as a bar (View › Show
     /// Disk Usage).
     #[serde(default)]

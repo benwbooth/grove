@@ -1575,6 +1575,14 @@ ApplicationWindow {
         else if (cmd === "savesearch") saveSmartFolder(p)
         else if (cmd === "menu") p.showItemMenu(Number(arg), 100, 100)
         else if (cmd === "bgmenu") p.showBackgroundMenu()
+        // "itemmenu=Google Drive": the open item menu's submenu with that title.
+        else if (cmd === "itemmenu") {
+            const m = p.itemMenu
+            for (let i = 0; i < m.count; i++) {
+                const it = m.itemAt(i)
+                if (it && it.subMenu && it.text === arg) { m.currentIndex = i; it.subMenu.popup(it, it.width - 3, -Theme.menuPad); break }
+            }
+        }
         else if (cmd === "actions") { if (actionButton) appMenu.openBelow(actionButton); else appMenu.openAt(root, root.width - appMenu.implicitWidth - 12, Theme.toolbarHeight) }
         // "appmenu=View/Sort By": the action button's menus, those submenus open.
         else if (cmd === "appmenu") {

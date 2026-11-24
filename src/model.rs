@@ -168,6 +168,9 @@ pub mod qobject {
         /// Fill in git status for this folder (JSON {path: "M"|"A"|"?"...}).
         #[qinvokable]
         fn set_git_status(self: Pin<&mut FolderModel>, json: &QString);
+        /// Google Drive badges from canopy (JSON {path: "S/canopy"...}).
+        #[qinvokable]
+        fn set_cloud_status(self: Pin<&mut FolderModel>, json: &QString);
         /// Tags changed on these paths (read again).
         #[qinvokable]
         fn refresh_tags(self: Pin<&mut FolderModel>, paths: &QString);
@@ -277,6 +280,8 @@ pub struct FolderModelRust {
     patterns: Vec<(bool, String)>,
     dirs_only: bool,
     group_by: String,
+    /// Google Drive badges (canopy.rs) by path: "S/canopy"...
+    cloud: HashMap<String, String>,
     /// Identifies this model to the media worker (dimensions, durations).
     media_id: std::cell::Cell<u64>,
 }
@@ -285,7 +290,7 @@ const ROLES: &[&str] = &[
     "name", "path", "isDir", "isLink", "size", "sizeText", "mtime", "dateText", "kind", "mime", "iconName", "hidden", "selected", "depth",
     "expanded", "tags", "tagColors", "note", "git", "cut", "thumb", "row", "broken", "ext", "created", "createdText",
     "rating", "addedText", "openedText", "permissions", "owner", "group", "fullPath", "section", "dims", "duration",
-    "badge", "isArchive", "subvol",
+    "badge", "isArchive", "subvol", "cloud",
 ];
 
 fn qs(s: &str) -> QString {
@@ -450,6 +455,7 @@ impl qobject::FolderModel {
             }
             "note" => QVariant::from(&qs(&it.e.note)),
             "git" => QVariant::from(&qs(&it.git)),
+            "cloud" => QVariant::from(&qs(r.cloud.get(&it.e.path).map(String::as_str).unwrap_or(""))),
             "cut" => QVariant::from(&r.cut.contains(&it.e.path)),
             "thumb" => QVariant::from(&mime::thumbable(&it.e, &it.mime)),
             "row" => QVariant::from(&row),
@@ -1152,7 +1158,7 @@ impl qobject::FolderModel {
             "mtime": b.e.mtime, "mime": b.mime.name, "kind": if b.e.subvol.is_empty() { b.mime.comment.as_str() } else { b.e.subvol }, "subvol": b.e.subvol, "icon": b.icon,
             "note": b.e.note, "key": b.e.key, "tags": b.tags, "depth": b.e.depth, "expanded": b.expanded,
             "thumb": mime::thumbable(&b.e, &b.mime), "target": b.e.target, "selected": b.selected, "rating": b.rating,
-            "hidden": b.e.hidden, "git": b.git, "cut": self.rust().cut.contains(&b.e.path),
+            "hidden": b.e.hidden, "git": b.git, "cloud": self.rust().cloud.get(&b.e.path).cloned().unwrap_or_default(), "cut": self.rust().cut.contains(&b.e.path),
             "tagColors": b.tags.iter().map(|t| grove_core::tags::color_of(t).unwrap_or("")).collect::<Vec<_>>().join(","),
             "tagText": b.tags.join(", "), "sizeText": if b.e.is_dir { "--".to_string() } else { grove_core::util::human_size(b.e.size) },
             "row": row, "dims": self.media_of(&b, false).dims,
@@ -1188,6 +1194,25 @@ impl qobject::FolderModel {
         }
         let n = self.rust().vis.len() as i32;
         if any && n > 0 {
+            qobject::grove_rows_changed(self.as_mut().upcast_pin(), 0, n - 1);
+        }
+    }
+
+    fn set_cloud_status(mut self: Pin<&mut Self>, json: &QString) {
+        let mut map: HashMap<String, String> = HashMap::new();
+        if let Ok(serde_json::Value::Object(m)) = serde_json::from_str::<serde_json::Value>(&json.to_string()) {
+            for (k, v) in m {
+                if let (false, Some(v)) = (k.starts_with("__"), v.as_str()) {
+                    map.insert(k, v.to_string());
+                }
+            }
+        }
+        if map == self.rust().cloud {
+            return;
+        }
+        self.as_mut().rust_mut().cloud = map;
+        let n = self.rust().vis.len() as i32;
+        if n > 0 {
             qobject::grove_rows_changed(self.as_mut().upcast_pin(), 0, n - 1);
         }
     }

@@ -62,6 +62,8 @@ pub mod ffi {
         #[qproperty(QString, redo_label, cxx_name = "redoLabel")]
         #[qproperty(i32, places_revision, cxx_name = "placesRevision")]
         #[qproperty(QString, settings_json, cxx_name = "settingsJson")]
+        // canopy's socket is there (Google Drive sync is running).
+        #[qproperty(bool, canopy_available, cxx_name = "canopyAvailable")]
         type Grove = super::GroveRust;
     }
 
@@ -103,6 +105,10 @@ pub mod ffi {
         /// away, or its accounts changed.
         #[qsignal]
         fn accounts_changed(self: Pin<&mut Grove>, available: bool);
+        /// canopy reported sync changes (debounced): folders under a canopy
+        /// root ask for their badges again.
+        #[qsignal]
+        fn cloud_changed(self: Pin<&mut Grove>);
 
         #[qinvokable]
         fn start(self: Pin<&mut Grove>);
@@ -247,6 +253,12 @@ pub mod ffi {
         fn remove_smart_folder(self: &Grove, name: &QString);
         #[qinvokable]
         fn git_status(self: &Grove, key: &QString, dir: &QString);
+        /// Google Drive badges from canopy: {path: "S/canopy"..., __root}.
+        #[qinvokable]
+        fn cloud_status(self: &Grove, key: &QString, dir: &QString);
+        /// The Google Drive menu (canopy.rs `action`): {…} or {error}.
+        #[qinvokable]
+        fn cloud_action(self: &Grove, key: &QString, action: &QString, path: &QString, arg: &QString);
         #[qinvokable]
         fn quick_action(self: &Grove, key: &QString, action: &QString, paths: &QString, arg: &QString);
         #[qinvokable]

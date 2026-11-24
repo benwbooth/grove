@@ -229,6 +229,24 @@ Item {
             width: isPreview ? Math.max(root.colW * 1.3, strip.width - root.chain.length * root.colW) : (ownWidth > 0 ? ownWidth : root.colW)
             height: strip.height
 
+            // Google Drive badges (canopy) for this column's folder; again
+            // when canopy reports changes under its synced folder.
+            property string cloudRoot: ""
+            function cloudBadges() {
+                const pane = root.pane, folder = column.folder
+                if (!pane.app || pane.app.settings.show_cloud_status === false || folder.indexOf("/") !== 0) { own.setCloudStatus("{}"); cloudRoot = ""; return }
+                Async.call(pane.grove, k => pane.grove.cloudStatus(k, folder), r => {
+                    if (own.path !== folder) return
+                    column.cloudRoot = (r && r.__root) || ""
+                    if (column.cloudRoot) pane.noteCloudRoot(column.cloudRoot)
+                    own.setCloudStatus(JSON.stringify(r || {}))
+                })
+            }
+            Connections {
+                target: root.pane.grove
+                enabled: column.cloudRoot !== ""
+                function onCloudChanged() { if (!column.isPreview) column.cloudBadges() }
+            }
             FolderModel {
                 id: own
                 onLoaded: {
@@ -237,6 +255,7 @@ Item {
                     const pane = root.pane, folder = column.folder
                     if (pane.app && pane.app.settings.show_git_status && folder.indexOf("/") === 0)
                         Async.call(pane.grove, k => pane.grove.gitStatus(k, folder), r => { if (own.path === folder) own.setGitStatus(JSON.stringify(r || {})) })
+                    column.cloudBadges()
                 }
             }
             // The last column shows the pane's model, but only once it has
@@ -333,6 +352,7 @@ Item {
                     required property bool cut
                     required property string sizeText
                     required property string git
+                    required property string cloud
                     width: lv.width
                     readonly property bool browsable: r.isDir || (r.isArchive && root.pane.archiveLike(r))
                     // An archive is a file (a click selects it and previews
@@ -359,6 +379,7 @@ Item {
                     }
                     GIcon { id: ic; x: 12; anchors.verticalCenter: parent.verticalCenter; size: 18; name: r.iconName; opacity: r.hidden || r.cut ? 0.5 : 1 }
                     GitBadge { status: r.git; anchors.right: ic.right; anchors.bottom: ic.bottom; anchors.margins: -5; scale: 0.7 }
+                    CloudBadge { status: r.cloud; anchors.left: ic.left; anchors.bottom: ic.bottom; anchors.margins: -5; scale: 0.7 }
                     GLabel {
                         id: colName
                         visible: !r.renaming

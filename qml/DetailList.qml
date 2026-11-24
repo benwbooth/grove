@@ -240,6 +240,7 @@ Item {
             required property string tagColors
             required property string note
             required property string git
+            required property string cloud
             required property bool cut
             required property bool hidden
             required property bool thumb
@@ -364,6 +365,7 @@ Item {
                         source: rowItem.thumb && root.thumbs && root.pane.app && root.pane.app.settings.list_thumbnails ? "image://thumb/" + encodeURIComponent(rowItem.path) + "?m=" + rowItem.mtime : ""
                     }
                     GitBadge { status: rowItem.git; anchors.right: ic.right; anchors.bottom: ic.bottom; anchors.margins: -4; scale: 0.8 }
+                    CloudBadge { status: rowItem.cloud; anchors.left: ic.left; anchors.bottom: ic.bottom; anchors.margins: -4; scale: 0.8 }
                     GLabel {
                         id: nameLabel
                         anchors.left: ic.right

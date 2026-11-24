@@ -21,6 +21,7 @@ Item {
     property string tags: ""
     property string tagColors: ""
     property string git: ""
+    property string cloud: ""
     property bool cut: false
     property bool hidden: false
     property string info: ""
@@ -103,6 +104,8 @@ Item {
         GLabel { anchors.centerIn: parent; text: "↗"; color: "black"; font.pixelSize: 10 }
     }
     GitBadge { status: cell.git; x: iconBg.x + iconBg.width - width - 2; y: iconBg.y + 2 }
+    // Google Drive (canopy): bottom left, beside the alias arrow.
+    CloudBadge { status: cell.cloud; x: iconBg.x + (cell.isLink ? 22 : 2); y: iconBg.y + iconBg.height - height - 2 }
     // Selection mode (Dolphin): a checkbox on every item.
     SelectCheck {
         visible: cell.pane.selectionMode

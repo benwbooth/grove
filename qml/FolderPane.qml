@@ -143,6 +143,35 @@ FocusScope {
     property bool dropHover: false
     property var gitMap: ({})
     property bool inGit: false
+    // Google Drive (canopy): the synced folder this folder is inside ("" when
+    // none), and every synced folder seen here (for the item menu).
+    property string cloudRoot: ""
+    property var cloudRoots: ({})
+    readonly property bool cloudOn: !app || app.settings.show_cloud_status !== false
+    onCloudOnChanged: cloudBadges()
+    function noteCloudRoot(r) { if (r && !cloudRoots[r]) { const m = Object.assign({}, cloudRoots); m[r] = true; cloudRoots = m } }
+    // The synced folder holding `p`, or "".
+    function cloudRootOf(p) {
+        for (const r in cloudRoots) if (p === r || p.indexOf(r + "/") === 0) return r
+        return ""
+    }
+    function cloudBadges() {
+        const p = pane.path
+        if (!grove || !cloudOn || pane.special || pane.searching || p.indexOf("/") !== 0) { cloudRoot = ""; fm.setCloudStatus("{}"); return }
+        Async.call(grove, k => grove.cloudStatus(k, p), r => {
+            if (pane.path !== p) return
+            pane.cloudRoot = (r && r.__root) || ""
+            pane.noteCloudRoot(pane.cloudRoot)
+            fm.setCloudStatus(JSON.stringify(r || {}))
+        })
+    }
+    // canopy reported changes (debounced in canopy.rs): only folders inside a
+    // synced folder ask again.
+    Connections {
+        target: pane.grove
+        enabled: pane.cloudRoot !== ""
+        function onCloudChanged() { pane.cloudBadges() }
+    }
     property string groupBy: ""
     // Finder's View Options (Ctrl+J), remembered per folder.
     property int gridSpacing: 0          // 1–10, 0 = default (4)
@@ -206,6 +235,7 @@ FocusScope {
             if (app && app.settings.show_git_status && !pane.special && !pane.searching) {
                 Async.call(grove, k => grove.gitStatus(k, pane.path), r => { pane.gitMap = r || {}; pane.inGit = !!r && (r.__vcs === "git" || r.__vcs === "jj"); fm.setGitStatus(JSON.stringify(r || {})) })
             }
+            pane.cloudBadges()
         }
     }
 
@@ -1072,6 +1102,7 @@ FocusScope {
     }
 
     ItemMenu { id: itemMenu; pane: itemMenu.parent }
+    property alias itemMenu: itemMenu
 
     GMenu {
         id: bgMenu
@@ -1108,6 +1139,14 @@ FocusScope {
             GMenuItem { text: "Commit All Changes…"; iconName: "vcs-commit|document-save"; onTriggered: pane.win.askCommit(pane.path, []) }
             GMenuItem { text: "Show Changes"; iconName: "vcs-diff|document-preview"; onTriggered: pane.win.gitAction("diff", pane.path, [], "") }
             GMenuItem { text: "Show History"; iconName: "vcs-log|view-history"; onTriggered: pane.win.gitAction("log", pane.path, [], "") }
+        }
+        GMenuItem {
+            text: "Sync “" + pane.title + "” with Google Drive…"
+            iconName: "folder-cloud|folder-sync|folder-remote"
+            visible: !pane.special && pane.path.indexOf("/") === 0 && pane.cloudRootOf(pane.path) === "" && !!pane.grove && pane.grove.canopyAvailable
+            height: visible ? implicitHeight : 0
+            tip: "Keep this folder in Google Drive and in step with it (opens canopy)"
+            onTriggered: Async.call(pane.grove, k => pane.grove.cloudAction(k, "add-folder", pane.path, ""), r => { if (r && r.error) pane.win.toast("error", r.error) })
         }
         GMenuSeparator {}
         GMenu {
