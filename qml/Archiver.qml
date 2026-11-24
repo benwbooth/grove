@@ -94,7 +94,8 @@ QtObject {
     // acceptLabel, filters}; fn(paths).
     property Component chooserComp: Component { FileChooser {} }
     function choose(title, opts, fn) {
-        const req = Object.assign({ title: title, mode: "open" }, opts || {})
+        // Archives are files to pick here, not folders to go into.
+        const req = Object.assign({ title: title, mode: "open", archivesAsFiles: true }, opts || {})
         const c = chooserComp.createObject(null, { app: app, request: req, onChosen: fn })
         c.show(); c.raise(); c.requestActivate()
         return c

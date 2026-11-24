@@ -322,9 +322,6 @@ Window {
                 x: 10
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 4
-                GButton { iconName: "go-up|go-previous"; enabled: aw.cwd !== ""; tip: "Up one folder (Backspace)"; onClicked: aw.up() }
-                GButton { iconName: "document-open|folder-open"; tip: "Open another archive (Ctrl+O)"; onClicked: aw.openOther() }
-                Item { width: 6; height: 1 }
                 component Tool: GButton {
                     property string label: ""
                     width: Math.max(54, lbl.implicitWidth + 12)
@@ -332,6 +329,9 @@ Window {
                     iconSize: 20
                     GLabel { id: lbl; text: parent.label; font.pixelSize: Theme.caption; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 2; color: Theme.fgSecondary }
                 }
+                Tool { label: "Up"; iconName: "go-up|go-previous"; enabled: aw.cwd !== ""; tip: "Up one folder (Backspace)"; onClicked: aw.up() }
+                Tool { label: "Open"; iconName: "document-open|folder-open"; tip: "Open another archive (Ctrl+O)"; onClicked: aw.openOther() }
+                Rectangle { width: 1; height: bar.height - 20; anchors.verticalCenter: parent.verticalCenter; color: Theme.separator }
                 Tool { label: "Add"; iconName: "list-add|archive-insert"; enabled: aw.writable; tip: aw.writable ? "Add files to this archive (or drop them on the window) — Ctrl+Shift+A" : "This kind of archive can only be read"; onClicked: aw.chooseAdd() }
                 Tool { label: "Extract"; iconName: "archive-extract|document-export"; enabled: !!aw.listing; tip: aw.selCount ? "Extract what's selected… (Ctrl+E)" : "Extract everything… (Ctrl+E)"; onClicked: aw.extractSelected() }
                 Tool { label: "Test"; iconName: "dialog-ok-apply|checkmark"; enabled: !!aw.listing; tip: "Check every file against its checksum, to find damage (Ctrl+T)"; onClicked: aw.test() }
@@ -749,6 +749,7 @@ Window {
                 if (k === "enter") aw.enter(v)
                 else if (k === "expand") aw.toggle(v, true, false)
                 else if (k === "expandall") aw.expandAll(true)
+                else if (k === "openpanel") aw.openOther()
                 else if (k === "select") { for (let i = 0; i < aw.rows.length; i++) if (aw.rows[i].name === v) aw.select(i, "toggle") }
                 else if (k === "info") aw.showInfo = true
                 else if (k === "menu") rowMenu.popup(200, 160)

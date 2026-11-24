@@ -353,6 +353,8 @@ FocusScope {
     // Anything bsdtar can open (grove's list: zip, tar.*, 7z, rar, iso, cab,
     // deb/rpm, cbz/cbr, jar/apk...), decided by the model from type and name.
     function archiveLike(it) {
+        // Grove Archiver's open panels pick archives as files.
+        if (win && win.chooserMode && win.request && win.request.archivesAsFiles) return false
         return !!it && !!it.isArchive && app && app.settings.browse_archives !== false
     }
     function openSelected(inNewTab) {
