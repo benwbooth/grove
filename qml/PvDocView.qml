@@ -113,15 +113,21 @@ Item {
                 spacing: 12
                 Repeater {
                     model: dv.display === "two" ? (row.index * 2 + 1 < dv.pages.length ? 2 : 1) : 1
-                    PvPage {
+                    Item {
+                        id: slot
                         required property int index
-                        readonly property int pi: dv.display === "two" ? row.index * 2 + index : row.index
-                        win: dv.win
-                        doc: dv.doc
-                        index: pi
-                        pg: dv.pages[pi] || null
-                        k: dv.k
-                        anchors.verticalCenter: parent.verticalCenter
+                        readonly property int pi: dv.display === "two" ? row.index * 2 + slot.index : row.index
+                        width: page.width
+                        height: page.height
+                        anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+                        PvPage {
+                            id: page
+                            win: dv.win
+                            doc: dv.doc
+                            index: slot.pi
+                            pg: dv.pages[slot.pi] || null
+                            k: dv.k
+                        }
                     }
                 }
             }

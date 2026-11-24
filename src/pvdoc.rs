@@ -51,6 +51,11 @@ impl ffi::Grove {
                 v["kind"] = json!("pdf");
                 v
             } else {
+                // The first save with text would wait for the font list.
+                static WARM: std::sync::Once = std::sync::Once::new();
+                WARM.call_once(|| {
+                    std::thread::spawn(imgedit::warm_fonts);
+                });
                 let mut v = imgedit::info(Path::new(&p));
                 v["kind"] = json!("image");
                 v

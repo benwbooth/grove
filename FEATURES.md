@@ -106,6 +106,25 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Markup (draw/annotate), trim video | ✅ | – | ✅ Quick Look: pen, highlighter, shapes, arrows, text, crop, rotate; trim video/audio (ffmpeg stream copy when the cut starts on a keyframe, exact re-encode otherwise); Save (original to the Trash, Undo) or Save as Copy |
 | Tooltip previews | – | ✅ | ✅ Settings › Previews in tooltips: preview, kind, size, dimensions, date (icon and list views) |
 
+## Grove Preview (macOS Preview; replaces Okular and Gwenview)
+
+`grove --preview FILES` (grove-preview.desktop for PDFs and pictures). Rust + MuPDF + libcups; pictures through the `image` crate (libvips for HEIC, AVIF, RAW...).
+
+| Feature | Preview | grove |
+|---|---|---|
+| Several documents in one window, sidebar of thumbnails | ✅ | ✅ drag pages to reorder or into another PDF; drop files to insert |
+| Table of contents, highlights and notes, bookmarks, contact sheet | ✅ | ✅ |
+| Continuous, single page, two pages; actual size, fit, zoom, pinch | ✅ | ✅ |
+| Search with results list, text selection, copy, links | ✅ | ✅ |
+| Markup: sketch, highlighter, shapes (line, arrow, rectangle, rounded, oval, speech bubble, star, polygon, loupe), text, notes, signatures | ✅ | ✅ select, move, resize, line width, border/fill colour, font; saved as real PDF annotations |
+| Highlight, underline, strikethrough text | ✅ | ✅ |
+| Fill in PDF forms | ✅ | ✅ text, check boxes, radio buttons, lists |
+| Rotate, delete, insert (file or blank), crop pages | ✅ | ✅ |
+| Pictures: Instant Alpha, Adjust Color (levels, exposure, contrast, highlights, shadows, saturation, temperature, tint, sepia, sharpness), Adjust Size, crop, rotate, flip | ✅ | ✅ |
+| Save, Duplicate, Revert, Export (PDF with password, PNG, JPEG, WebP, TIFF, BMP, GIF), pictures to one PDF | ✅ | ✅ Save puts the previous version in the Trash |
+| Print (printer, copies, pages, paper, layout, two-sided, colour) | ✅ | ✅ CUPS |
+| Inspector, editable PDF info, slideshow | ✅ | ✅ |
+
 ## Integration
 
 | Feature | F | D | grove |

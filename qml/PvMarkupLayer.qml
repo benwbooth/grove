@@ -154,17 +154,7 @@ Item {
                     }
                     g.stroke()
                 } else if (o.t === "text") {
-                    if (o.fill) { g.fillStyle = o.fill; g.fillRect(bx, by, bw, bh) }
-                    const size = Math.max(4, (o.s || 14) * k)
-                    g.font = (o.i ? "italic " : "") + (o.b ? "bold " : "") + size + "px \"" + (o.font || Theme.family) + "\""
-                    g.fillStyle = o.c
-                    g.textBaseline = "top"
-                    const lines = wrap(g, o.text || "", bw - 4 * k)
-                    for (let i = 0; i < lines.length; i++) {
-                        const lw = g.measureText(lines[i]).width
-                        const tx = o.al === "center" ? bx + (bw - lw) / 2 : o.al === "right" ? bx + bw - 2 * k - lw : bx + 2 * k
-                        g.fillText(lines[i], tx, by + i * size * 1.2)
-                    }
+                    // Drawn by the Text items below.
                 } else if (o.t === "note") {
                     // A sticky note.
                     const s = 20 * k
@@ -205,6 +195,36 @@ Item {
                 g.fillRect(b[2] - 4, b[3] - 4, 8, 8)
                 g.strokeRect(b[2] - 4, b[3] - 4, 8, 8)
                 g.restore()
+            }
+        }
+    }
+
+    // Text boxes (real text: wrapped, native rendering).
+    Repeater {
+        model: ml.liveOps || ml.ops
+        Rectangle {
+            required property var modelData
+            required property int index
+            readonly property var o: modelData
+            visible: o.t === "text" && index !== ml.editing
+            x: visible ? Math.min(o.x1, o.x2) * ml.k : 0
+            y: visible ? Math.min(o.y1, o.y2) * ml.k : 0
+            width: visible ? Math.abs(o.x2 - o.x1) * ml.k : 0
+            height: visible ? Math.abs(o.y2 - o.y1) * ml.k : 0
+            color: visible && o.fill ? o.fill : "transparent"
+            Text {
+                visible: parent.visible
+                anchors.fill: parent
+                anchors.leftMargin: 2 * ml.k
+                anchors.rightMargin: 2 * ml.k
+                text: parent.o.text || ""
+                color: parent.o.c || "black"
+                wrapMode: Text.Wrap
+                font.family: parent.o.font || Theme.family
+                font.pixelSize: Math.max(4, (parent.o.s || 14) * ml.k)
+                font.bold: !!parent.o.b
+                font.italic: !!parent.o.i
+                horizontalAlignment: parent.o.al === "center" ? Text.AlignHCenter : parent.o.al === "right" ? Text.AlignRight : Text.AlignLeft
             }
         }
     }

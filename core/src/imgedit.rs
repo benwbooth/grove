@@ -296,6 +296,11 @@ fn fonts() -> &'static fontdb::Database {
     })
 }
 
+/// Load the system's font list ahead of the first save with text.
+pub fn warm_fonts() {
+    let _ = fonts();
+}
+
 /// A font by family name (sans-serif, serif, monospace or a real name).
 fn font(family: &str, bold: bool, italic: bool) -> Option<ab_glyph::FontArc> {
     let db = fonts();
