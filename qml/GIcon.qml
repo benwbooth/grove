@@ -18,9 +18,13 @@ Image {
     readonly property bool fileArt: {
         const n = (name.split("|")[0] || "")
         if (n.endsWith("-symbolic") || n.endsWith("-new")) return false
-        return /^(folder|inode-|text-|application-|image-|video-|audio-|font-|model-|package-|x-office|user-home|user-desktop|unknown)/.test(n) || n.indexOf("-x-") >= 0 || n.indexOf("/") === 0
+        return /^(grove-type:|folder|inode-|text-|application-|image-|video-|audio-|font-|model-|package-|x-office|user-home|user-desktop|unknown)/.test(n) || n.indexOf("-x-") >= 0 || n.indexOf("/") === 0
     }
-    readonly property real renderScale: fileArt ? Math.max(2, Math.ceil(Screen.devicePixelRatio * 1.5)) : 1
+    // grove's own file type icons (image://icon/grove-type:...) are drawn
+    // from vectors at exactly the device pixels shown (Qt multiplies the
+    // source size by the window's scale), so they need no shrinking.
+    readonly property bool typeArt: name.indexOf("grove-type:") === 0
+    readonly property real renderScale: typeArt ? 1 : fileArt ? Math.max(2, Math.ceil(Screen.devicePixelRatio * 1.5)) : 1
     sourceSize.width: crispPx > 0 ? crispPt : Math.ceil(size * renderScale)
     sourceSize.height: crispPx > 0 ? crispPt : Math.ceil(size * renderScale)
 
@@ -67,6 +71,6 @@ Image {
     asynchronous: true
     cache: true
     smooth: true
-    mipmap: fileArt
+    mipmap: fileArt && !typeArt
     fillMode: Image.PreserveAspectFit
 }

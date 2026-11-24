@@ -53,6 +53,8 @@ pub mod ffi {
         fn grove_pdf_page(path: &str, page: u32, width: u32, token: u64) -> String;
         fn grove_archive_local(path: &str, extract: bool) -> String;
         fn grove_du_treemap(scan: i32, node: u32, w: u32, h: u32, apparent: bool) -> Vec<u8>;
+        /// A file type picture's SVG (icons/filetypes), empty if unknown.
+        fn grove_type_icon_svg(name: &str) -> Vec<u8>;
     }
 
     extern "RustQt" {
@@ -640,6 +642,10 @@ fn grove_thumb_done(token: u64) {
 
 fn grove_archive_local(path: &str, extract: bool) -> String {
     crate::archive::local_copy(path, extract).map(|p| p.display().to_string()).unwrap_or_default()
+}
+
+fn grove_type_icon_svg(name: &str) -> Vec<u8> {
+    crate::mime::type_icon_svg(name).to_vec()
 }
 
 fn grove_du_treemap(scan: i32, node: u32, w: u32, h: u32, apparent: bool) -> Vec<u8> {

@@ -133,7 +133,71 @@ pub fn icon_for(e: &Entry, m: &MimeRec) -> String {
     if e.mode & 0o111 != 0 && (m.name == "application/x-executable" || m.name == "application/x-sharedlib" || m.name == "application/x-pie-executable") {
         return "application-x-executable|application-x-executable-script".into();
     }
-    format!("{}|{}|unknown", m.icon, if m.generic.is_empty() { "unknown" } else { &m.generic })
+    let theme = format!("{}|{}|unknown", m.icon, if m.generic.is_empty() { "unknown" } else { &m.generic });
+    match type_icon(e, m) {
+        Some(t) => format!("{t}|{theme}"),
+        None => theme,
+    }
+}
+
+struct TypeTables {
+    pictures: HashMap<&'static str, &'static [u8]>,
+    exts: HashMap<&'static str, (&'static str, &'static str)>,
+    names: HashMap<&'static str, (&'static str, &'static str)>,
+    mimes: HashMap<&'static str, (&'static str, &'static str)>,
+    generic: HashMap<&'static str, &'static str>,
+}
+
+fn type_tables() -> &'static TypeTables {
+    use crate::filetype_table as t;
+    static T: OnceLock<TypeTables> = OnceLock::new();
+    T.get_or_init(|| TypeTables {
+        pictures: t::PICTURES.iter().copied().collect(),
+        exts: t::EXTS.iter().map(|&(k, p, l)| (k, (p, l))).collect(),
+        names: t::NAMES.iter().map(|&(k, p, l)| (k, (p, l))).collect(),
+        mimes: t::MIMES.iter().map(|&(k, p, l)| (k, (p, l))).collect(),
+        generic: t::GENERIC.iter().copied().collect(),
+    })
+}
+
+/// A file type picture's SVG (icons/filetypes), for the icon provider.
+pub fn type_icon_svg(name: &str) -> &'static [u8] {
+    type_tables().pictures.get(name).copied().unwrap_or(&[])
+}
+
+/// The label written on a type's page: the extension in capitals, up to
+/// seven letters (a longer one says nothing useful at that size).
+fn ext_label(ext: &str) -> String {
+    let l: String = ext.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '#' | '-' | '_')).collect();
+    if l.is_empty() || l.chars().count() > 7 {
+        return String::new();
+    }
+    l.to_ascii_uppercase()
+}
+
+/// grove's own picture for a file ("grove-type:code-rust/RUST"): by whole
+/// name, then the longest extension the table knows ("x.tar.gz" before
+/// "gz"), then the MIME type, then its generic icon or family, which take
+/// the extension as their label. None leaves it to the icon theme.
+pub fn type_icon(e: &Entry, m: &MimeRec) -> Option<String> {
+    let t = type_tables();
+    let lname = e.name.to_ascii_lowercase();
+    let mut hit = t.names.get(lname.as_str()).map(|&(p, l)| (p, l.to_string()));
+    if hit.is_none() {
+        // Every suffix after a dot, longest first (".gitignore" is "gitignore").
+        hit = lname.match_indices('.').find_map(|(i, _)| t.exts.get(&lname[i + 1..]).map(|&(p, l)| (p, l.to_string())));
+    }
+    if hit.is_none() {
+        hit = t.mimes.get(m.name.as_str()).map(|&(p, l)| (p, l.to_string()));
+    }
+    if hit.is_none() {
+        let family = m.name.split('/').next().unwrap_or("");
+        let p = t.generic.get(m.generic.as_str()).or_else(|| t.generic.get(m.icon.as_str())).or_else(|| t.generic.get(family)).or_else(|| t.generic.get("unknown"))?;
+        hit = Some((p, ext_label(e.ext())));
+    }
+    let (pic, label) = hit?;
+    // '#' (C#) would end the image URL: the provider decodes %23.
+    Some(format!("grove-type:{pic}/{}", label.replace('%', "%25").replace('#', "%23").replace('|', "").replace('?', "")))
 }
 
 /// Whether a thumbnail is worth asking for.

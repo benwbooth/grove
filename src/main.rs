@@ -23,6 +23,7 @@ mod dbus;
 mod disks;
 mod docconv;
 mod du;
+mod filetype_table;
 mod hexdoc;
 mod langguess;
 mod gitstatus;

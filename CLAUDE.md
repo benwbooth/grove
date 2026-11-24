@@ -13,6 +13,9 @@ Finder-style file manager with Dolphin's power. Rust + Qt Quick via cxx-qt.
   QAbstractListModel), `terminal.rs` (F4 panel), plus helpers.
   `cpp/native.cpp` + `include/native_helpers.h`: app creation (native
   text), thumbnail/icon image providers, QMimeDatabase, clipboard.
+- File type icons: `scripts/gen-filetype-icons.py` writes icons/filetypes/*.svg
+  and src/filetype_table.rs (add extensions there, rerun, commit both);
+  mime::type_icon picks one, cpp/native.cpp typeIcon draws it with its label.
 - `qml/`: every QML file is registered automatically (build.rs).
 
 Rules (Ben's):

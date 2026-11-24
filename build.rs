@@ -72,6 +72,8 @@ fn main() {
         .qt_module("Quick")
         .qt_module("QuickControls2")
         .qt_module("Pdf")
+        // grove's file type icons (QSvgRenderer, cpp/native.cpp typeIcon).
+        .qt_module("Svg")
         // Grove Player's picture (mpv's OpenGL render API).
         .qt_module("OpenGL")
         .cpp_file("cpp/native.cpp")

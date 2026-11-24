@@ -9,6 +9,7 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Feature | F | D | grove |
 |---|---|---|---|
 | Icon view with zoom slider / Ctrl+wheel | ✅ | ✅ | ✅ |
+| An icon per file type | ✅ | theme | ✅ grove's own (scripts/gen-filetype-icons.py): a page in the type's colour with a picture of the kind of file and, from 40 px up, the extension or type name written on it (JPEG, RUST, ZIP); ~770 extensions, names (Makefile, LICENSE) and content types; anything else is a grey page with its extension. Folders keep the icon theme's |
 | List/details view, sortable columns | ✅ | ✅ | ✅ |
 | Expandable folders in list view | ✅ | ✅ | ✅ (triangles, Right/Left) |
 | Choosable columns (dates, size, kind, tags, rating, permissions, owner, group, path) | ✅ | ✅ | ✅ right-click the header; also Dimensions (pictures, video) and Duration (video, audio), read off the UI thread |

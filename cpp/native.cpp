@@ -47,6 +47,7 @@
 #include <QtQml/QQmlContext>
 #include <QtQuick/QQuickImageProvider>
 #include <QtQuick/QQuickWindow>
+#include <QtSvg/QSvgRenderer>
 #include <atomic>
 #include <functional>
 #include <algorithm>
@@ -806,6 +807,68 @@ public:
 
 }  // namespace
 
+// ---- grove's file type icons: "grove-type:<picture>/<LABEL>" ----
+// The picture (icons/filetypes, scripts/gen-filetype-icons.py) is a page in
+// the type's colour (<g id="page">) with a white picture on it (<g
+// id="glyph">). From 40 px up the label (extension or short type name) is
+// written across the bottom, as Finder does; smaller, or with no label, the
+// picture is drawn bigger in the middle of the page instead. Drawn here at
+// exactly the pixels asked, so the vector art stays sharp at any scale.
+static QImage typeIcon(const QString& spec, int s)
+{
+    const int slash = spec.indexOf(QLatin1Char('/'));
+    const QString pic = spec.mid(11, slash < 0 ? -1 : slash - 11);
+    const QString label = slash < 0 ? QString() : spec.mid(slash + 1);
+    const std::string picName = pic.toStdString();
+    const rust::Vec<uint8_t> bytes = grove_type_icon_svg(rust::Str(picName.data(), picName.size()));
+    if (bytes.empty()) return {};
+    QSvgRenderer r(QByteArray(reinterpret_cast<const char*>(bytes.data()), qsizetype(bytes.size())));
+    if (!r.isValid()) return {};
+    QImage img(s, s, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    p.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform | QPainter::TextAntialiasing);
+    const qreal k = s / 256.0;
+    const bool labelled = !label.isEmpty() && s >= 40;
+    if (labelled) {
+        r.render(&p, QRectF(0, 0, s, s));
+        QFont f;
+        f.setFamilies({ QStringLiteral("SF Pro Text"), QStringLiteral("Inter"), f.family() });
+        f.setWeight(QFont::Bold);
+        f.setHintingPreference(QFont::PreferNoHinting);
+        // Long labels shrink to fit the page (down to 70 %), then tighten.
+        const qreal maxW = 150 * k;
+        qreal px = 0.15 * s;
+        f.setPixelSize(qMax(1, qRound(px)));
+        f.setLetterSpacing(QFont::PercentageSpacing, 100);
+        for (int i = 0; i < 12 && QFontMetricsF(f).horizontalAdvance(label) > maxW; i++) {
+            if (px > 0.105 * s) { px *= 0.94; f.setPixelSize(qMax(1, qRound(px))); }
+            else f.setLetterSpacing(QFont::PercentageSpacing, f.letterSpacing() - 3);
+        }
+        QPainterPath path;
+        const QFontMetricsF fm(f);
+        const qreal w = fm.horizontalAdvance(label);
+        // Cap height centred on the band under the picture.
+        path.addText(QPointF((s - w) / 2, 200 * k + fm.capHeight() / 2), f, label);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0, 0, 0, 60));
+        p.drawPath(path.translated(0, qMax(0.6, s / 160.0)));
+        p.setBrush(Qt::white);
+        p.drawPath(path);
+    } else {
+        const QRectF pb = r.boundsOnElement(QStringLiteral("page"));
+        r.render(&p, QStringLiteral("page"), QRectF(pb.x() * k, pb.y() * k, pb.width() * k, pb.height() * k));
+        QRectF gb = r.boundsOnElement(QStringLiteral("glyph"));
+        if (gb.isValid() && gb.width() > 0 && gb.height() > 0) {
+            const qreal sc = qMin(148 / gb.width(), 128 / gb.height());
+            const QSizeF gs(gb.width() * sc * k, gb.height() * sc * k);
+            r.render(&p, QStringLiteral("glyph"), QRectF(QPointF(128 * k - gs.width() / 2, 138 * k - gs.height() / 2), gs));
+        }
+    }
+    p.end();
+    return img;
+}
+
 // ---- theme icons: image://icon/name|fallback|fallback ----
 class IconProvider : public QQuickImageProvider {
 public:
@@ -832,6 +895,13 @@ public:
         const QString decoded = QUrl::fromPercentEncoding(key.toUtf8());
         QString matched;
         for (const QString& n : decoded.split(QLatin1Char('|'), Qt::SkipEmptyParts)) {
+            if (n.startsWith(QLatin1String("grove-type:"))) {
+                if (tint.isValid()) continue;
+                QImage t = typeIcon(n, s);
+                if (t.isNull()) continue;
+                if (size) *size = t.size();
+                return t;
+            }
             if (n.startsWith(QLatin1Char('/'))) { icon = QIcon(n); if (!icon.isNull()) break; continue; }
             if (QIcon::hasThemeIcon(n)) { icon = QIcon::fromTheme(n); matched = n; break; }
         }
