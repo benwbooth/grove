@@ -1106,16 +1106,35 @@ FocusScope {
     }
 
     // ---------- context menus ----------
+    // (Timing: a right-click that takes long says where, in the journal.)
+    property var menuTimes: null
     function showItemMenu(row, x, y) {
+        const t = [Date.now()]
         if (!fm.isSelected(row)) fm.select(row, "set")
+        t.push(Date.now())
         itemMenu.target = itemAt(row)
+        t.push(Date.now())
         itemMenu.sel = selectedPaths()
         itemMenu.apps = []
         itemMenu.services = []
         if (!itemMenu.target.isDir && itemMenu.sel.length === 1)
             Async.call(grove, k => grove.appsFor(k, itemMenu.target.path), r => itemMenu.apps = r.apps || [])
         Async.call(grove, k => grove.serviceMenus(k, JSON.stringify(itemMenu.sel)), r => itemMenu.services = r || [])
+        t.push(Date.now())
         itemMenu.popup()
+        t.push(Date.now())
+        menuTimes = t
+    }
+    Connections {
+        target: itemMenu
+        function onOpened() {
+            const t = pane.menuTimes
+            if (!t) return
+            pane.menuTimes = null
+            const done = Date.now()
+            if (done - t[0] > 40)
+                console.warn("grove: item menu took " + (done - t[0]) + " ms (select " + (t[1] - t[0]) + ", item " + (t[2] - t[1]) + ", setup " + (t[3] - t[2]) + ", popup " + (t[4] - t[3]) + ", until shown " + (done - t[4]) + ")")
+        }
     }
     function showBackgroundMenu() {
         fm.clearSelection()

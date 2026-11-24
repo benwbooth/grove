@@ -21,8 +21,8 @@ Menu {
         tint: Theme.glassMenu
         radius: Theme.glassRadius
     }
-    // Fade only, as macOS menus do: scaling resampled the icons, which
-    // flickered while it ran.
-    enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 120; easing.type: Easing.OutCubic } }
+    // Appears at once (a fade in made every right-click feel slow), fades
+    // out, as macOS menus do. (No scaling: it resampled the icons.)
+    enter: Transition { NumberAnimation { property: "opacity"; from: 1; to: 1; duration: 0 } }
     exit: Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 140 } }
 }
