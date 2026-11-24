@@ -80,7 +80,7 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Burn discs | ✅ | – | ✅ Burn to Disc… (selection, folder, toolbar): xorriso to CD/DVD/BD with a drive picker, disc name, eject, test burn, progress in the jobs list; or a disc image (.iso); no burner: says so and offers the image |
 | Compare files | – | ✅ | ✅ (diff view; opens meld/kompare/kdiff3 if installed) |
 | Previous versions (Time Machine style, snapper/btrfs snapshots), show + restore | ✅ | – | ✅ |
-| btrfs subvolumes: Kind "Subvolume"/"Snapshot" + icon badge, New Subvolume, Take Snapshot (read-only, dated), Delete (root through pkexec when the disk needs it; snapper's snapshots left to snapper) | – | – | ✅ (kernel ioctls, no btrfs tool) |
+| btrfs subvolumes: Kind "Subvolume"/"Snapshot" + icon badge, New Subvolume, Take Snapshot (read-only, dated), Restore from Snapshot (current contents kept aside), Delete (root through pkexec when the disk needs it; snapper's snapshots left to snapper) | – | – | ✅ (kernel ioctls, no btrfs tool) |
 
 ## Information
 

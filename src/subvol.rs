@@ -23,6 +23,10 @@ pub fn describe(path: &str) -> Value {
         "place": btrfs::snapshot_place(p).to_string_lossy(),
         "snapshotName": btrfs::snapshot_name(p, now),
         "needsRoot": btrfs::delete_needs_root(p),
+        // A snapshot: the subvolume it was taken of, if grove can see it
+        // (Restore puts that back the way it was here).
+        "source": btrfs::source_of(p).map(|s| s.to_string_lossy().into_owned()),
+        "asideName": btrfs::source_of(p).map(|s| btrfs::aside_name(&s, now)),
     })
 }
 
@@ -38,6 +42,15 @@ pub fn create(dir: &str, name: &str) -> Value {
     let n = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     match btrfs::create(d, &n) {
         Ok(p) => json!({"path": p.to_string_lossy()}),
+        Err(e) => json!({"error": e}),
+    }
+}
+
+/// Restores `target` from the snapshot `snap` (what's there now is kept
+/// aside: {aside}).
+pub fn restore(snap: &str, target: &str, aside: &str) -> Value {
+    match btrfs::restore(Path::new(snap), Path::new(target), aside) {
+        Ok(a) => json!({"ok": true, "aside": a.to_string_lossy()}),
         Err(e) => json!({"error": e}),
     }
 }

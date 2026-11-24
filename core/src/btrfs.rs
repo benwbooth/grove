@@ -318,6 +318,87 @@ pub fn delete_needs_root(path: &Path) -> bool {
     !(empty_dir(path) && !ro)
 }
 
+/// The subvolume a snapshot was taken of, when it's where grove puts
+/// snapshots: beside the snapshot, or the folder the snapshot is in.
+/// (Finding it anywhere else needs root: a search of the disk's tree.)
+pub fn source_of(snap: &Path) -> Option<PathBuf> {
+    let i = info(snap)?;
+    if i.parent_uuid.is_empty() {
+        return None;
+    }
+    let dir = snap.parent()?;
+    let is_it = |p: &Path| p != snap && info(p).map_or(false, |x| x.uuid == i.parent_uuid);
+    if is_it(dir) {
+        return Some(dir.to_path_buf());
+    }
+    let siblings: Vec<PathBuf> = std::fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).collect();
+    // The original, else a subvolume restored from this snapshot (the
+    // original may have been deleted after a restore), not a set-aside one.
+    let restored_from_here = |p: &Path| {
+        p != snap && base_name(&display_name(p)) == display_name(p) && info(p).map_or(false, |x| x.parent_uuid == i.uuid && !x.read_only)
+    };
+    let found = siblings.iter().find(|p| is_it(p)).or_else(|| siblings.iter().find(|p| restored_from_here(p)))?.clone();
+    // A restore renames the original aside ("Data (before restore …)") and
+    // puts a new subvolume in its place: that one is what to restore now.
+    let base = base_name(&display_name(&found));
+    let live = dir.join(&base);
+    Some(if live != found && live != snap && is_subvolume(&live) { live } else { found })
+}
+
+/// "Data (before restore 2026-11-24 10.02) (before restore …)" → "Data".
+fn base_name(name: &str) -> String {
+    let mut n = name;
+    while let Some(i) = n.rfind(" (before restore ") {
+        if !n.ends_with(')') {
+            break;
+        }
+        n = &n[..i];
+    }
+    n.to_string()
+}
+
+/// The name the current contents get when a subvolume is restored:
+/// "Data (before restore 2026-11-24 10.02)".
+pub fn aside_name(target: &Path, now: i64) -> String {
+    let stamp = snapshot_name(Path::new("x"), now);
+    format!("{} (before restore{})", display_name(target), &stamp[1..])
+}
+
+/// Puts the subvolume `target` back the way it was in `snap`: what's in
+/// `target` now is renamed aside (nothing is lost; it's handed back), and
+/// a writable snapshot of `snap` takes its name. Works as the owner, no
+/// root. Not for a subvolume that is the top of a mounted disk (that needs
+/// a rollback and a remount).
+/// `aside`: the name the current contents get ("" = aside_name now).
+pub fn restore(snap: &Path, target: &Path, aside: &str) -> Result<PathBuf, String> {
+    if !is_subvolume(snap) || !is_subvolume(target) {
+        return Err("Both have to be btrfs subvolumes.".into());
+    }
+    let tc = std::fs::canonicalize(target).map_err(|e| crate::util::plain_error(&e, target))?;
+    if mount_of(target).map_or(false, |(mp, _)| mp == tc) {
+        return Err(format!(
+            "“{}” is the top of a mounted disk, so it can't be swapped while it's in use. Restore single files with Browse Previous Versions instead.",
+            display_name(target)
+        ));
+    }
+    let dir = target.parent().ok_or("Can't restore the top of a disk.")?;
+    let name = display_name(target);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
+    let aside = if aside.is_empty() { aside_name(target, now) } else { aside.to_string() };
+    check_name(&aside, PATH_NAME_MAX)?;
+    let base = dir.join(aside);
+    let aside = if base.symlink_metadata().is_ok() { crate::ops::unique_name(&base) } else { base };
+    std::fs::rename(target, &aside).map_err(|e| format!("Couldn't set the current “{name}” aside: {}", crate::util::plain_error(&e, target)))?;
+    match snapshot(snap, dir, &name, false) {
+        Ok(_) => Ok(aside),
+        Err(e) => {
+            // Put it back as it was.
+            let _ = std::fs::rename(&aside, target);
+            Err(e)
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum DeleteError {
     /// Only an administrator can delete it (EPERM).
@@ -435,6 +516,32 @@ mod tests {
         assert_eq!(kind(&rw), "Snapshot");
         assert!(snapshot(&t, &t, "nope", true).is_err());
 
+        // Restore: the snapshot's source is found beside it, the current
+        // contents go aside, the snapshot's contents come back.
+        assert_eq!(source_of(&snap).as_deref(), Some(sv.as_path()));
+        assert_eq!(source_of(&sv), None);
+        std::fs::write(sv.join("f.txt"), "changed").unwrap();
+        let aside = restore(&snap, &sv, &aside_name(&sv, 0)).unwrap();
+        assert_eq!(std::fs::read_to_string(sv.join("f.txt")).unwrap(), "hi");
+        assert_eq!(std::fs::read_to_string(aside.join("f.txt")).unwrap(), "changed");
+        assert!(aside.file_name().unwrap().to_string_lossy().starts_with("Data (before restore 19"));
+        assert_eq!(kind(&sv), "Snapshot");
+        std::fs::write(sv.join("g.txt"), "writable again").unwrap();
+        assert!(restore(&snap, &t, "").is_err());
+        // Again: the live "Data" is found, not the copy set aside.
+        assert_eq!(source_of(&snap).as_deref(), Some(sv.as_path()));
+        let aside2 = restore(&snap, &sv, &aside_name(&sv, 60)).unwrap();
+        assert_eq!(std::fs::read_to_string(aside2.join("g.txt")).unwrap(), "writable again");
+        assert_eq!(std::fs::read_to_string(sv.join("f.txt")).unwrap(), "hi");
+        assert_eq!(base_name("Data (before restore 1) (before restore 2)"), "Data");
+        // The original deleted after a restore: the restored one is found.
+        for a in [&aside, &aside2] {
+            for f in ["f.txt", "g.txt"] {
+                let _ = std::fs::remove_file(a.join(f));
+            }
+            delete(a).unwrap();
+        }
+        assert_eq!(source_of(&snap).as_deref(), Some(sv.as_path()));
         // A plain folder is never deleted as a subvolume.
         assert!(matches!(delete(&t), Err(DeleteError::Other(_))));
         // Empty and writable: rmdir works as the user.

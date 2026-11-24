@@ -592,6 +592,11 @@ impl ffi::Grove {
         self.answer_on("files", key, move || crate::subvol::snapshot(&s, &d, &n, read_only));
     }
 
+    pub fn restore_subvolume(&self, key: &QString, snap: &QString, target: &QString, aside: &QString) {
+        let (s, t, a) = (snap.to_string(), target.to_string(), aside.to_string());
+        self.answer_on("files", key, move || crate::subvol::restore(&s, &t, &a));
+    }
+
     pub fn delete_subvolume(&self, key: &QString, path: &QString) {
         let p = path.to_string();
         // Not on the files lane: polkit's password prompt may wait a while.

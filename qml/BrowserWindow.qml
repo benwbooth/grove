@@ -937,6 +937,7 @@ ApplicationWindow {
     function newSubvolume() { if (activePane) activePane.newSubvolume() }
     function snapshotSubvolume(path) { if (path) subvolSheet.snapshot(path) }
     function deleteSubvolume(path) { if (path) subvolSheet.remove(path) }
+    function restoreSubvolume(path) { if (path) subvolSheet.restore(path) }
     Timer {
         id: appsTimer
         interval: 150
@@ -1005,6 +1006,7 @@ ApplicationWindow {
                 { id: "share", icon: "document-share", text: "Share with Nearby Device…", enabled: sel > 0 && !special && !(t && t.isDir) },
                 { separator: true },
                 { id: "snapshot", icon: "camera-photo", text: subvolTarget ? "Take Snapshot of “" + subvolTarget.substring(subvolTarget.lastIndexOf("/") + 1) + "”…" : "Take Snapshot…", shortcut: k("snapshot"), enabled: subvolTarget !== "" },
+                { id: "restoresubvol", icon: "document-revert", text: "Restore from Snapshot…", enabled: subvolTarget !== "" && ((t && t.subvol) ? t.subvol.indexOf("Snapshot") >= 0 && t.subvol !== "Snapper Snapshot" : (!!hereSubvol.info && hereSubvol.info.snapshot && !hereSubvol.snapper)) },
                 { id: "deletesubvol", icon: "edit-delete", text: "Delete Subvolume…", enabled: subvolTarget !== "" && !(t && t.subvol === "Snapper Snapshot") && !(menuSel === 0 && hereSubvol.snapper) },
                 { separator: true },
                 { id: "putback", icon: "edit-undo", text: "Put Back", enabled: trash && sel > 0 },
@@ -1175,6 +1177,7 @@ ApplicationWindow {
             case "newsubvol": p.newSubvolume(); break
             case "snapshot": snapshotSubvolume(subvolTarget); break
             case "deletesubvol": deleteSubvolume(subvolTarget); break
+            case "restoresubvol": restoreSubvolume(subvolTarget); break
             case "open": p.openSelected(false); break
             case "opentab": p.openSelected(true); break
             case "quicklook": p.quickLook(); break
@@ -1513,6 +1516,8 @@ ApplicationWindow {
         else if (cmd === "snapgo") subvolSheet.go()
         else if (cmd === "delsubvol") bw.deleteSubvolume(arg || bw.subvolTarget)
         else if (cmd === "delgo") subvolSheet.go()
+        else if (cmd === "restoresubvol") bw.restoreSubvolume(arg || bw.subvolTarget)
+        else if (cmd === "restorego") subvolSheet.go()
         else if (cmd === "subvoldump") Async.call(app.grove, k => app.grove.subvolInfo(k, arg || p.path), r => console.warn("grove test subvol", JSON.stringify(r)))
         else if (cmd === "cloud") bw.addCloudDrive()
         else if (cmd === "cloudpick") { const f = cloudSheet.providers.find(x => x.name === arg); if (f) cloudSheet.pick(f) }

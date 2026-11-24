@@ -166,6 +166,10 @@ pub mod ffi {
         #[qinvokable]
         fn snapshot_subvolume(self: &Grove, key: &QString, src: &QString, dest: &QString, name: &QString, read_only: bool);
         /// btrfs: delete a subvolume or snapshot (as root through pkexec when needed).
+        /// btrfs: put `target` back as it was in the snapshot `snap` (its
+        /// current contents are kept aside: {aside} or {error}).
+        #[qinvokable]
+        fn restore_subvolume(self: &Grove, key: &QString, snap: &QString, target: &QString, aside: &QString);
         #[qinvokable]
         fn delete_subvolume(self: &Grove, key: &QString, path: &QString);
         #[qinvokable]
