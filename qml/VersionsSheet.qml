@@ -103,16 +103,17 @@ Sheet {
         property string tip: ""
         signal clicked()
         radius: Theme.radius
+        // Only times with versions are lit and can be picked; the rest are gray.
         color: picked ? Theme.accent
              : count > 0 ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, ma.containsMouse ? 0.38 : 0.24)
-             : ma.containsMouse ? Theme.hover : "transparent"
+             : "transparent"
         border.width: count > 0 && !picked ? 1 : 0
         border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.6)
         GLabel {
             anchors.centerIn: parent
             anchors.verticalCenterOffset: cell.count > 0 && cell.height > 38 ? -6 : 0
             text: cell.label
-            color: cell.picked ? Theme.accentText : cell.dim ? Theme.fgTertiary : Theme.fg
+            color: cell.picked ? Theme.accentText : cell.count === 0 ? Theme.fgDisabled : cell.dim ? Theme.fgSecondary : Theme.fg
             font.bold: cell.count > 0
         }
         GLabel {
@@ -123,7 +124,7 @@ Sheet {
             font.pixelSize: Theme.caption
             color: cell.picked ? Theme.accentText : Theme.fgSecondary
         }
-        MouseArea { id: ma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: cell.clicked() }
+        MouseArea { id: ma; anchors.fill: parent; enabled: cell.count > 0; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: cell.clicked() }
         GTip { visible: ma.containsMouse && cell.tip !== ""; text: cell.tip }
     }
 
