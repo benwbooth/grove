@@ -603,7 +603,9 @@ ApplicationWindow {
     }
     function openDialog() {
         chooseFiles("Open in Preview", { mode: "open", multiple: true, currentFolder: cur ? cur.path.substring(0, cur.path.lastIndexOf("/")) : app.grove.home(),
-                                          filters: [{ name: "PDFs and pictures", patterns: [{ mime: true, pattern: "application/pdf" }, { mime: true, pattern: "image/*" }] }, { name: "All files", patterns: [{ mime: false, pattern: "*" }] }] },
+                                          filters: [{ name: "All files", patterns: [{ mime: false, pattern: "*" }] },
+                                                    { name: "PDFs and pictures", patterns: [{ mime: true, pattern: "application/pdf" }, { mime: true, pattern: "image/*" }] },
+                                                    { name: "Documents (e-books, comics, DjVu, PostScript, Office, text)", patterns: ["epub", "mobi", "fb2", "xps", "cbz", "cbr", "cb7", "cbt", "djvu", "ps", "eps", "odt", "ods", "odp", "docx", "xlsx", "pptx", "doc", "xls", "ppt", "rtf", "txt", "md"].map(e => ({ mime: false, pattern: "*." + e })) }] },
                     paths => {
                         // As in Preview: a window that has files gets a new one for these.
                         if (docs.length && app.preview) app.preview(paths)

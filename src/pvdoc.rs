@@ -19,7 +19,38 @@ fn ext_of(path: &str) -> String {
 /// Paged documents (shown as PDF pages); everything else is a picture.
 pub fn is_document(path: &str) -> bool {
     let ext = ext_of(path);
-    ext == "pdf" || ext == "ai" || crate::docconv::kind(path).is_some() || OFFICE.contains(&ext.as_str())
+    ext == "pdf" || ext == "ai" || crate::docconv::kind(path).is_some() || OFFICE.contains(&ext.as_str()) || is_text(path)
+}
+
+/// Plain text, code, Markdown, logs, JSON...: laid out as pages by MuPDF.
+fn is_text(path: &str) -> bool {
+    let ext = ext_of(path);
+    if ["svg", "svgz"].contains(&ext.as_str()) {
+        return false;
+    }
+    let m = crate::mime::deep(path).name;
+    m.starts_with("text/")
+        || matches!(m.as_str(), "application/json" | "application/xml" | "application/x-shellscript" | "application/javascript" | "application/toml" | "application/x-yaml" | "application/x-desktop" | "application/x-subrip")
+}
+
+/// A text file as a PDF (cached by path, size and time): MuPDF reads it as
+/// plain text whatever its own extension.
+fn text_pdf(path: &str) -> Result<PathBuf, String> {
+    let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
+    let key = grove_core::thumbs::md5_hex(&format!("text|{}|{}|{}", path, meta.len(), std::os::unix::fs::MetadataExt::mtime(&meta)));
+    let dir = grove_core::util::cache_home().join("grove/docs");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let out = dir.join(format!("{key}.pdf"));
+    if out.is_file() {
+        return Ok(out);
+    }
+    let txt = dir.join(format!("{key}.txt"));
+    std::fs::copy(path, &txt).map_err(|e| e.to_string())?;
+    let part = dir.join(format!("{key}.part.pdf"));
+    let r = grove_core::docs::to_pdf(&txt, &part).and_then(|_| std::fs::rename(&part, &out).map_err(|e| e.to_string()));
+    let _ = std::fs::remove_file(&txt);
+    let _ = std::fs::remove_file(&part);
+    r.map(|_| out)
 }
 
 /// Documents that aren't PDFs (EPUB, MOBI, FB2, XPS, CBZ/CBR/CB7/CBT,
@@ -34,7 +65,10 @@ fn converted(path: &str) -> Option<Result<PathBuf, String>> {
         let never = std::sync::atomic::AtomicBool::new(false);
         return Some(grove_core::previews::office_pdf(Path::new(path), &never).ok_or_else(|| "LibreOffice couldn't turn this document into pages (is LibreOffice installed?).".to_string()));
     }
-    crate::docconv::kind(path).map(|_| crate::docconv::to_pdf(path))
+    if crate::docconv::kind(path).is_some() {
+        return Some(crate::docconv::to_pdf(path));
+    }
+    is_text(path).then(|| text_pdf(path))
 }
 
 fn converted_needed(path: &str) -> bool {
