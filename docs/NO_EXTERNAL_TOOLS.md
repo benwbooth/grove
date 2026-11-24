@@ -37,3 +37,4 @@ Stays external, by nature:
 - hearth-search: hearth's indexer.
 - yt-dlp: mpv's ytdl hook runs it for web addresses in Grove Player (the sites change weekly; only yt-dlp keeps up);
 - hearth-ipc: File › New Screen Recording opens hearth's recorder.
+- each filesystem's own tools (mkfs.*, resize2fs, ntfsresize, btrfs, e2fsck, fsck.fat...): Grove Disk Utility formats, resizes, checks and repairs through UDisks2, which runs them (as GParted runs them itself); no in-process library does that for every filesystem. Partition tables: UDisks2 (libblockdev), moves through gptman in grove, FAT resizing through libparted linked (core/csrc/parted.c, as root via the root helper).

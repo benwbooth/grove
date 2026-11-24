@@ -798,7 +798,7 @@ Window {
             }
         }
         Field {
-            label: "Free space before (MiB):"
+            label: "Free before (MiB):"
             GField {
                 width: parent.width; enabled: geo.canMove
                 text: Math.round((geo.start - geo.lo) / dk.mib)
@@ -818,7 +818,7 @@ Window {
             }
         }
         Field {
-            label: "Free space after (MiB):"
+            label: "Free after (MiB):"
             GField {
                 width: parent.width; enabled: geo.canMove || geo.canResize
                 text: Math.round((geo.hi - geo.start - geo.len) / dk.mib)

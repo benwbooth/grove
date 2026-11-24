@@ -229,7 +229,9 @@ pub fn disks() -> Result<Vec<Disk>, String> {
             size,
             sector: std::fs::read_to_string(Path::new("/sys/class/block").join(&name).join("queue/logical_block_size")).ok().and_then(|x| x.trim().parse().ok()).unwrap_or(512),
             table: table.clone(),
-            system: system.contains(&name),
+            // Tests: GROVE_DISK_TEST_SYSTEM=loopN plays the system's disk
+            // (only inside the sandbox).
+            system: system.contains(&name) || (sandbox().is_some() && std::env::var("GROVE_DISK_TEST_SYSTEM").ok().as_deref() == Some(name.as_str())),
             removable: drive.map(|d| b(d, "Removable") || b(d, "MediaRemovable") || b(d, "Ejectable")).unwrap_or(false),
             read_only: b(block, "ReadOnly"),
             loop_file,

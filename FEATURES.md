@@ -150,6 +150,18 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Movie Inspector | ✅ | ✅ codecs, resolution, frame rate, data rates, colour, hardware decoding |
 | Remembers where you stopped | ✅ | ✅ |
 
+## Grove Disk Utility (GParted's features; replaces GParted / KDE Partition Manager)
+
+| Feature | Status |
+|---|---|
+| Disks with their partition map drawn to scale (used space, logical partitions inside the extended one), partition table | done |
+| New, delete, resize/move, format, label, GPT name, flags, new partition table (GPT/MBR), check and repair, copy/paste | done |
+| Operations queued and shown as they will be; Undo, Clear, Apply in order with progress | done |
+| Mount / unmount, information | done |
+| The system's disks (/, /home, /boot, /nix, swap) locked until unlocked | done |
+| Format… a removable drive (name + exFAT / FAT32 / NTFS / ext4 / Btrfs, one confirm) from the sidebar | done |
+| Moving the start of a logical (MBR) partition | not yet |
+
 ## Integration
 
 | Feature | F | D | grove |
