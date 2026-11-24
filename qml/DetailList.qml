@@ -309,12 +309,16 @@ Item {
                             rotation: rowItem.expanded ? 90 : 0
                             font.pixelSize: Theme.title
                             color: rowItem.dimColor
+                            // An archive's: grey until it's opened.
+                            opacity: rowItem.isArchive && !rowItem.isDir && !rowItem.expanded ? 0.45 : 1
                             Behavior on rotation { NumberAnimation { duration: 120 } }
                         }
                         MouseArea {
                             anchors.fill: parent
                             enabled: rowItem.expandable
+                            hoverEnabled: rowItem.isArchive && !rowItem.isDir
                             onClicked: root.fm.toggleExpanded(rowItem.index)
+                            GTip { visible: parent.containsMouse && !rowItem.expanded; text: "Show what's inside “" + rowItem.name + "” (double-click opens it like a folder)" }
                         }
                     }
                     GIcon {
