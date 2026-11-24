@@ -59,11 +59,12 @@
               # chmods the destination: that fails on a file left by another
               # nixbld user. The exports are regenerated every build anyway.
               rm -rf "$workDir/target/cxxqt"
-              # libsqlite3-sys copies its bindings the same way (fs::copy).
-              # Its whole build-script run goes, fingerprint included: with
-              # only out/ removed cargo still thinks the script ran and the
-              # crate then fails to find out/bindgen.rs.
-              for d in "$workDir"/target/release/build/libsqlite3-sys-*; do
+              # libsqlite3-sys copies its bindings the same way (fs::copy),
+              # libssh2-sys its headers. Their whole build-script runs go,
+              # fingerprints included: with only out/ removed cargo still
+              # thinks the script ran and the crate then fails to find
+              # out/bindgen.rs.
+              for d in "$workDir"/target/release/build/libsqlite3-sys-* "$workDir"/target/release/build/libssh2-sys-*; do
                 [ -d "$d/out" ] || continue
                 rm -rf "$d" "$workDir/target/release/.fingerprint/$(basename "$d")"
               done
