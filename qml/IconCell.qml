@@ -145,7 +145,7 @@ Item {
                 }
             }
             GLabel {
-                visible: cell.grid.itemInfo && cell.info !== ""
+                visible: (cell.grid.itemInfo || (cell.grid.pane && cell.grid.pane.usageOn)) && cell.info !== ""
                 anchors.horizontalCenter: cell.atRight ? undefined : parent.horizontalCenter
                 text: cell.info
                 font.pixelSize: Math.max(9, cell.grid.textPx - 2)

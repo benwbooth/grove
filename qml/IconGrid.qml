@@ -298,8 +298,22 @@ Item {
                 index: gd.index; name: gd.name; path: gd.path; isDir: gd.isDir; isLink: gd.isLink
                 selected: gd.selected; iconName: gd.iconName; thumb: gd.thumb; mtime: gd.mtime
                 tags: gd.tags; tagColors: gd.tagColors; git: gd.git; cut: gd.cut; hidden: gd.hidden
-                info: gd.isDir ? "" : (gd.dims !== "" ? gd.dims : gd.sizeText)
+                info: root.pane.usageOn ? root.pane.usageLabel(gd.path) : gd.isDir ? "" : (gd.dims !== "" ? gd.dims : gd.sizeText)
                 badge: gd.badge
+            }
+            // Disk usage mode: a thin bar along the cell's foot, a spinner
+            // while it's worked out.
+            UsageBar {
+                pane: root.pane
+                path: gd.path
+                x: 10; width: parent.width - 20; height: 4
+                anchors.bottom: parent.bottom; anchors.bottomMargin: 2
+            }
+            UsageSpinner {
+                running: root.pane.usageOn && root.pane.usagePending(gd.path)
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom; anchors.bottomMargin: 2
+                width: 10; height: 10
             }
         }
     }

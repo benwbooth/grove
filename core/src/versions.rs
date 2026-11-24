@@ -47,6 +47,63 @@ fn info_date(dir: &Path) -> (i64, String) {
     (secs, tag("description"))
 }
 
+#[derive(Clone, Debug, Serialize, PartialEq)]
+pub struct Snapshot {
+    pub snapshot: u64,
+    pub date: i64,
+    pub description: String,
+    /// The folder asked about as it was then (or the nearest folder above
+    /// it that existed), inside the snapshot (read-only).
+    pub path: String,
+    /// The folder itself existed then.
+    pub exists: bool,
+}
+
+/// Where a path inside a snapshot is: (its number, its date, the same path
+/// today).
+pub fn in_snapshot(path: &str) -> Option<(u64, i64, String)> {
+    let i = path.find("/.snapshots/")?;
+    let rest = &path[i + "/.snapshots/".len()..];
+    let (num, after) = rest.split_once('/').unwrap_or((rest, ""));
+    let n: u64 = num.parse().ok()?;
+    let after = after.strip_prefix("snapshot")?;
+    if !(after.is_empty() || after.starts_with('/')) {
+        return None;
+    }
+    let base = if i == 0 { "/" } else { &path[..i] };
+    let live = if after.is_empty() { base.to_string() } else { format!("{}{after}", base.trim_end_matches('/')) };
+    let (date, _) = info_date(&Path::new(&path[..i + "/.snapshots/".len() + num.len()]));
+    Some((n, date, live))
+}
+
+/// Every snapshot of the disk `folder` is on, newest first, with `folder`
+/// as it was in each.
+pub fn snapshots(folder: &Path) -> Vec<Snapshot> {
+    let live = in_snapshot(&folder.to_string_lossy()).map(|(_, _, l)| PathBuf::from(l)).unwrap_or_else(|| folder.to_path_buf());
+    let Some((snaps, rel)) = snapshot_root(&live) else { return vec![] };
+    let mut nums: Vec<(u64, PathBuf)> = std::fs::read_dir(&snaps)
+        .map(|r| r.flatten().filter_map(|e| e.file_name().to_string_lossy().parse::<u64>().ok().map(|n| (n, e.path()))).collect())
+        .unwrap_or_default();
+    nums.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut out = vec![];
+    for (n, dir) in nums {
+        let root = dir.join("snapshot");
+        if !root.is_dir() {
+            continue;
+        }
+        let mut at = root.join(&rel);
+        let exists = at.is_dir();
+        while !at.is_dir() && at != root {
+            if !at.pop() {
+                break;
+            }
+        }
+        let (date, description) = info_date(&dir);
+        out.push(Snapshot { snapshot: n, date, description, path: at.to_string_lossy().into_owned(), exists });
+    }
+    out
+}
+
 /// Distinct earlier versions of `path`, newest first.
 pub fn versions(path: &Path) -> Vec<Version> {
     let Some((snaps, rel)) = snapshot_root(path) else { return vec![] };
@@ -94,5 +151,10 @@ mod tests {
         assert_eq!(v[0].snapshot, 3);
         assert_eq!(v[1].snapshot, 2);
         assert_eq!(v[0].date, crate::recents::parse_utc("2026-11-03T10:00:00").unwrap());
+        let s = snapshots(&home.join("me"));
+        assert_eq!(s.len(), 3);
+        assert!(s[0].exists && s[0].path.ends_with(".snapshots/3/snapshot/me"));
+        let (n, _, live) = in_snapshot(&s[0].path).unwrap();
+        assert_eq!((n, live.as_str()), (3, home.join("me").to_str().unwrap()));
     }
 }

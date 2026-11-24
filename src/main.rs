@@ -16,6 +16,7 @@ mod archiver;
 mod burn;
 mod bridge;
 mod controller;
+mod usage;
 mod dbus;
 mod docconv;
 mod du;

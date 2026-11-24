@@ -19,7 +19,7 @@ ApplicationWindow {
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
     property var currentTab: tabRepeater.count > 0 ? tabRepeater.itemAt(tabBar.currentIndex) : null
     property var activePane: currentTab ? currentTab.activePane : null
-    property bool modalOpen: burnSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || subvolSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened || aboutSheet.opened
+    property bool modalOpen: burnSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || subvolSheet.opened || snapshotsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened || aboutSheet.opened
 
     width: 1180
     height: 720
@@ -109,6 +109,11 @@ ApplicationWindow {
     Connections { target: bw.activePane; function onPathChanged() { bw.app.saveSession() } }
     function go(path) { if (activePane) { activePane.navigate(path); activePane.forceActiveFocus() } }
     function setSetting(name, value) { app.grove.setSetting(name, JSON.stringify(value)) }
+    function toggleUsage() {
+        const v = !app.settings.usage_mode
+        setSetting("usage_mode", v)
+        toast("info", v ? "Showing disk usage: sizes fill in as they're worked out" : "Disk usage hidden")
+    }
     function toggleHidden() {
         const v = !app.settings.show_hidden
         setSetting("show_hidden", v)
@@ -283,6 +288,7 @@ ApplicationWindow {
         })
     }
     function showVersions(path) { versionsSheet.start(path) }
+    function showSnapshots(path) { snapshotsSheet.start(path) }
     function share(paths) { shareSheet.start(paths) }
     function showText(heading, text, html, tool, action) {
         const w = textComp.createObject(null, { heading: heading, text: text || "", html: html || "", tool: tool || "", toolAction: action || null })
@@ -836,7 +842,7 @@ ApplicationWindow {
                 GMenuItem { text: "Date Created"; iconName: "document-new|x-office-calendar"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "created"; onTriggered: sortMenu.p.sortBy("created") }
                 GMenuItem { text: "Date Added"; iconName: "list-add"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "added"; onTriggered: sortMenu.p.sortBy("added") }
                 GMenuItem { text: "Last Opened"; iconName: "document-open-recent"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "accessed"; onTriggered: sortMenu.p.sortBy("accessed") }
-                GMenuItem { text: "Size"; iconName: "drive-harddisk|view-sort"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "size"; onTriggered: sortMenu.p.sortBy("size") }
+                GMenuItem { text: !!sortMenu.p && sortMenu.p.usageOn ? "Size (Disk Usage, Folders Too)" : "Size"; iconName: "drive-harddisk|view-sort"; checkable: true; checked: !!sortMenu.m && sortMenu.m.sortKey === "size"; onTriggered: sortMenu.p.sortBy("size") }
                 GMenuSeparator {}
                 GMenuItem { text: "Descending"; iconName: "view-sort-descending|go-down"; checkable: true; checked: !!sortMenu.m && sortMenu.m.descending; onTriggered: { sortMenu.m.applySort(sortMenu.m.sortKey, !sortMenu.m.descending); sortMenu.p.rememberView() } }
                 GMenuItem { text: "Folders First"; iconName: "folder"; checkable: true; checked: !!sortMenu.m && sortMenu.m.foldersFirst; onTriggered: bw.setSetting("folders_first", !sortMenu.m.foldersFirst) }
@@ -1060,6 +1066,7 @@ ApplicationWindow {
                 { id: "statusbar", icon: "kt-show-statusbar", text: "Status Bar", checkable: true, checked: st.show_status_bar !== false },
                 { separator: true },
                 { id: "hidden", icon: "view-hidden", text: "Show Hidden Files", shortcut: k("hidden"), checkable: true, checked: !!st.show_hidden },
+                { id: "usage", icon: "view-statistics|drive-harddisk", text: "Show Disk Usage", shortcut: k("usage"), checkable: true, checked: !!st.usage_mode, tip: "A bar and size for every item: how much room it takes (worked out in the background)" },
                 { id: "zoomin", icon: "zoom-in", text: "Bigger Icons", shortcut: k("zoomin"), enabled: ok },
                 { id: "zoomout", icon: "zoom-out", text: "Smaller Icons", shortcut: k("zoomout"), enabled: ok },
                 { id: "viewoptions", icon: "configure", text: "Show View Options", shortcut: k("viewoptions"), enabled: ok },
@@ -1084,7 +1091,8 @@ ApplicationWindow {
                 { id: "cloud", icon: app.accountsService ? "preferences-system-users|folder-cloud" : "folder-cloud", text: app.accountsService ? "Open Settings › Accounts…" : "Add Cloud Drive…" },
                 { separator: true },
                 { id: "terminal", icon: "utilities-terminal", text: "Open in Terminal", shortcut: k("terminal"), enabled: ok },
-                { id: "diskusage", icon: "filelight", text: "Disk Usage…", shortcut: k("diskusage") }
+                { id: "diskusage", icon: "filelight", text: "Disk Usage…", shortcut: k("diskusage") },
+                { id: "snapshots", icon: "document-open-recent", text: "Snapshots…", shortcut: k("snapshots") }
             ] },
             { title: "Window", icon: "window-duplicate", items: [
                 { id: "minimize", icon: "window-minimize", text: "Minimize" },
@@ -1144,6 +1152,7 @@ ApplicationWindow {
         case "terminalpanel": setPanel("terminal_panel", !app.settings.terminal_panel); break
         case "statusbar": setSetting("show_status_bar", app.settings.show_status_bar === false); break
         case "hidden": toggleHidden(); break
+        case "usage": toggleUsage(); break
         case "recents": go("recent:///"); break
         case "documents": go(home + "/Documents"); break
         case "desktop": go(home + "/Desktop"); break
@@ -1155,6 +1164,7 @@ ApplicationWindow {
         case "connect": connectServer(); break
         case "cloud": addCloudDrive(); break
         case "diskusage": showDiskUsage(); break
+        case "snapshots": showSnapshots(activePane.path); break
         case "undo": app.grove.undo(); break
         case "redo": app.grove.redo(); break
         default:
@@ -1276,6 +1286,7 @@ ApplicationWindow {
     BatchRename { id: renameSheet; app: bw.app; win: bw }
     VersionsSheet { id: versionsSheet; app: bw.app; win: bw }
     SubvolumeSheet { id: subvolSheet; app: bw.app; win: bw }
+    SnapshotsSheet { id: snapshotsSheet; app: bw.app; win: bw }
     ShareSheet { id: shareSheet; app: bw.app; win: bw }
     Sheet {
         id: commitSheet
@@ -1387,6 +1398,8 @@ ApplicationWindow {
     Key { act: "zoomin"; onActivated: bw.activePane.zoom(1) }
     Key { act: "zoomout"; onActivated: bw.activePane.zoom(-1) }
     Key { act: "hidden"; onActivated: bw.toggleHidden() }
+    Key { act: "usage"; onActivated: bw.toggleUsage() }
+    Key { act: "snapshots"; onActivated: bw.showSnapshots(bw.activePane.path) }
     Key { act: "filter"; onActivated: bw.openFilter() }
     Key { act: "selectionmode"; onActivated: bw.toggleSelectionMode() }
     Key { act: "viewoptions"; onActivated: bw.toggleViewOptions() }
@@ -1602,6 +1615,8 @@ ApplicationWindow {
         else if (cmd === "toast") toast("info", arg)
         else if (cmd === "light") Theme.mode = "light"
         else if (cmd === "hidden") toggleHidden()
+        else if (cmd === "usage") toggleUsage()
+        else if (cmd === "snapshots") showSnapshots(arg || p.path)
         else if (cmd === "share") share([arg])
         else if (cmd === "versions") showVersions(arg)
         else if (cmd === "panel") setPanel(arg, true)

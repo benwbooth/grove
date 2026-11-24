@@ -29,6 +29,10 @@ pub struct Node {
     pub n_children: u32,
     /// Space used on disk (blocks), apparent size (file lengths).
     pub disk: u64,
+    /// Of `disk`, the part shared with other files: hard links, reflinked
+    /// copies, snapshots (btrfs extents marked shared; see [`shared_bytes`]).
+    /// Only measured when the scan asks for it.
+    pub shared: u64,
     pub apparent: u64,
     /// Files and folders inside (a file counts itself).
     pub items: u64,
@@ -50,6 +54,7 @@ struct Raw {
     name: String,
     is_dir: bool,
     disk: u64,
+    shared: u64,
     apparent: u64,
     mtime: i64,
     dir_id: usize,
@@ -67,8 +72,13 @@ struct Shared<'a> {
     next_id: AtomicUsize,
     results: Mutex<HashMap<usize, DirScan>>,
     links: Mutex<HashSet<(u64, u64)>>,
+    /// Shared extents already counted (reflinked copies inside the scan
+    /// count once, like hard links).
+    extents: Mutex<HashSet<(u64, u64)>>,
     dev: u64,
     prog: &'a Progress,
+    /// Measure shared data (btrfs: extents in use elsewhere too).
+    fiemap: bool,
 }
 
 fn read_one(sh: &Shared, path: &Path) -> DirScan {
@@ -93,13 +103,38 @@ fn read_one(sh: &Shared, path: &Path) -> DirScan {
             sh.pending.fetch_add(1, AO::SeqCst);
             sh.queue.lock().unwrap().push_back((id, e.path()));
             sh.cv.notify_one();
-            entries.push(Raw { name, is_dir: true, disk: m.blocks() * 512, apparent: m.len(), mtime: m.mtime(), dir_id: id });
+            entries.push(Raw { name, is_dir: true, disk: m.blocks() * 512, shared: 0, apparent: m.len(), mtime: m.mtime(), dir_id: id });
         } else {
             let counted = m.nlink() <= 1 || sh.links.lock().unwrap().insert((m.dev(), m.ino()));
-            let (disk, apparent) = if counted { (m.blocks() * 512, m.len()) } else { (0, 0) };
+            let (mut disk, apparent) = if counted { (m.blocks() * 512, m.len()) } else { (0, 0) };
+            // Shared: a hard-linked file as a whole; else (btrfs) the
+            // extents other files or snapshots use too, each counted once
+            // in the scan (a reflinked copy next to its original adds nothing).
+            let shared = if disk == 0 {
+                0
+            } else if m.nlink() > 1 {
+                disk
+            } else if sh.fiemap && m.is_file() {
+                let ext = shared_extents(&e.path());
+                let (mut all, mut seen) = (0u64, 0u64);
+                {
+                    let mut known = sh.extents.lock().unwrap();
+                    for x in ext {
+                        all += x.1;
+                        if !known.insert(x) {
+                            seen += x.1;
+                        }
+                    }
+                }
+                let all = all.min(disk);
+                disk = disk.saturating_sub(seen.min(all));
+                all.saturating_sub(seen).min(disk)
+            } else {
+                0
+            };
             bytes += disk;
             files += 1;
-            entries.push(Raw { name, is_dir: false, disk, apparent, mtime: m.mtime(), dir_id: 0 });
+            entries.push(Raw { name, is_dir: false, disk, shared, apparent, mtime: m.mtime(), dir_id: 0 });
         }
     }
     sh.prog.files.fetch_add(files, AO::Relaxed);
@@ -143,6 +178,80 @@ fn worker(sh: &Shared) {
 
 /// Scans `root` (a folder) into a tree. Cancel through `prog.cancel`.
 pub fn scan(root: &Path, prog: &Progress) -> Result<Tree, String> {
+    scan_opts(root, prog, false)
+}
+
+/// btrfs (the only filesystem whose shared extents are worth measuring here).
+pub fn is_btrfs(path: &Path) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    let Ok(c) = std::ffi::CString::new(path.as_os_str().as_bytes()) else { return false };
+    let mut st: libc::statfs = unsafe { std::mem::zeroed() };
+    unsafe { libc::statfs(c.as_ptr(), &mut st) == 0 && st.f_type as i64 == 0x9123683E }
+}
+
+/// The bytes of a file's data that other files share (reflinked copies,
+/// snapshots, deduplicated data): its extents the filesystem marks shared
+/// (FIEMAP, no root needed). Capped at `disk`.
+pub fn shared_bytes(path: &Path, disk: u64) -> u64 {
+    shared_extents(path).iter().map(|e| e.1).sum::<u64>().min(disk)
+}
+
+/// A file's shared extents: (where on the disk, length).
+pub fn shared_extents(path: &Path) -> Vec<(u64, u64)> {
+    use std::os::fd::AsRawFd;
+    use std::os::unix::fs::OpenOptionsExt;
+    const FS_IOC_FIEMAP: libc::c_ulong = 0xC020_660B;
+    const LAST: u32 = 0x1;
+    const SHARED: u32 = 0x2000;
+    const COUNT: usize = 64;
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct Extent {
+        logical: u64,
+        physical: u64,
+        length: u64,
+        reserved64: [u64; 2],
+        flags: u32,
+        reserved: [u32; 3],
+    }
+    #[repr(C)]
+    struct Map {
+        start: u64,
+        length: u64,
+        flags: u32,
+        mapped: u32,
+        count: u32,
+        reserved: u32,
+        extents: [Extent; COUNT],
+    }
+    let Ok(f) = std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_NOATIME).open(path).or_else(|_| std::fs::OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK).open(path)) else {
+        return vec![];
+    };
+    let mut shared = vec![];
+    let mut start = 0u64;
+    for _ in 0..100_000 {
+        let mut m = Map { start, length: u64::MAX - start, flags: 0, mapped: 0, count: COUNT as u32, reserved: 0, extents: [Extent::default(); COUNT] };
+        if unsafe { libc::ioctl(f.as_raw_fd(), FS_IOC_FIEMAP as _, &mut m as *mut Map) } != 0 || m.mapped == 0 {
+            break;
+        }
+        let n = (m.mapped as usize).min(COUNT);
+        let mut last = false;
+        for e in &m.extents[..n] {
+            if e.flags & SHARED != 0 {
+                shared.push((e.physical, e.length));
+            }
+            start = e.logical + e.length;
+            last |= e.flags & LAST != 0;
+        }
+        if last {
+            break;
+        }
+    }
+    shared
+}
+
+/// [`scan`], also measuring shared data when `fiemap` (and on btrfs).
+pub fn scan_opts(root: &Path, prog: &Progress, fiemap: bool) -> Result<Tree, String> {
     let meta = std::fs::metadata(root).map_err(|e| crate::util::plain_error(&e, root))?;
     if !meta.is_dir() {
         return Err(format!("{} isn't a folder.", root.display()));
@@ -154,8 +263,10 @@ pub fn scan(root: &Path, prog: &Progress) -> Result<Tree, String> {
         next_id: AtomicUsize::new(1),
         results: Mutex::new(HashMap::new()),
         links: Mutex::new(HashSet::new()),
+        extents: Mutex::new(HashSet::new()),
         dev: meta.dev(),
         prog,
+        fiemap: fiemap && is_btrfs(root),
     };
     let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 16);
     std::thread::scope(|s| {
@@ -173,6 +284,7 @@ pub fn scan(root: &Path, prog: &Progress) -> Result<Tree, String> {
         first_child: NONE,
         n_children: 0,
         disk: meta.blocks() * 512,
+        shared: 0,
         apparent: meta.len(),
         items: 0,
         is_dir: true,
@@ -198,6 +310,7 @@ pub fn scan(root: &Path, prog: &Progress) -> Result<Tree, String> {
                 first_child: NONE,
                 n_children: 0,
                 disk: r.disk,
+                shared: r.shared,
                 apparent: r.apparent,
                 items: if r.is_dir { 0 } else { 1 },
                 is_dir: r.is_dir,
@@ -209,8 +322,9 @@ pub fn scan(root: &Path, prog: &Progress) -> Result<Tree, String> {
     }
     // Children come after parents: add sizes up from the end.
     for i in (1..nodes.len()).rev() {
-        let (d, a, it) = (nodes[i].disk, nodes[i].apparent, nodes[i].items + if nodes[i].is_dir { 1 } else { 0 });
+        let (d, a, it, sh) = (nodes[i].disk, nodes[i].apparent, nodes[i].items + if nodes[i].is_dir { 1 } else { 0 }, nodes[i].shared);
         let p = nodes[i].parent as usize;
+        nodes[p].shared += sh;
         nodes[p].disk += d;
         nodes[p].apparent += a;
         nodes[p].items += it;

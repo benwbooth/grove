@@ -75,6 +75,10 @@ pub struct Settings {
     pub show_extensions: bool,
     #[serde(default = "t")]
     pub show_git_status: bool,
+    /// Disk usage mode: every item's size and share as a bar (View › Show
+    /// Disk Usage).
+    #[serde(default)]
+    pub usage_mode: bool,
     /// Colour .txt (and .text, .nfo...) files as code when Magika is sure
     /// what they are (off: they're always plain text).
     #[serde(default)]

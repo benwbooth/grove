@@ -27,6 +27,118 @@ FocusScope {
     property string folderBeforeSearch: ""
     property int renamingRow: -1
     property var pendingSelect: []
+
+    // ---- Disk usage mode (View › Show Disk Usage): what every item takes,
+    // worked out in the background (usage.rs). Kept per path, for every
+    // folder shown (the column view shows several).
+    readonly property bool usageOn: !!app && !!app.settings && app.settings.usage_mode === true
+    property var usage: ({})        // path → {disk, shared, items, kind, error, estimate, volumeTotal}
+    property var usageFolders: ({}) // folder → {max, total, used, archive, pending: {path: true}, done}
+    property int usageRev: 0
+    function usageFor(folder) {
+        if (!usageOn || !grove || !folder || folder.indexOf("search:") === 0 || folder.indexOf("trash:") === 0 || folder.indexOf("mount:") === 0) return
+        grove.usageScan(folder)
+    }
+    onUsageOnChanged: { if (usageOn) usageFor(path); else { if (grove) grove.usageStop(); fm.setUsageSizes("{}"); usageSort.sizes = {} } }
+    // Sorting by Size goes by these sizes (folders too): handed to the
+    // model in batches, so rows don't jump on every folder that finishes.
+    Timer {
+        id: usageSort
+        property var sizes: ({})
+        interval: 400
+        onTriggered: { const s = sizes; sizes = {}; if (Object.keys(s).length) fm.setUsageSizes(JSON.stringify(s)) }
+    }
+    // The folder an item is in (archive members: up to "#").
+    function usageParent(p) {
+        const h = p.indexOf("#")
+        const s = p.lastIndexOf("/")
+        if (h > 0 && s < h) return p.substring(0, h + 1)
+        if (h > 0 && s > h && p.substring(h + 1).indexOf("/") < 0) return p.substring(0, h + 1)
+        return s > 0 ? p.substring(0, s) : "/"
+    }
+    function usageFolderOf(p) {
+        let f = usageParent(p)
+        // archive://x.zip#a (a top member): its folder is "archive://x.zip#"
+        return usageFolders[f] ? f : (usageFolders[f + "#"] ? f + "#" : f)
+    }
+    function usageItem(p) { usageRev; return usage[p] || null }
+    function usagePending(p) {
+        usageRev
+        const f = usageFolders[usageFolderOf(p)]
+        return !!f && !!f.pending && !!f.pending[p]
+    }
+    // The bar's length: of the folder's largest item.
+    function usageFraction(p) {
+        usageRev
+        const u = usage[p], f = usageFolders[usageFolderOf(p)]
+        if (!u || !f || !f.max) return 0
+        return Math.max(0, Math.min(1, u.disk / f.max))
+    }
+    function usageExclusive(p) {
+        usageRev
+        const u = usage[p], f = usageFolders[usageFolderOf(p)]
+        if (!u || !f || !f.max) return 0
+        return Math.max(0, Math.min(1, (u.disk - (u.shared || 0)) / f.max))
+    }
+    function pct(n) { return n >= 10 ? Math.round(n) + "%" : n >= 0.1 ? n.toFixed(1) + "%" : n > 0 ? "<0.1%" : "0%" }
+    // "12.4 GB · 3.1%" (of the volume, or of the archive).
+    function usageLabel(p) {
+        usageRev
+        const u = usage[p], f = usageFolders[usageFolderOf(p)]
+        if (!u) return ""
+        if (u.kind === "link") return "–"
+        if (u.kind === "snapshots") return u.estimate ? "≈ " + app.size(u.disk) + " in snapshots" : "Snapshots"
+        if (u.kind === "mount") return app.size(u.disk) + " of " + app.size(u.volumeTotal || 0)
+        const total = f ? f.total : 0
+        return app.size(u.disk) + (total > 0 ? " · " + pct(100 * u.disk / total) : "")
+    }
+    // The whole story, for the tooltip.
+    function usageTip(p) {
+        usageRev
+        const u = usage[p], f = usageFolders[usageFolderOf(p)]
+        if (!u) return usagePending(p) ? "Working out how much room this takes…" : ""
+        if (u.kind === "snapshots")
+            return u.estimate ? "Snapshots of this disk (btrfs): about " + app.size(u.disk) + " is kept only for them (the disk's used space less everything here). They're a separate volume: not counted in any folder."
+                              : "Snapshots of this disk (btrfs): a separate volume, not counted in this folder. Open the disk's top folder to see about how much they keep."
+        if (u.kind === "mount") return "Another disk mounted here: " + app.size(u.disk) + " used of " + app.size(u.volumeTotal || 0) + ". Not counted in this folder."
+        if (u.kind === "link") return "A link: takes no room itself."
+        const total = f ? f.total : 0
+        let t = app.size(u.disk) + " on disk"
+        if (total > 0) t += " — " + pct(100 * u.disk / total) + " of " + (f.archive ? "the archive (" : "the disk (") + app.size(total) + ")"
+        if (u.items > 1) t += "\n" + Number(u.items).toLocaleString(Qt.locale(), "f", 0) + " items"
+        if (u.kind === "hardlink") t += "\nHard-linked: the same file has other names, so deleting this one frees nothing."
+        else if (u.shared > 0) t += "\n" + app.size(u.shared) + " shared with other files or snapshots; deleting it would free about " + app.size(u.disk - u.shared) + " (the darker part of the bar)."
+        if (u.error) t += "\nSome folders inside couldn't be read: at least this much."
+        return t
+    }
+    Connections {
+        target: pane.grove
+        enabled: pane.usageOn
+        function onUsageReady(folder, json) {
+            let r
+            try { r = JSON.parse(json) } catch (e) { return }
+            const f = Object.assign({}, pane.usageFolders[folder] || {})
+            if (r.volume) { f.total = r.volume.total; f.used = r.volume.used; f.archive = !!r.volume.archive }
+            if (r.max !== undefined) f.max = Math.max(r.max, 1)
+            if (r.pending) { const pd = {}; for (const p of r.pending) pd[p] = true; f.pending = pd }
+            f.done = !!r.done
+            const u = pane.usage
+            for (const k in (r.items || {})) {
+                u[k] = r.items[k]
+                if (folder === pane.path && r.items[k].kind !== "snapshots" && r.items[k].kind !== "mount") usageSort.sizes[k] = r.items[k].disk
+            }
+            if (folder === pane.path) usageSort.start()
+            const fs = pane.usageFolders
+            fs[folder] = f
+            pane.usageRev++
+        }
+        function onFoldersTouched(json) {
+            pane.grove.usageForget(json)
+            let list = []
+            try { list = JSON.parse(json) } catch (e) {}
+            if (list.indexOf(pane.path) >= 0) pane.usageFor(pane.path)
+        }
+    }
     property string typeAhead: ""
     property bool dropHover: false
     property var gitMap: ({})
@@ -68,6 +180,14 @@ FocusScope {
     }
     function setViewOption(name, value) { pane[name] = value; rememberView() }
     readonly property bool inTrash: path.indexOf("trash:") === 0
+    // Inside a btrfs snapshot: {snapshot, date, live} (for the banner).
+    property var snapInfo: null
+    onPathChanged: {
+        usageFor(path)
+        const p = path
+        if (p.indexOf("/.snapshots/") < 0) { snapInfo = null; return }
+        if (grove) Async.call(grove, k => grove.snapshots(k, p), r => { if (pane.path === p) pane.snapInfo = r && r.current ? r.current : null })
+    }
     readonly property bool special: path.indexOf(":///") > 0 || inTrash || path.indexOf("recent:") === 0
     readonly property bool inArchive: path.indexOf("archive://") === 0
     property Item view: viewLoader.item
@@ -689,6 +809,38 @@ FocusScope {
         id: topBars
         width: parent.width
         z: 2
+        // Inside a snapshot: what this is, read-only, and the way back.
+        Rectangle {
+            width: parent.width
+            height: pane.snapInfo ? snapRow.implicitHeight + 12 : 0
+            visible: height > 0
+            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.dark ? 0.2 : 0.12)
+            Row {
+                id: snapRow
+                x: 10
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 8
+                GIcon { name: "document-open-recent|clock"; size: 18; anchors.verticalCenter: parent.verticalCenter }
+                GLabel {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, pane.width - 360)
+                    elide: Text.ElideRight
+                    text: pane.snapInfo ? "As it was " + new Date(pane.snapInfo.date * 1000).toLocaleString(Qt.locale(), "ddd d MMM yyyy, h:mm AP") + " (snapshot " + pane.snapInfo.snapshot + "). Read-only." : ""
+                }
+                GButton {
+                    text: "Show Current"; flat: false; capsule: true
+                    anchors.verticalCenter: parent.verticalCenter
+                    tip: "This folder as it is now"
+                    onClicked: pane.navigate(pane.snapInfo.live)
+                }
+                GButton {
+                    text: "Other Snapshots…"; flat: false; capsule: true
+                    anchors.verticalCenter: parent.verticalCenter
+                    tip: "This folder in the disk's other snapshots"
+                    onClicked: pane.win.showSnapshots(pane.path)
+                }
+            }
+        }
         // Filter bar (Ctrl+I, like Dolphin's).
         Rectangle {
             width: parent.width

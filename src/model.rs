@@ -114,6 +114,11 @@ pub mod qobject {
         fn stop(self: Pin<&mut FolderModel>);
         #[qinvokable]
         fn apply_sort(self: Pin<&mut FolderModel>, key: &QString, descending: bool);
+        /// Disk usage mode's sizes ({path: bytes}; "{}" when it's off). They
+        /// add to what's known; sorting by Size follows them.
+        #[qinvokable]
+        #[cxx_name = "setUsageSizes"]
+        fn set_usage_sizes(self: Pin<&mut FolderModel>, json: &QString);
         #[qinvokable]
         fn apply_filter(self: Pin<&mut FolderModel>, text: &QString);
         #[qinvokable]
@@ -249,6 +254,8 @@ pub struct FolderModelRust {
     descending: bool,
     folders_first: bool,
     show_hidden: bool,
+    /// Disk usage mode's sizes, for sorting by Size (empty: the mode is off).
+    usage: HashMap<String, u64>,
     filter: QString,
     count: i32,
     total: i32,
@@ -318,7 +325,10 @@ impl FolderModelRust {
 }
 
 /// Sort `all` and keep expanded folders' contents right under them.
-fn flatten(all: &[ItemRef], s: Sort, group: &str) -> Vec<ItemRef> {
+/// `usage`: disk usage mode's sizes (path → bytes on disk). Sorting by Size
+/// then goes by them, folders and files mixed (a folder's whole content).
+fn flatten(all: &[ItemRef], s: Sort, group: &str, usage: &HashMap<String, u64>) -> Vec<ItemRef> {
+    let by_usage = s.key == listing::SortKey::Size && !usage.is_empty();
     let mut groups: HashMap<String, Vec<ItemRef>> = HashMap::new();
     let mut roots: Vec<ItemRef> = Vec::new();
     for it in all {
@@ -335,6 +345,11 @@ fn flatten(all: &[ItemRef], s: Sort, group: &str) -> Vec<ItemRef> {
             if o != std::cmp::Ordering::Equal {
                 return o;
             }
+        }
+        if by_usage {
+            let size = |e: &Entry| usage.get(&e.path).copied().unwrap_or(if e.is_dir { 0 } else { e.size });
+            let o = size(&x.e).cmp(&size(&y.e)).then_with(|| grove_core::util::natural_cmp(&x.e.name, &y.e.name));
+            return if s.descending { o.reverse() } else { o };
         }
         listing::compare(&x.e, &y.e, s)
     };
@@ -612,7 +627,7 @@ impl qobject::FolderModel {
 
     fn resort(mut self: Pin<&mut Self>) {
         let s = self.rust().sort();
-        let all = flatten(&self.rust().all, s, &self.rust().group_by.clone());
+        let all = flatten(&self.rust().all, s, &self.rust().group_by.clone(), &self.rust().usage);
         self.as_mut().rust_mut().all = all;
         self.refilter();
     }
@@ -880,6 +895,21 @@ impl qobject::FolderModel {
             s.store(true, Ordering::SeqCst);
         }
         self.as_mut().set_loading(false);
+    }
+
+    fn set_usage_sizes(mut self: Pin<&mut Self>, json: &QString) {
+        let m: HashMap<String, u64> = serde_json::from_str(&json.to_string()).unwrap_or_default();
+        if m.is_empty() {
+            if self.rust().usage.is_empty() {
+                return;
+            }
+            self.as_mut().rust_mut().usage.clear();
+        } else {
+            self.as_mut().rust_mut().usage.extend(m);
+        }
+        if listing::SortKey::from_str(&self.rust().sort_key.to_string()) == listing::SortKey::Size {
+            self.resort();
+        }
     }
 
     fn apply_sort(mut self: Pin<&mut Self>, key: &QString, descending: bool) {

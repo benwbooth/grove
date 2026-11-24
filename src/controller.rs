@@ -1387,6 +1387,14 @@ impl ffi::Grove {
         });
     }
 
+    pub fn snapshots(&self, key: &QString, path: &QString) {
+        let p = path.to_string();
+        self.answer(key, move || {
+            let current = grove_core::versions::in_snapshot(&p).map(|(n, d, live)| json!({"snapshot": n, "date": d, "live": live}));
+            json!({"current": current, "list": grove_core::versions::snapshots(std::path::Path::new(&p))})
+        });
+    }
+
     pub fn versions(&self, key: &QString, path: &QString) {
         let p = PathBuf::from(path.to_string());
         self.answer(key, move || json!(grove_core::versions::versions(&p)));
@@ -1523,6 +1531,17 @@ impl ffi::Grove {
             let ext = p.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_else(|| "mkv".into());
             save_edit(&p, &mode, "trimmed", &ext, "Trim", &qt, |dest| trim_with_ffmpeg(&p, start_ms, end_ms, dest))
         });
+    }
+
+    pub fn usage_scan(&self, folder: &QString) {
+        crate::usage::request(self.qt_thread(), folder.to_string());
+    }
+    pub fn usage_stop(&self) {
+        crate::usage::stop();
+    }
+    pub fn usage_forget(&self, folders_json: &QString) {
+        let f: Vec<String> = serde_json::from_str(&folders_json.to_string()).unwrap_or_default();
+        crate::usage::forget(&f);
     }
 
     pub fn free_space(&self, key: &QString, path: &QString) {

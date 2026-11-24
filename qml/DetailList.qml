@@ -44,7 +44,8 @@ Item {
         enabled: root.columns.indexOf("duration") >= 0
         function onDataChanged() { Qt.callLater(root.bump) }
     }
-    function colW(k) { return (widths[k] || allColumns[k].w) * Theme.pt }
+    // (Disk usage mode: the Size column holds "12.4 GB · 3.1%", so it's wider.)
+    function colW(k) { return Math.max(widths[k] || allColumns[k].w, k === "size" && pane.usageOn ? 150 : 0) * Theme.pt }
     readonly property real fixedW: { let t = 0; for (const k of columns) t += colW(k); return t }
     readonly property real wName: Math.max(220, width - fixedW - 30)
 
@@ -259,7 +260,7 @@ Item {
                 case "created": return createdText
                 case "added": return addedText
                 case "opened": return openedText
-                case "size": return sizeText
+                case "size": return root.pane.usageOn && (root.pane.usageItem(path) || isDir) ? root.pane.usageLabel(path) : sizeText
                 case "kind": return kind
                 case "rating": return root.stars(rating)
                 case "permissions": return permissions
@@ -290,6 +291,15 @@ Item {
                 Item {
                     width: root.wName
                     height: parent.height
+                    // Disk usage mode: the item's share, behind its name.
+                    UsageBar {
+                        pane: root.pane
+                        path: rowItem.path
+                        x: disclosure.x + 18
+                        width: parent.width - x - 4
+                        height: parent.height - 6
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                     SelectCheck {
                         id: rowCheck
                         visible: root.pane.selectionMode
@@ -393,6 +403,15 @@ Item {
                             elide: parent.modelData === "where" || parent.modelData === "path" ? Text.ElideMiddle : Text.ElideRight
                         }
                         TagDots { visible: parent.modelData === "tags" && rowItem.tags !== ""; x: 8; anchors.verticalCenter: parent.verticalCenter; tags: rowItem.tags; colors: rowItem.tagColors }
+                        // Disk usage mode: working it out; the whole story on hover.
+                        UsageSpinner {
+                            running: parent.modelData === "size" && root.pane.usageOn && root.pane.usagePending(rowItem.path)
+                            anchors.right: parent.right; anchors.rightMargin: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: rowItem.dimColor
+                        }
+                        HoverHandler { id: usageHover; enabled: parent.modelData === "size" && root.pane.usageOn }
+                        GTip { visible: usageHover.hovered && root.pane.usageOn; text: root.pane.usageTip(rowItem.path) }
                     }
                 }
             }

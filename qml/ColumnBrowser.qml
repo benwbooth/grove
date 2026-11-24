@@ -260,7 +260,12 @@ Item {
                 own.applySort(root.fm.sortKey || "name", root.fm.descending)
                 own.loadPath(folder)
             }
-            Component.onCompleted: { loadOwn(); swapModel() }
+            Component.onCompleted: { loadOwn(); swapModel(); if (!isPreview) root.pane.usageFor(folder) }
+            // Disk usage mode: this column's folder too.
+            Connections {
+                target: root.pane
+                function onUsageOnChanged() { if (!column.isPreview) root.pane.usageFor(column.folder) }
+            }
             // Sorted as the current folder is (the toolbar's Sort, View > Sort By).
             Connections {
                 target: root.fm
@@ -345,6 +350,13 @@ Item {
                         radius: 5
                         color: r.selected ? (column.isLast && root.pane.active ? Theme.accent : Theme.selectedInactive) : drop.hovering ? Theme.dropTarget : "transparent"
                     }
+                    UsageBar {
+                        pane: root.pane
+                        path: r.path
+                        x: 8; width: parent.width - 16
+                        height: parent.height - 4
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                     GIcon { id: ic; x: 12; anchors.verticalCenter: parent.verticalCenter; size: 18; name: r.iconName; opacity: r.hidden || r.cut ? 0.5 : 1 }
                     GitBadge { status: r.git; anchors.right: ic.right; anchors.bottom: ic.bottom; anchors.margins: -5; scale: 0.7 }
                     GLabel {
@@ -370,8 +382,15 @@ Item {
                         id: sizeLbl
                         anchors.right: chevron.left; anchors.rightMargin: 4
                         anchors.verticalCenter: parent.verticalCenter
-                        text: r.archiveRow ? r.sizeText : ""
+                        text: root.pane.usageOn ? root.pane.usageLabel(r.path) : r.archiveRow ? r.sizeText : ""
                         font.pixelSize: Theme.small
+                        color: r.selected && column.isLast && root.pane.active ? Theme.accentText : Theme.fgSecondary
+                    }
+                    UsageSpinner {
+                        id: usageSpin
+                        running: root.pane.usageOn && root.pane.usagePending(r.path)
+                        anchors.right: chevron.left; anchors.rightMargin: 6
+                        anchors.verticalCenter: parent.verticalCenter
                         color: r.selected && column.isLast && root.pane.active ? Theme.accentText : Theme.fgSecondary
                     }
                     TagDots { anchors.right: sizeLbl.left; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; tags: r.tags; colors: r.tagColors }
@@ -438,7 +457,8 @@ Item {
                     }
                     // A name cut short shows in full on hover.
                     HoverHandler { acceptedDevices: PointerDevice.AllDevices; id: rowHover }
-                    GTip { visible: rowHover.hovered && colName.truncated && !r.renaming; text: r.name }
+                    GTip { visible: rowHover.hovered && (colName.truncated || root.pane.usageOn) && !r.renaming
+                           text: root.pane.usageOn ? r.name + "\n" + root.pane.usageTip(r.path) : r.name }
                 }
             }
             Rectangle { visible: !column.isPreview; anchors.right: parent.right; width: 1; height: parent.height; color: Theme.separator }

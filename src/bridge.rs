@@ -95,6 +95,10 @@ pub mod ffi {
         /// The portal wants a file chooser (JSON request).
         #[qsignal]
         fn chooser_request(self: Pin<&mut Grove>, json: QString);
+        /// Disk usage mode: sizes for a folder's items (usage.rs).
+        #[qsignal]
+        #[cxx_name = "usageReady"]
+        fn usage_ready(self: Pin<&mut Grove>, folder: QString, json: QString);
         /// hearth's accounts service (Settings > Accounts) appeared, went
         /// away, or its accounts changed.
         #[qsignal]
@@ -251,6 +255,10 @@ pub mod ffi {
         fn checksum(self: &Grove, key: &QString, path: &QString, algo: &QString);
         #[qinvokable]
         fn versions(self: &Grove, key: &QString, path: &QString);
+        /// Snapshots of the disk `path` is on, and where `path` is if it's
+        /// inside one: {current: {snapshot, date, live}|null, list: [...]}.
+        #[qinvokable]
+        fn snapshots(self: &Grove, key: &QString, path: &QString);
         #[qinvokable]
         fn git_action(self: &Grove, key: &QString, dir: &QString, action: &QString, paths: &QString, arg: &QString);
         #[qinvokable]
@@ -477,6 +485,18 @@ pub mod ffi {
         /// Free and total bytes on the disk holding `path` ({free, total}).
         #[qinvokable]
         fn free_space(self: &Grove, key: &QString, path: &QString);
+        /// Disk usage mode: work out `folder`'s items (answers by usageReady).
+        #[qinvokable]
+        #[cxx_name = "usageScan"]
+        fn usage_scan(self: &Grove, folder: &QString);
+        /// Disk usage mode turned off: stop working.
+        #[qinvokable]
+        #[cxx_name = "usageStop"]
+        fn usage_stop(self: &Grove);
+        /// These folders changed: their sizes are worked out again.
+        #[qinvokable]
+        #[cxx_name = "usageForget"]
+        fn usage_forget(self: &Grove, folders_json: &QString);
 
         // --- burning ---
         /// Optical drives: JSON [{dev, name, canWrite}].
