@@ -317,6 +317,23 @@ pub mod ffi {
         /// A track's waveform for the player (async_reply {base, played}: PNGs).
         #[qinvokable]
         fn audio_waveform(self: &Grove, key: &QString, path: &QString, width: i32, height: i32, dark: bool);
+        /// Grove Player's trim filmstrip (async_reply {path, frames} or {error}).
+        #[qinvokable]
+        fn player_filmstrip(self: &Grove, key: &QString, path: &QString, frames: i32, height: i32);
+        /// Recently played movies and songs (newest first): JSON list of paths.
+        #[qinvokable]
+        fn player_recents(self: &Grove, key: &QString);
+        /// What Grove Player should open for a path (async_reply {kind:
+        /// "dvd" | "bluray" | "file" | "folder", device}): DVD and Blu-ray
+        /// folders and disc images play through mpv's dvd:// and bd://.
+        #[qinvokable]
+        fn player_probe(self: &Grove, key: &QString, path: &QString);
+        /// hearth's screen recorder (File › New Screen Recording).
+        #[qinvokable]
+        fn player_screen_recording(self: &Grove);
+        /// Remember a played file in the desktop's recent files.
+        #[qinvokable]
+        fn player_add_recent(self: &Grove, path: &QString);
         /// A Google Docs link file's document, exported ({path} or {error}).
         #[qinvokable]
         #[cxx_name = "gdocExport"]

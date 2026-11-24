@@ -126,6 +126,29 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Print (printer, copies, pages, paper, layout, two-sided, colour) | ✅ | ✅ CUPS |
 | Inspector, editable PDF info, slideshow | ✅ | ✅ |
 
+## Grove Player (QuickTime Player; libmpv)
+
+`grove --play FILES|URLS` (grove-player.desktop for video files), its own process. libmpv, driven from Rust (src/mpv.rs); the picture through mpv's OpenGL render API (cpp/mpv_gl.cpp, the only C++).
+
+| Feature | QuickTime | grove |
+|---|---|---|
+| Borderless window that is all picture, controls fade in on movement | ✅ | ✅ glass control bar, title in a fading top strip |
+| Play/pause, ±15 s, scrubber with times, volume | ✅ | ✅ chapter ticks, buffered part for streams, time under the pointer |
+| Sound output picker (AirPlay) | ✅ | ✅ every PipeWire/Pulse output |
+| Picture in picture, full screen, Float on Top | ✅ | ✅ |
+| Actual Size, Fit, Fill | ✅ | ✅ |
+| Formats | 🟡 Apple's | ✅ everything FFmpeg reads (MKV, WebM, AVI, HEVC, AV1, VP9, ...), hardware decoding (VA-API) |
+| Music with cover art | ✅ | ✅ title, artist, album |
+| Subtitles (embedded and beside the file), audio languages | ✅ | ✅ track picker, Add Subtitle File |
+| Open Location (URLs) | ✅ | ✅ YouTube and the other yt-dlp sites, streams |
+| DVD and Blu-ray folders and images | ❌ | ✅ through libdvdnav/libbluray |
+| Trim (yellow handles), Split Clip, delete clips, Rotate, Flip, Undo | ✅ | ✅ shown at once (mpv EDL); not on URLs or discs |
+| Export As 4K/1080p/720p/480p/Audio Only | ✅ | ✅ in the background with progress and Cancel (H.264/AAC MP4, AAC M4A) through mpv's encoder |
+| New Audio Recording | ✅ | ✅ microphone to Music as M4A |
+| New Screen Recording | ✅ | ✅ opens hearth's recorder |
+| Movie Inspector | ✅ | ✅ codecs, resolution, frame rate, data rates, colour, hardware decoding |
+| Remembers where you stopped | ✅ | ✅ |
+
 ## Integration
 
 | Feature | F | D | grove |

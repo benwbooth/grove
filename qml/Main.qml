@@ -34,16 +34,15 @@ Item {
     // Everything, so a restart comes back as it was: each window's tabs
     // (folders, history, views, selection, scroll, open folders, the files
     // being viewed and where in them), size, Quick Look, Get Info and Disk
-    // Usage windows, and Grove Player windows with their playback position.
+    // Usage windows. (Grove Player runs as its own process; mpv remembers
+    // where each movie was left.)
     // Tests: GROVE_SESSION_TEST=1 saves and restores in screenshot runs too.
     readonly property bool sessionOn: screenshot === "" || grove.env("GROVE_SESSION_TEST") === "1"
     function saveSession() {
         if (!sessionOn || portalMode) return
         const ws = []
         for (const w of windows) { const st = w.windowState(); st.tabs = w.tabPaths(); ws.push(st) }
-        players = players.filter(p => p && p.visible)
-        const ps = players.map(p => ({ path: p.path, pos: p.position() }))
-        if (ws.length) grove.saveSession(JSON.stringify({ windows: ws, players: ps }))
+        if (ws.length) grove.saveSession(JSON.stringify({ windows: ws }))
     }
     Timer { id: sessionTimer; interval: 2000; onTriggered: app.saveSession() }
     // Saved as things change too (scroll, playback): a crash or logout keeps it.
@@ -72,14 +71,21 @@ Item {
     property Archiver archiver: Archiver { app: app }
 
     Component { id: playerComp; PlayerWindow {} }
-    // Grove Player windows (one per file).
+    // Grove Player windows (one per file; none: an empty one with the Open
+    // panel, as QuickTime starts). Its own process (grove --play).
     function play(paths) {
-        for (const p of paths) {
-            const w = playerComp.createObject(null, { app: app, path: p })
-            players = players.concat([w])
-            w.show(); w.raise(); w.requestActivate()
-        }
+        const list = paths.length ? paths : [""]
+        let last = null
+        for (const p of list) last = newPlayer(p)
         if (screenshot !== "") playShot.start()
+        return last
+    }
+    function newPlayer(p, mode) {
+        const w = playerComp.createObject(null, { app: app, path: p || "", mode: mode || "" })
+        players = players.concat([w])
+        w.closing.connect(() => Qt.callLater(() => { players = players.filter(x => x !== w) }))
+        w.show(); w.raise(); w.requestActivate()
+        return w
     }
     // Tests: grove --play FILE --screenshot out.png grabs the player and quits.
     Timer { id: playShot; interval: Number(grove.env("GROVE_PLAY_SHOT_MS") || 3500); onTriggered: { grove.grabWindows(app.screenshot); Qt.quit() } }
@@ -239,7 +245,7 @@ Item {
         let req = null
         try { req = JSON.parse(grove.env("GROVE_OPEN") || "null") } catch (e) {}
         if (portalMode) return
-        if (req && req.paths && (req.paths.length || req.action === "archive" || req.action === "preview")) handleOpen(req)
+        if (req && req.paths && (req.paths.length || req.action === "archive" || req.action === "preview" || req.action === "play")) handleOpen(req)
         else if (!service) {
             let sess = null
             try { sess = JSON.parse(grove.session() || "null") } catch (e) {}
@@ -252,14 +258,7 @@ Item {
                     const win = st.length ? openWindowWithStates(st) : openWindow((w.tabs || []).filter(ok), [])
                     if (win && win.restoreWindow) win.restoreWindow(w)
                 }
-            if (settings.restore_session !== false && sess && sess.players && sessionOn)
-                for (const pl of sess.players) {
-                    if (!pl.path) continue
-                    const pw = playerComp.createObject(null, { app: app, path: pl.path, startAt: pl.pos || 0 })
-                    players = players.concat([pw])
-                    pw.show()
-                }
-            else openWindow([grove.home()])
+            if (!(sess && sess.windows && sess.windows.length && settings.restore_session !== false && sessionOn)) openWindow([grove.home()])
         }
     }
 }

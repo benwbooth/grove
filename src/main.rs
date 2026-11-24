@@ -25,6 +25,7 @@ mod gitstatus;
 mod info;
 mod localsend;
 mod media;
+mod mpv;
 mod mime;
 mod model;
 mod places;
@@ -72,7 +73,13 @@ fn main() {
             "--new-window" | "-n" => new_window = true,
             "--select" | "-s" => action = "items",
             // Grove Player: play the files in a QuickTime-style window.
-            "--play" | "-p" => action = "play",
+            // Its own process (libmpv; a crash or a stuck stream never takes
+            // the file manager with it), drawn with OpenGL (mpv's render API).
+            "--play" | "-p" => {
+                action = "play";
+                std::env::set_var("GROVE_NO_DBUS", "1");
+                std::env::set_var("QSG_RHI_BACKEND", "opengl");
+            }
             // Grove Preview (macOS Preview's features): PDFs and pictures.
             // Its own process, never handed to a running grove (one from
             // before Preview existed would drop the request).
@@ -107,6 +114,8 @@ fn main() {
                 return;
             }
             a if a.starts_with("--") => {}
+            // A web address or a disc (Grove Player: https://, dvd://, bd://).
+            a if action == "play" && a.contains("://") && !a.starts_with("file://") => paths.push(a.to_string()),
             a => {
                 let p = grove_core::util::path_from_uri(a).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| a.to_string());
                 let abs = std::env::current_dir().unwrap_or_default().join(&p);
@@ -132,7 +141,7 @@ fn main() {
             return;
         }
     }
-    if !paths.is_empty() || action == "archive" || action == "preview" {
+    if !paths.is_empty() || action == "archive" || action == "preview" || action == "play" {
         std::env::set_var("GROVE_OPEN", serde_json::json!({"action": action, "paths": paths}).to_string());
     }
     // hearth's light/dark mode and accent, so grove matches the shell.

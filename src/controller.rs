@@ -1161,6 +1161,94 @@ impl ffi::Grove {
         });
     }
 
+    pub fn player_filmstrip(&self, key: &QString, path: &QString, frames: i32, height: i32) {
+        let p = path.to_string();
+        let (n, h) = (frames.clamp(1, 60) as u32, height.clamp(16, 400) as u32);
+        self.answer_on("filmstrip", key, move || {
+            let never = std::sync::atomic::AtomicBool::new(false);
+            match grove_core::av::filmstrip(std::path::Path::new(&p), n, h, &never) {
+                Some(out) => serde_json::json!({"path": out.display().to_string(), "frames": n}),
+                None => serde_json::json!({"error": "no frames"}),
+            }
+        });
+    }
+
+    pub fn player_probe(&self, key: &QString, path: &QString) {
+        let p = path.to_string();
+        self.answer(key, move || {
+            let path = std::path::Path::new(&p);
+            let name = path.file_name().map(|n| n.to_string_lossy().to_uppercase()).unwrap_or_default();
+            let parent = path.parent().map(|x| x.display().to_string()).unwrap_or_default();
+            let disc = |kind: &str, device: &str| serde_json::json!({"kind": kind, "device": device});
+            if path.is_dir() {
+                if name == "VIDEO_TS" || name == "BDMV" {
+                    return disc(if name == "BDMV" { "bluray" } else { "dvd" }, &parent);
+                }
+                if path.join("BDMV").is_dir() {
+                    return disc("bluray", &p);
+                }
+                if path.join("VIDEO_TS").is_dir() || path.join("video_ts").is_dir() {
+                    return disc("dvd", &p);
+                }
+                return disc("folder", &p);
+            }
+            // A disc's own files: VIDEO_TS.IFO, index.bdmv.
+            if name == "VIDEO_TS.IFO" {
+                return disc("dvd", &parent);
+            }
+            if name == "INDEX.BDMV" || name == "MOVIEOBJECT.BDMV" {
+                return disc("bluray", &path.parent().and_then(|x| x.parent()).map(|x| x.display().to_string()).unwrap_or_default());
+            }
+            // Disc images: look for the disc's folder names near the start
+            // (ISO 9660 and UDF directory records keep them as plain bytes).
+            if name.ends_with(".ISO") || name.ends_with(".IMG") {
+                use std::io::Read;
+                let mut buf = Vec::new();
+                let _ = std::fs::File::open(path).and_then(|f| f.take(8 << 20).read_to_end(&mut buf));
+                let hay = &buf[..];
+                let has = |needle: &[u8]| hay.windows(needle.len()).any(|w| w == needle);
+                if has(b"BDMV") {
+                    return disc("bluray", &p);
+                }
+                if has(b"VIDEO_TS") {
+                    return disc("dvd", &p);
+                }
+            }
+            disc("file", &p)
+        });
+    }
+
+    pub fn player_screen_recording(&self) {
+        // hearth's capture overlay (Screenshot / Record), as QuickTime opens
+        // macOS's screenshot toolbar.
+        std::thread::spawn(|| {
+            let _ = std::process::Command::new("hearth-ipc").args(["call", "screenshot", "open"]).stdin(std::process::Stdio::null()).spawn().map(|mut c| c.wait());
+        });
+    }
+
+    pub fn player_recents(&self, key: &QString) {
+        self.answer(key, move || {
+            let media = |p: &std::path::Path| {
+                let n = p.to_string_lossy().to_lowercase();
+                const EXT: &[&str] = &[".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".wmv", ".flv", ".mpg", ".mpeg", ".ts", ".m2ts", ".ogv", ".3gp", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wav", ".aac", ".wma", ".iso", ".mka", ".aiff"];
+                EXT.iter().any(|e| n.ends_with(e)) && p.exists()
+            };
+            let list: Vec<String> = grove_core::recents::list(200).into_iter().filter(|p| media(p)).take(15).map(|p| p.display().to_string()).collect();
+            serde_json::json!(list)
+        });
+    }
+
+    pub fn player_add_recent(&self, path: &QString) {
+        let p = path.to_string();
+        std::thread::spawn(move || {
+            let path = std::path::Path::new(&p);
+            if path.is_absolute() {
+                let mime = if p.to_lowercase().ends_with(".iso") { "application/x-cd-image" } else { "video/x-matroska" };
+                grove_core::recents::add(path, mime);
+            }
+        });
+    }
+
     pub fn audio_waveform(&self, key: &QString, path: &QString, width: i32, height: i32, dark: bool) {
         let p = path.to_string();
         let (w, h) = (width.clamp(64, 4096) as u32, height.clamp(16, 512) as u32);

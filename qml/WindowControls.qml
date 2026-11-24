@@ -8,6 +8,8 @@ Row {
     id: wc
     required property var window
     readonly property bool maximized: window.visibility === Window.Maximized
+    // The icons' colour (Grove Player: white over the picture).
+    property color tint: Theme.fg
     spacing: 6
 
     // One 1.5 px stroke of an icon, centred at (cx, cy) on a 16×16 grid.
@@ -50,7 +52,7 @@ Row {
             anchors.centerIn: parent
             width: 16; height: 16
             opacity: wc.window.active || b.hot ? 1 : 0.55
-            readonly property color ink: (b.hot || b.down) ? (b.danger ? "white" : Theme.window) : Theme.fg
+            readonly property color ink: (b.hot || b.down) ? (b.danger ? "white" : Theme.window) : wc.tint
             // ⌄ minimize / ⌃ maximize: two bars meeting in the middle.
             Bar { ink: icon.ink; visible: b.glyph === "minimize"; len: 5.4; angle: 45;  cx: 6.25; cy: 8.25 }
             Bar { ink: icon.ink; visible: b.glyph === "minimize"; len: 5.4; angle: -45; cx: 9.75; cy: 8.25 }

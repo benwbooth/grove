@@ -130,6 +130,52 @@ pub fn audio_cover(path: &Path, px: u32, cancel: &AtomicBool) -> Option<PathBuf>
     save_frame(&f, px)
 }
 
+/// Grove Player's trim filmstrip: `n` frames spread over the video, each
+/// `h` px tall, side by side in one PNG (temporary file).
+pub fn filmstrip(path: &Path, n: u32, h: u32, cancel: &AtomicBool) -> Option<PathBuf> {
+    let mut ictx = input(path)?;
+    let idx = video_index(&ictx)?;
+    let dur = ictx.duration().max(0);
+    let n = n.clamp(1, 60);
+    let h = h.clamp(16, 400);
+    let mut tiles: Vec<image::RgbImage> = Vec::new();
+    for i in 0..n {
+        if cancel.load(Ordering::Relaxed) {
+            return None;
+        }
+        let at = dur * (2 * i as i64 + 1) / (2 * n as i64);
+        let _ = ictx.seek(at, ..at);
+        let Some(frame) = first_frame(&mut ictx, idx, cancel) else { continue };
+        let (fw, fh) = (frame.width(), frame.height());
+        if fw == 0 || fh == 0 {
+            continue;
+        }
+        let tw = ((fw as f64 * h as f64 / fh as f64).round() as u32).max(2);
+        let Ok(mut sc) = ff::software::scaling::Context::get(frame.format(), fw, fh, ff::format::Pixel::RGB24, tw, h, ff::software::scaling::Flags::BILINEAR) else { continue };
+        let mut rgb = ff::frame::Video::empty();
+        if sc.run(&frame, &mut rgb).is_err() {
+            continue;
+        }
+        let stride = rgb.stride(0);
+        let data = rgb.data(0);
+        let mut buf = Vec::with_capacity((tw * h * 3) as usize);
+        for y in 0..h as usize {
+            buf.extend_from_slice(&data[y * stride..y * stride + tw as usize * 3]);
+        }
+        if let Some(img) = image::RgbImage::from_raw(tw, h, buf) {
+            tiles.push(img);
+        }
+    }
+    let tw = tiles.first()?.width();
+    let mut out = image::RgbImage::new(tw * tiles.len() as u32, h);
+    for (i, t) in tiles.iter().enumerate() {
+        image::imageops::replace(&mut out, t, (i as u32 * tw) as i64, 0);
+    }
+    let p = crate::previews::temp_file("png");
+    out.save(&p).ok()?;
+    Some(p)
+}
+
 /// Peak levels of the (first, up to `max_secs`) audio, one per 10 ms,
 /// 0..1, and the stream's length in seconds.
 pub fn peaks(path: &Path, max_secs: f64, cancel: &AtomicBool) -> Option<(Vec<f32>, f64)> {

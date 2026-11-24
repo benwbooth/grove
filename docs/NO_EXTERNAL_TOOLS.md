@@ -26,6 +26,7 @@ separate privileged/FUSE service is needed (drives).
 | Disk images (mount) | udisksctl | UDisks2 over D-Bus | done |
 | Permissions, owner | chmod, chown, env (as root) | std::fs; as root `pkexec grove --root-helper` (src/roothelper.rs) | done |
 | Version control badges (git, hg, svn, jj, fossil) | git | libgit2, hg dirstate, svn/fossil SQLite (src/vcs.rs) | done |
+| Media playback, export, audio recording (Grove Player) | QtMultimedia | libmpv linked (src/mpv.rs; picture via cpp/mpv_gl.cpp), mpv's encoder for exports | done |
 | Burn to disc, ISO images | xorriso | libisofs + libburn linked (core/csrc/burn.c) | done |
 
 Stays external, by nature:
@@ -34,3 +35,5 @@ Stays external, by nature:
 - umount, for mounts from fstab that udisks doesn't manage (setuid);
 - rclone, sshfs, simple-mtpfs/jmtpfs, fusermount: FUSE mounts run as their own processes;
 - hearth-search: hearth's indexer.
+- yt-dlp: mpv's ytdl hook runs it for web addresses in Grove Player (the sites change weekly; only yt-dlp keeps up);
+- hearth-ipc: File › New Screen Recording opens hearth's recorder.

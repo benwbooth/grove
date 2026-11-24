@@ -5,6 +5,7 @@
 #include <QColor>
 #include "native_helpers.h"
 #include "global_menu.h"
+#include "mpv_gl.h"
 #include <QtQml/qqml.h>
 #include "grove/src/bridge.cxxqt.h"
 
@@ -959,6 +960,7 @@ void grove_create_app()
 int grove_run(const QString& url, const QString& importPath)
 {
     qmlRegisterType<GlobalMenuBar>("GlobalMenu", 1, 0, "GlobalMenuBar");
+    qmlRegisterType<MpvGlView>("GroveMpv", 1, 0, "MpvGlView");
     auto* engine = new QQmlApplicationEngine;
     engine->addImageProvider(QStringLiteral("thumb"), new ThumbProvider);
     engine->addImageProvider(QStringLiteral("pdfpage"), new PdfPageProvider);

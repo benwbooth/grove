@@ -59,21 +59,33 @@ fn main() {
         _ => Vec::new(),
     };
 
+    // libmpv's headers (Grove Player); Rust links it (src/mpv.rs).
+    let mpv_includes: Vec<std::path::PathBuf> = std::process::Command::new("pkg-config")
+        .args(["--cflags-only-I", "mpv"])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).split_whitespace().filter_map(|f| f.strip_prefix("-I")).map(std::path::PathBuf::from).collect())
+        .unwrap_or_default();
     let builder = CxxQtBuilder::new_qml_module(QmlModule::new("Grove").qml_files(qml_files))
         .crate_include_root(None)
         .include_dir("include")
         .qt_module("Quick")
         .qt_module("QuickControls2")
         .qt_module("Pdf")
+        // Grove Player's picture (mpv's OpenGL render API).
+        .qt_module("OpenGL")
         .cpp_file("cpp/native.cpp")
         // The menus in the desktop's global menu bar (moc runs on the header).
         .cpp_file("include/global_menu.h")
         .cpp_file("cpp/global_menu.cpp")
-        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs", "src/hexdoc.rs", "src/pvcanvas.rs"]);
+        .cpp_file("include/mpv_gl.h")
+        .cpp_file("cpp/mpv_gl.cpp")
+        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs", "src/hexdoc.rs", "src/pvcanvas.rs", "src/mpv.rs"]);
     // Only adds include dirs and a define for our own code.
     let builder = unsafe {
         builder.cc_builder(|cc| {
             cc.includes(&qpa_headers);
+            cc.includes(&mpv_includes);
             // Shown in About Grove.
             cc.define("GROVE_VERSION", Some(format!("{:?}", env!("CARGO_PKG_VERSION")).as_str()));
         })
