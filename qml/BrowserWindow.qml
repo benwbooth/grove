@@ -1582,6 +1582,8 @@ ApplicationWindow {
         else if (cmd === "savesearch") saveSmartFolder(p)
         else if (cmd === "menu") p.showItemMenu(Number(arg), 100, 100)
         else if (cmd === "bgmenu") p.showBackgroundMenu()
+        // "colmenu=/path/item": a right-click on an item in an earlier column.
+        else if (cmd === "colmenu") { p.pendingMenu = arg; p.navigate(arg.substring(0, arg.lastIndexOf("/")) || "/", { select: [arg] }) }
         // "itemmenu=Google Drive": the open item menu's submenu with that title.
         else if (cmd === "itemmenu") {
             const m = p.itemMenu

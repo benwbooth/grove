@@ -446,6 +446,14 @@ Item {
                         onClicked: (mouse) => {
                             root.pane.activated()
                             root.pane.forceActiveFocus()
+                            // Right-click: this column becomes the current one with the
+                            // item selected, then its menu opens (the menu's actions
+                            // work on the current folder's selection).
+                            if (mouse.button === Qt.RightButton) {
+                                root.pane.pendingMenu = r.path
+                                root.pane.navigate(column.folder, { select: [r.path] })
+                                return
+                            }
                             const d = r.clickOpens() ? root.pane.browsePath(r) : ""
                             if (d) root.pane.navigate(d)
                             else root.pane.navigate(column.folder, { select: [r.path] })

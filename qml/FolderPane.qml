@@ -27,6 +27,9 @@ FocusScope {
     property string folderBeforeSearch: ""
     property int renamingRow: -1
     property var pendingSelect: []
+    // A right-click in column view on an item in an earlier column: its
+    // menu, once that column is the current one.
+    property string pendingMenu: ""
 
     // ---- Disk usage mode (View › Show Disk Usage): what every item takes,
     // worked out in the background (usage.rs). Kept per path, for every
@@ -211,6 +214,13 @@ FocusScope {
     readonly property bool inTrash: path.indexOf("trash:") === 0
     // Inside a btrfs snapshot: {snapshot, date, live} (for the banner).
     property var snapInfo: null
+    // Copy items from the snapshot back to the same folder today (the usual
+    // conflict sheet asks about ones still there).
+    function restoreFromSnapshot(paths) {
+        if (!snapInfo || !paths.length) return
+        grove.runJob("copy", JSON.stringify(paths), snapInfo.live)
+        win.toast("info", (paths.length === 1 ? "Restoring “" + paths[0].substring(paths[0].lastIndexOf("/") + 1) + "”" : "Restoring " + paths.length + " items") + " to " + snapInfo.live)
+    }
     onPathChanged: {
         usageFor(path)
         const p = path
@@ -231,6 +241,11 @@ FocusScope {
                 fm.selectPaths(JSON.stringify(pane.pendingSelect))
                 if (pane.view && pane.view.positionAt) pane.view.positionAt(fm.currentRow)
                 pane.pendingSelect = []
+            }
+            if (pane.pendingMenu !== "") {
+                const row = fm.rowOf(pane.pendingMenu)
+                pane.pendingMenu = ""
+                if (row >= 0) pane.showItemMenu(row, 0, 0)
             }
             if (app && app.settings.show_git_status && !pane.special && !pane.searching) {
                 Async.call(grove, k => grove.gitStatus(k, pane.path), r => { pane.gitMap = r || {}; pane.inGit = !!r && (r.__vcs === "git" || r.__vcs === "jj"); fm.setGitStatus(JSON.stringify(r || {})) })
@@ -856,6 +871,13 @@ FocusScope {
                     width: Math.min(implicitWidth, pane.width - 360)
                     elide: Text.ElideRight
                     text: pane.snapInfo ? "As it was " + new Date(pane.snapInfo.date * 1000).toLocaleString(Qt.locale(), "ddd d MMM yyyy, h:mm AP") + " (snapshot " + pane.snapInfo.snapshot + "). Read-only." : ""
+                }
+                GButton {
+                    text: fm.selectionCount > 0 ? "Restore Selected" : "Restore All"; flat: false; capsule: true
+                    anchors.verticalCenter: parent.verticalCenter
+                    tip: fm.selectionCount > 0 ? "Copy the selected items back to " + (pane.snapInfo ? pane.snapInfo.live : "") + " (asks about ones still there)"
+                                               : "Copy everything here back to " + (pane.snapInfo ? pane.snapInfo.live : "") + " (asks about ones still there)"
+                    onClicked: { if (fm.selectionCount === 0) fm.selectAll(); pane.restoreFromSnapshot(pane.selectedPaths()) }
                 }
                 GButton {
                     text: "Show Current"; flat: false; capsule: true

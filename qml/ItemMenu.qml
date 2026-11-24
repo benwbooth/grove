@@ -50,6 +50,14 @@ GMenu {
         }
     }
 
+    GMenuItem {
+        text: m.one ? "Restore “" + m.target.name + "”" : "Restore " + m.sel.length + " Items"
+        iconName: "edit-undo|document-revert"
+        visible: !!m.pane.snapInfo
+        height: visible ? implicitHeight : 0
+        tip: "Copy back to where it is today (" + (m.pane.snapInfo ? m.pane.snapInfo.live : "") + "); if it's still there you choose to replace it or keep both"
+        onTriggered: m.pane.restoreFromSnapshot(m.sel)
+    }
     GMenuItem { text: m.target.isDir ? "Open" : "Open"; iconName: "document-open"; shortcutText: Help.shown("Return"); enabled: !m.trash; onTriggered: m.pane.openSelected(false) }
     GMenuItem { text: "Open in New Tab"; iconName: "tab-new"; visible: !!m.target.isDir; height: visible ? implicitHeight : 0; shortcutText: Help.shown("Ctrl+Return"); onTriggered: m.pane.openSelected(true) }
     GMenu {
@@ -79,7 +87,6 @@ GMenu {
     GMenuItem { text: m.one ? "Rename…" : "Rename " + m.sel.length + " Items…"; iconName: "edit-rename"; shortcutText: Help.shown("F2"); enabled: !m.pane.special; onTriggered: m.pane.rename() }
     GMenuItem { text: "Duplicate"; iconName: "edit-copy"; shortcutText: Help.shown("Ctrl+D"); enabled: !m.pane.special; onTriggered: m.pane.duplicate() }
     GMenuItem { text: "Make Alias"; iconName: "insert-link"; shortcutText: Help.shown("Ctrl+Alt+A"); enabled: !m.pane.special; onTriggered: m.pane.makeAlias() }
-    GMenuItem { text: m.one ? "Compress “" + m.target.name + "”" : "Compress " + m.sel.length + " Items"; iconName: "archive-insert"; enabled: !m.pane.special; tip: "Make a .zip next to the items"; onTriggered: m.pane.compress("zip") }
     GMenuItem { text: "Extract Here"; iconName: "archive-extract"; visible: m.isArchive; height: visible ? implicitHeight : 0
         tip: "Into a folder named after the archive if it holds more than one item; else right here"; onTriggered: m.pane.extract() }
     GMenuItem { text: "Extract To…"; iconName: "archive-extract|folder-open"; visible: m.isArchive; height: visible ? implicitHeight : 0
@@ -179,7 +186,6 @@ GMenu {
             GMenuItem { text: "to JPEG"; iconName: "image-x-generic"; onTriggered: m.pane.win.quickAction("convert", m.sel, "jpg") }
             GMenuItem { text: "to WebP"; iconName: "image-x-generic"; onTriggered: m.pane.win.quickAction("convert", m.sel, "webp") }
         }
-        GMenuItem { text: "Compress as .tar.zst"; iconName: "archive-insert"; onTriggered: m.pane.compress("tar.zst") }
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; enabled: !!m.target.isDir; onTriggered: m.pane.grove.openTerminal(m.target.path) }
         GMenuItem { text: "Open as Administrator"; iconName: "dialog-password"; tip: "Opens a grove window with administrator rights (asks for your password)"; onTriggered: m.pane.win.quickAction("open-as-root", m.target.isDir ? [m.target.path] : [m.pane.path], "") }
         GMenuItem { text: "Add to Favourites"; iconName: "bookmark-new"; enabled: !!m.target.isDir; onTriggered: m.pane.grove.addFavourite(m.target.path, -1) }
