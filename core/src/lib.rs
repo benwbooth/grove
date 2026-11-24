@@ -25,6 +25,8 @@ pub mod listing;
 pub mod mounts;
 pub mod previews;
 pub mod ops;
+pub mod partmap;
+pub mod diskops;
 pub mod recents;
 pub mod rename;
 pub mod search;

@@ -16,7 +16,7 @@
       # places, devices, git status). All optional at run time.
       # Libraries grove links instead of running their command-line tools
       # (docs/NO_EXTERNAL_TOOLS.md).
-      linkedFor = pkgs: with pkgs; [ libarchive libgit2 libssh2 openssl zlib ffmpeg-headless vips glib mupdf djvulibre libisofs libburn cups mpv-unwrapped ];
+      linkedFor = pkgs: with pkgs; [ libarchive libgit2 libssh2 openssl zlib ffmpeg-headless vips glib mupdf djvulibre libisofs libburn cups mpv-unwrapped parted ];
       # Programs grove still runs (docs/NO_EXTERNAL_TOOLS.md): drives are
       # separate services (FUSE mounts, rclone), not libraries.
       runtimeFor = pkgs: with pkgs; [ yt-dlp sshfs rclone simple-mtpfs fuse3 cifs-utils smbnetfs ];
