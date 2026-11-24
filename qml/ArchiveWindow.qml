@@ -456,6 +456,8 @@ Window {
                     readonly property color ink: picked && aw.active ? Theme.accentText : Theme.fg
                     readonly property color ink2: picked && aw.active ? Theme.accentText : Theme.fgSecondary
                     Row {
+                        // Above the row's click area, so the triangles get their clicks.
+                        z: 1
                         x: 6
                         height: parent.height
                         Row {
