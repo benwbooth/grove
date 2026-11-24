@@ -984,7 +984,8 @@ fn be64(b: &[u8], o: usize) -> u64 {
 }
 
 /// Bytes in use on a filesystem, read from the start of its partition
-/// (the first 128 KiB is enough for ext, btrfs, XFS and FAT32).
+/// (the first 128 KiB is enough for ext, btrfs, XFS and FAT32; FAT16
+/// needs its whole first FAT, up to 1 MiB in).
 pub fn used_from_superblock(fs: &str, head: &[u8]) -> Option<u64> {
     match fs {
         "ext2" | "ext3" | "ext4" => {
@@ -1028,8 +1029,18 @@ pub fn used_from_superblock(fs: &str, head: &[u8]) -> Option<u64> {
             let fats = s[16] as u64;
             let total = if le16(s, 19) != 0 { le16(s, 19) } else { le32(s, 32) };
             let fat_sz = if le16(s, 22) != 0 { le16(s, 22) } else { le32(s, 36) };
-            if bps == 0 || spc == 0 || le16(s, 22) != 0 {
-                return None; // FAT12/16: no free count kept.
+            if bps == 0 || spc == 0 {
+                return None;
+            }
+            let clusters = (total.saturating_sub(reserved + fats * fat_sz + (le16(s, 17) * 32).div_ceil(bps))) / spc;
+            if le16(s, 22) != 0 {
+                // FAT16 (FAT12 isn't worth it): count the clusters in use.
+                if clusters < 4085 {
+                    return None;
+                }
+                let fat = head.get((reserved * bps) as usize..((reserved * bps) + (clusters + 2) * 2) as usize)?;
+                let used = (2..clusters + 2).filter(|&i| le16(fat, (i * 2) as usize) != 0).count() as u64;
+                return Some(used * spc * bps + (reserved + fats * fat_sz) * bps + le16(s, 17) * 32);
             }
             let fsinfo = le16(s, 48) * bps;
             let fi = head.get(fsinfo as usize..fsinfo as usize + 512)?;
@@ -1037,7 +1048,6 @@ pub fn used_from_superblock(fs: &str, head: &[u8]) -> Option<u64> {
                 return None;
             }
             let free = le32(fi, 488);
-            let clusters = (total - reserved - fats * fat_sz) / spc;
             if free == 0xffff_ffff || free > clusters {
                 return None;
             }

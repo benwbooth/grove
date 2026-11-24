@@ -72,6 +72,23 @@ Item {
         return w
     }
 
+    // Grove Disk Utility: one window, opened from Go › Disk Utility…, the
+    // sidebar's Format… sheet, or `grove --disk-utility`.
+    Component { id: diskUtilComp; DiskUtilityWindow {} }
+    property var diskUtil: null
+    function openDiskUtility(diskId) {
+        if (!diskUtil) {
+            diskUtil = diskUtilComp.createObject(null, { app: app })
+            diskUtil.closing.connect(() => Qt.callLater(() => { if (diskUtil && !diskUtil.visible) { diskUtil.destroy(); diskUtil = null } }))
+        }
+        if (diskId) diskUtil.diskId = diskId
+        diskUtil.show(); diskUtil.raise(); diskUtil.requestActivate()
+        if (screenshot !== "" && windows.length === 0) duShot.start()
+        return diskUtil
+    }
+    // Tests: grove --disk-utility --screenshot out.png (GROVE_DU_SHOT_MS).
+    Timer { id: duShot; interval: Number(grove.env("GROVE_DU_SHOT_MS") || 2500); onTriggered: { grove.grabWindows(app.screenshot); Qt.quit() } }
+
     // Grove Archiver: archive windows, extract/compress/test flows.
     property Archiver archiver: Archiver { app: app }
 
@@ -109,6 +126,7 @@ Item {
         const paths = req.paths || []
         if (req.action === "play") { play(paths); return }
         if (req.action === "preview") { preview(paths); return }
+        if (req.action === "diskutility") { openDiskUtility(""); return }
         if (archiver.handle(req)) return
         if (req.action === "properties") {
             for (const p of paths) {
@@ -246,7 +264,7 @@ Item {
         let req = null
         try { req = JSON.parse(grove.env("GROVE_OPEN") || "null") } catch (e) {}
         if (portalMode) return
-        if (req && req.paths && (req.paths.length || req.action === "archive" || req.action === "preview" || req.action === "play")) handleOpen(req)
+        if (req && req.paths && (req.paths.length || req.action === "archive" || req.action === "preview" || req.action === "play" || req.action === "diskutility")) handleOpen(req)
         else if (!service) {
             let sess = null
             try { sess = JSON.parse(grove.session() || "null") } catch (e) {}

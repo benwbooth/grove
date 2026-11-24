@@ -91,6 +91,9 @@ pub mod ffi {
         /// should refresh (the watcher catches most; this is immediate).
         #[qsignal]
         fn folders_touched(self: Pin<&mut Grove>, json: QString);
+        /// Disk Utility / Format… progress (JSON {step, steps, fraction, text}).
+        #[qsignal]
+        fn disk_progress(self: Pin<&mut Grove>, json: QString);
         /// Folder size while counting (Get Info).
         #[qsignal]
         fn size_ready(self: Pin<&mut Grove>, key: QString, bytes: f64, items: f64, done: bool);
@@ -521,6 +524,42 @@ pub mod ffi {
         /// Burn (JSON burn::Request) to a drive or an ISO file; the job id.
         #[qinvokable]
         fn burn(self: Pin<&mut Grove>, json: &QString) -> i32;
+
+        // --- Grove Disk Utility (src/disks.rs) ---
+        /// Filesystems, flags and what each can do here (async_reply).
+        #[qinvokable]
+        fn disk_info(self: &Grove, key: &QString);
+        /// Every disk with its partitions and free space (async_reply {disks}).
+        #[qinvokable]
+        fn disk_list(self: &Grove, key: &QString);
+        /// The queue played out on a disk: {result, steps} or {error}.
+        /// Pure computation (no disk access).
+        #[qinvokable]
+        fn disk_plan(self: &Grove, disk: &QString, queue: &QString) -> QString;
+        /// Add a step to the queue: {queue, result, steps} or {error}.
+        #[qinvokable]
+        fn disk_push(self: &Grove, disk: &QString, queue: &QString, op: &QString) -> QString;
+        /// Bytes used on an unmounted filesystem (async_reply {used}).
+        #[qinvokable]
+        fn disk_usage(self: &Grove, key: &QString, part: &QString, fs: &QString);
+        /// Carry out the queue (progress: disk_progress; async_reply {ok} or {error}).
+        #[qinvokable]
+        fn disk_apply(self: &Grove, key: &QString, disk: &QString, queue: &QString, unlocked: bool);
+        /// Stop applying after the current step.
+        #[qinvokable]
+        fn disk_cancel(self: &Grove);
+        #[qinvokable]
+        fn disk_unmount(self: &Grove, key: &QString, part: &QString);
+        #[qinvokable]
+        fn disk_mount(self: &Grove, key: &QString, part: &QString);
+        /// The whole disk behind a sidebar place (mount point or device):
+        /// async_reply {disk, canFormat, reason}.
+        #[qinvokable]
+        fn drive_lookup(self: &Grove, key: &QString, place: &QString);
+        /// Format…: erase a removable drive into one filesystem (async_reply
+        /// {ok, mount} or {error}; progress: disk_progress).
+        #[qinvokable]
+        fn drive_format(self: &Grove, key: &QString, disk: &QString, name: &QString, fs: &QString);
 
         // --- portal file chooser ---
         #[qinvokable]

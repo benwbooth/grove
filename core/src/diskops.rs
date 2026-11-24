@@ -35,8 +35,10 @@ pub fn move_bytes(f: &File, from: u64, to: u64, len: u64, _cancel: &AtomicBool, 
     f.sync_all().map_err(|e| format!("Writing the disk failed: {e}"))
 }
 
-/// Copy a whole partition into another (paste): `src` read, `dst` written.
-pub fn copy_device(src: &File, dst: &File, len: u64, cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<(), String> {
+/// Copy a whole partition into another (paste): `len` bytes of `src` from
+/// `src_off` into `dst` at `dst_off` (0 for partition devices; the
+/// partitions' offsets when both are disk images).
+pub fn copy_device(src: &File, src_off: u64, dst: &File, dst_off: u64, len: u64, cancel: &AtomicBool, progress: &mut dyn FnMut(u64, u64)) -> Result<(), String> {
     let mut buf = vec![0u8; CHUNK as usize];
     let mut done = 0u64;
     while done < len {
@@ -44,8 +46,8 @@ pub fn copy_device(src: &File, dst: &File, len: u64, cancel: &AtomicBool, progre
             return Err("Cancelled".into());
         }
         let n = CHUNK.min(len - done) as usize;
-        src.read_exact_at(&mut buf[..n], done).map_err(|e| format!("Reading the partition failed: {e}"))?;
-        dst.write_all_at(&buf[..n], done).map_err(|e| format!("Writing the copy failed: {e}"))?;
+        src.read_exact_at(&mut buf[..n], src_off + done).map_err(|e| format!("Reading the partition failed: {e}"))?;
+        dst.write_all_at(&buf[..n], dst_off + done).map_err(|e| format!("Writing the copy failed: {e}"))?;
         done += n as u64;
         progress(done, len);
     }
@@ -274,7 +276,7 @@ mod tests {
         a.write_all_at(&data, 0).unwrap();
         let a = File::open(t.path().join("a")).unwrap();
         let b = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(true).open(t.path().join("b")).unwrap();
-        copy_device(&a, &b, data.len() as u64, &AtomicBool::new(false), &mut |_, _| {}).unwrap();
+        copy_device(&a, 0, &b, 0, data.len() as u64, &AtomicBool::new(false), &mut |_, _| {}).unwrap();
         assert_eq!(std::fs::read(t.path().join("b")).unwrap(), data);
     }
 

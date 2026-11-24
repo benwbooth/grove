@@ -107,6 +107,7 @@
               install -Dm644 data/grove-player.desktop $out/share/applications/grove-player.desktop
               install -Dm644 data/grove-preview.desktop $out/share/applications/grove-preview.desktop
               install -Dm644 data/grove-archiver.desktop $out/share/applications/grove-archiver.desktop
+              install -Dm644 data/grove-disk-utility.desktop $out/share/applications/grove-disk-utility.desktop
               install -Dm644 data/grove.portal $out/share/xdg-desktop-portal/portals/grove.portal
               install -Dm644 data/mime/grove-tessh.xml $out/share/mime/packages/grove-tessh.xml
               mkdir -p $out/share/dbus-1/services

@@ -20,6 +20,7 @@ mod controller;
 mod mtp;
 mod usage;
 mod dbus;
+mod disks;
 mod docconv;
 mod du;
 mod hexdoc;
@@ -98,6 +99,8 @@ fn main() {
             // archive, extract it beside itself or somewhere picked, add
             // files to a new archive, test it.
             "--archive" | "-a" => action = "archive",
+            // Grove Disk Utility (GParted's features, grove's look).
+            "--disk-utility" => action = "diskutility",
             "--extract-here" => action = "extracthere",
             "--extract-to" => action = "extractto",
             "--compress" => action = "compress",
@@ -113,7 +116,7 @@ fn main() {
                 i += 1;
             }
             "--help" | "-h" => {
-                println!("grove [--new-window] [--select] [--play] [PATH|URI ...]\n\nA Finder-style file manager. Press F1 in a window for help and shortcuts.\n--play opens the files in Grove Player.\n--preview opens PDFs and pictures in Grove Preview.\n\nGrove Archiver:\n  --archive [ARCHIVE ...]   browse archives (7-Zip-style window)\n  --extract-here ARCHIVE    extract next to it\n  --extract-to ARCHIVE      pick where and how to extract\n  --compress PATH ...       Add to Archive (format, level, password, volumes)\n  --test-archive ARCHIVE    check an archive for damage");
+                println!("grove [--new-window] [--select] [--play] [PATH|URI ...]\n\nA Finder-style file manager. Press F1 in a window for help and shortcuts.\n--play opens the files in Grove Player.\n--preview opens PDFs and pictures in Grove Preview.\n--disk-utility opens Grove Disk Utility (partitions, formatting).\n\nGrove Archiver:\n  --archive [ARCHIVE ...]   browse archives (7-Zip-style window)\n  --extract-here ARCHIVE    extract next to it\n  --extract-to ARCHIVE      pick where and how to extract\n  --compress PATH ...       Add to Archive (format, level, password, volumes)\n  --test-archive ARCHIVE    check an archive for damage");
                 return;
             }
             "--version" => {
@@ -148,7 +151,7 @@ fn main() {
             return;
         }
     }
-    if !paths.is_empty() || action == "archive" || action == "preview" || action == "play" {
+    if !paths.is_empty() || action == "archive" || action == "preview" || action == "play" || action == "diskutility" {
         std::env::set_var("GROVE_OPEN", serde_json::json!({"action": action, "paths": paths}).to_string());
     }
     // hearth's light/dark mode and accent, so grove matches the shell.

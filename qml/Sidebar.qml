@@ -102,6 +102,9 @@ Item {
         property bool dim: false
         property bool dropTarget: false
         property int favIndex: -1
+        // A local disk (mounted or not): its device, for Format… and Disk Utility.
+        property string device: ""
+        readonly property bool isDisk: device.indexOf("/dev/") === 0
         // Identifies it for hiding (a path, or "tag:Red", "smart:Name"...).
         property string key: path
         property bool shown: true
@@ -192,8 +195,15 @@ Item {
             width: 22; height: 22
             iconName: "media-eject"
             iconSize: 14
-            tip: "Eject “" + pl.label + "” (Ctrl+E) — safe to unplug afterwards"
+            tip: "Eject “" + pl.label + "” (Ctrl+E) — safe to unplug afterwards" + (pl.isDisk ? ". Right-click for Format… and Disk Utility." : "")
             onClicked: pl.ejected()
+            // Right-click: the drive's menu (Eject, Format…, Disk Utility).
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.RightButton
+                enabled: pl.isDisk
+                onClicked: { placeMenu.target = pl; ejectMenu.popup() }
+            }
         }
         DropArea {
             id: drop
@@ -292,6 +302,7 @@ Item {
                         label: modelData.name; icon: modelData.icon; path: modelData.path
                         total: modelData.total || 0; free: modelData.free || 0
                         ejectable: !!modelData.ejectable
+                        device: modelData.device || ""
                         dim: modelData.kind === "unmounted" || modelData.kind === "mtp"
                         dropTarget: modelData.kind !== "unmounted" && modelData.kind !== "mtp"
                         tip: modelData.kind === "unmounted" ? "Click to open this disk"
@@ -420,9 +431,22 @@ Item {
         property var target: null
         GMenuItem { text: "Open in New Tab"; iconName: "tab-new"; enabled: !!placeMenu.target && placeMenu.target.path !== ""; onTriggered: sb.win.newTab(placeMenu.target.path, []) }
         GMenuItem { text: "Get Info"; iconName: "documentinfo"; enabled: !!placeMenu.target && placeMenu.target.path.indexOf("/") === 0; onTriggered: sb.win.showInfo([placeMenu.target.path]) }
+        GMenuSeparator { visible: !!placeMenu.target && placeMenu.target.isDisk; height: visible ? implicitHeight : 0 }
+        GMenuItem { text: "Format…"; iconName: "drive-removable-media|media-flash"; visible: !!placeMenu.target && placeMenu.target.isDisk; height: visible ? implicitHeight : 0
+            tip: "Erase this drive and give it a new name and format (exFAT, FAT32, NTFS, ext4, Btrfs)"
+            onTriggered: sb.win.formatDrive(placeMenu.target.device) }
+        GMenuItem { text: "Open in Disk Utility"; iconName: "drive-harddisk|partitionmanager"; visible: !!placeMenu.target && placeMenu.target.isDisk; height: visible ? implicitHeight : 0
+            tip: "See and change this disk's partitions in Grove Disk Utility"
+            onTriggered: sb.app.openDiskUtility("") }
         HideItem {}
         GMenuSeparator {}
         GMenuItem { text: "Show Hidden Entries"; iconName: "view-visible|view-reveal"; checkable: true; checked: sb.showHiddenPlaces; enabled: sb.hiddenPlaces.length > 0; onTriggered: sb.showHiddenPlaces = !sb.showHiddenPlaces }
+    }
+    GMenu {
+        id: ejectMenu
+        GMenuItem { text: "Eject"; iconName: "media-eject"; shortcutText: "Ctrl+E"; tip: "Close the drive so it's safe to unplug"; onTriggered: placeMenu.target.ejected() }
+        GMenuItem { text: "Format…"; iconName: "drive-removable-media|media-flash"; tip: "Erase this drive and give it a new name and format (exFAT, FAT32, NTFS, ext4, Btrfs)"; onTriggered: sb.win.formatDrive(placeMenu.target.device) }
+        GMenuItem { text: "Open in Disk Utility"; iconName: "drive-harddisk|partitionmanager"; tip: "See and change this disk's partitions in Grove Disk Utility"; onTriggered: sb.app.openDiskUtility("") }
     }
     GMenu {
         id: sectionMenu

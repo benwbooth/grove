@@ -23,6 +23,7 @@ QtObject {
         { id: "trash", group: "Navigate", action: "Trash", defaults: ["Ctrl+Shift+T"], fixed: "", note: "" },
         { id: "archiveselect", group: "Navigate", action: "Select an archive without opening it (column view: shows its info)", defaults: [], fixed: "Alt+click", note: "Archives open like folders" },
         { id: "snapshots", group: "Navigate", action: "Snapshots: this folder as it was in each btrfs snapshot (read-only)", defaults: ["Ctrl+Alt+Y"], fixed: "", note: "Like Time Machine; snapper's hourly snapshots" },
+        { id: "diskutility", group: "Navigate", action: "Grove Disk Utility (partitions, formatting)", defaults: ["Ctrl+Alt+D"], fixed: "", note: "Like GParted; also Go › Disk Utility…" },
         { id: "diskusage", group: "Navigate", action: "Disk Usage (what takes the room)", defaults: ["Ctrl+Shift+U"], fixed: "", note: "Like KDirStat / Filelight" },
         { id: "connect", group: "Navigate", action: "Connect to Server\u2026", defaults: ["Ctrl+K"], fixed: "", note: "Finder: ⌘K" },
         { id: "reload", group: "Navigate", action: "Reload", defaults: ["F5", "Ctrl+R"], fixed: "", note: "Dolphin: F5" },
@@ -190,6 +191,15 @@ QtObject {
         { id: "gd.share", group: "Google Drive (canopy)", defaults: [], action: "Share an item, star it", fixed: "right-click › Google Drive › Share… / Star", note: "Share… opens canopy's Share sheet" },
         { id: "gd.unsync", group: "Google Drive (canopy)", defaults: [], action: "Free up room: keep an item only in Google Drive", fixed: "right-click › Google Drive › Remove from This Computer…", note: "The copy here goes to the Trash; the one in Google Drive is kept" },
         { id: "gd.add", group: "Google Drive (canopy)", defaults: [], action: "Sync a folder with Google Drive", fixed: "right-click a folder › Sync with Google Drive…", note: "Shown while canopy is running; opens canopy to pick the account and where it goes" },
+        { id: "du-new", group: "Grove Disk Utility", action: "New partition in the selected free space", defaults: [], fixed: "Ctrl+N", note: "Or double-click free space" },
+        { id: "du-delete", group: "Grove Disk Utility", action: "Delete the selected partition", defaults: [], fixed: "Delete", note: "Queued: nothing changes until Apply" },
+        { id: "du-resize", group: "Grove Disk Utility", action: "Resize/Move the selected partition", defaults: [], fixed: "Ctrl+R", note: "Drag the ends or the middle" },
+        { id: "du-copy", group: "Grove Disk Utility", action: "Copy / paste a partition", defaults: [], fixed: "Ctrl+C, Ctrl+V", note: "Paste into free space, on this disk or another" },
+        { id: "du-label", group: "Grove Disk Utility", action: "Label and name the selected partition", defaults: [], fixed: "F2", note: "" },
+        { id: "du-info", group: "Grove Disk Utility", action: "Information about the selected partition", defaults: [], fixed: "Ctrl+I", note: "Or double-click it" },
+        { id: "du-undo", group: "Grove Disk Utility", action: "Undo the last pending operation", defaults: [], fixed: "Ctrl+Z", note: "" },
+        { id: "du-apply", group: "Grove Disk Utility", action: "Apply all pending operations", defaults: [], fixed: "Ctrl+Return", note: "Asks first" },
+        { id: "du-refresh", group: "Grove Disk Utility", action: "Look at the disks again", defaults: [], fixed: "F5", note: "Pending operations are kept" },
         { id: "help", group: "Other", action: "Help and shortcuts", defaults: ["F1", "Ctrl+?", "Ctrl+Shift+/"], fixed: "", note: "Dolphin: F1  ·  Finder: ⇧⌘?" }
     ]
 

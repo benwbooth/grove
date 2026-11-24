@@ -19,7 +19,7 @@ ApplicationWindow {
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
     property var currentTab: tabRepeater.count > 0 ? tabRepeater.itemAt(tabBar.currentIndex) : null
     property var activePane: currentTab ? currentTab.activePane : null
-    property bool modalOpen: burnSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || subvolSheet.opened || snapshotsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened || aboutSheet.opened
+    property bool modalOpen: burnSheet.opened || formatSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || subvolSheet.opened || snapshotsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened || aboutSheet.opened
 
     width: 1180
     height: 720
@@ -901,6 +901,10 @@ ApplicationWindow {
     }
     ToolbarSheet { id: toolbarSheet; win: bw }
     BurnSheet { id: burnSheet; app: bw.app; win: bw }
+    FormatSheet { id: formatSheet; app: bw.app; win: bw }
+    // Format… a removable drive (sidebar: right-click, or the eject button's menu).
+    function formatDrive(place) { formatSheet.start(place) }
+    function reloadPlaces() { sidebar.reload() }
 
     // ---------- menus ----------
     // Defined once: exported to the desktop's global menu bar (GlobalMenuBar:
@@ -1094,7 +1098,8 @@ ApplicationWindow {
                 { separator: true },
                 { id: "terminal", icon: "utilities-terminal", text: "Open in Terminal", shortcut: k("terminal"), enabled: ok },
                 { id: "diskusage", icon: "filelight", text: "Disk Usage…", shortcut: k("diskusage") },
-                { id: "snapshots", icon: "document-open-recent", text: "Snapshots…", shortcut: k("snapshots") }
+                { id: "snapshots", icon: "document-open-recent", text: "Snapshots…", shortcut: k("snapshots") },
+                { id: "diskutility", icon: "drive-harddisk|partitionmanager", text: "Disk Utility…", shortcut: k("diskutility") }
             ] },
             { title: "Window", icon: "window-duplicate", items: [
                 { id: "minimize", icon: "window-minimize", text: "Minimize" },
@@ -1167,6 +1172,7 @@ ApplicationWindow {
         case "cloud": addCloudDrive(); break
         case "diskusage": showDiskUsage(); break
         case "snapshots": showSnapshots(activePane.path); break
+        case "diskutility": app.openDiskUtility(""); break
         case "undo": app.grove.undo(); break
         case "redo": app.grove.redo(); break
         default:
@@ -1393,6 +1399,7 @@ ApplicationWindow {
     Key { act: "trash"; onActivated: bw.go("trash:///") }
     Key { act: "connect"; onActivated: bw.connectServer() }
     Key { act: "diskusage"; onActivated: bw.showDiskUsage() }
+    Key { act: "diskutility"; onActivated: bw.app.openDiskUtility("") }
     Key { act: "reload"; onActivated: bw.activePane.reload() }
     Key { act: "viewicons"; onActivated: bw.activePane.setView("icons") }
     Key { act: "viewlist"; onActivated: bw.activePane.setView("list") }
@@ -1607,6 +1614,12 @@ ApplicationWindow {
         else if (cmd === "qlsave") ql.saveEdit(arg)
         else if (cmd === "burn") burn(arg ? arg.split(",") : [p.path])
         else if (cmd === "burngo") burnSheet.goImage()
+        // Grove Disk Utility: "disks" opens it; "dk=new:ext4:100" etc. go to
+        // its testStep; "fmt=/dev/loopN" opens Format…, "fmtgo=NAME:exfat" erases.
+        else if (cmd === "disks") app.openDiskUtility("")
+        else if (cmd === "dk") { if (app.diskUtil) app.diskUtil.testStep(s.substring(3)) }
+        else if (cmd === "fmt") formatDrive(arg)
+        else if (cmd === "fmtgo") { const [n, f] = arg.split(":"); formatSheet.testGo(n, f) }
         else if (cmd === "hideplace") setSetting("hidden_places", arg.split(","))
         else if (cmd === "showhiddenplaces") sidebar.showHiddenPlaces = true
         else if (cmd === "columns") setSetting("list_columns", arg.split(","))

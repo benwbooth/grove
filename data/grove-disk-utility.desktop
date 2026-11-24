@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Grove Disk Utility
+GenericName=Partition Editor
+Comment=Partition, format, resize and check disks (like GParted)
+Exec=grove --disk-utility
+Icon=drive-harddisk
+Terminal=false
+Categories=Qt;System;Filesystem;
+Keywords=partition;disk;format;gparted;resize;usb;drive;
