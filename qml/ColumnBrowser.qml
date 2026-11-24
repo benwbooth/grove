@@ -330,6 +330,13 @@ Item {
                     required property string git
                     width: lv.width
                     readonly property bool browsable: r.isDir || (r.isArchive && root.pane.archiveLike(r))
+                    // An archive is a file (a click selects it and previews
+                    // it); its arrow, grey until it's open, or a double-click
+                    // shows what's inside, as a folder.
+                    readonly property bool archiveRow: r.isArchive && !r.isDir && root.pane.archiveLike(r)
+                    readonly property bool arrowButton: r.archiveRow
+                    readonly property bool opened: column.selectedChild !== "" && column.selectedChild === root.pane.browsePath(r)
+                    function clickOpens() { return r.opened || r.isDir || r.path.indexOf("mount:") === 0 }
                     height: Theme.rowHeight
                     readonly property bool renaming: column.isLast && root.pane.renamingRow === index
                     Rectangle {
@@ -358,17 +365,31 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         sourceComponent: RenameField { pane: root.pane; row: r.index; original: r.name; isDir: r.isDir }
                     }
-                    // Archives open like folders, so their size shows here
-                    // (Alt+click selects one without opening it: full info).
+                    // An archive's size, on its button with the arrow.
                     GLabel {
                         id: sizeLbl
                         anchors.right: chevron.left; anchors.rightMargin: 4
                         anchors.verticalCenter: parent.verticalCenter
-                        text: r.isArchive && !r.isDir ? r.sizeText : ""
+                        text: r.archiveRow ? r.sizeText : ""
                         font.pixelSize: Theme.small
                         color: r.selected && column.isLast && root.pane.active ? Theme.accentText : Theme.fgSecondary
                     }
                     TagDots { anchors.right: sizeLbl.left; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter; tags: r.tags; colors: r.tagColors }
+                    // An unopened archive's arrow is a small button: a faint
+                    // inset well that lights up under the pointer.
+                    Rectangle {
+                        visible: r.arrowButton && !r.opened
+                        anchors.right: chevron.right; anchors.rightMargin: -6
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: sizeLbl.implicitWidth + chevron.implicitWidth + 4 + 16
+                        height: 20; radius: 5
+                        color: arrowMouse.pressed ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.22)
+                             : arrowMouse.containsMouse ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.14)
+                             : Qt.rgba(0, 0, 0, Theme.dark ? 0.18 : 0.05)
+                        border.width: 1
+                        border.color: arrowMouse.containsMouse ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.35) : Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.12)
+                        Behavior on color { ColorAnimation { duration: 90 } }
+                    }
                     GLabel {
                         id: chevron
                         anchors.right: parent.right; anchors.rightMargin: 12
@@ -376,6 +397,7 @@ Item {
                         text: r.browsable ? "›" : ""
                         font.pixelSize: Theme.title
                         color: r.selected && column.isLast && root.pane.active ? Theme.accentText : Theme.fgSecondary
+                        opacity: r.arrowButton && !r.opened && !arrowMouse.containsMouse ? 0.55 : 1
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -384,10 +406,11 @@ Item {
                         onClicked: (mouse) => {
                             root.pane.activated()
                             root.pane.forceActiveFocus()
-                            const d = (mouse.modifiers & Qt.AltModifier) && !r.isDir ? "" : root.pane.browsePath(r)
+                            const d = r.clickOpens() ? root.pane.browsePath(r) : ""
                             if (d) root.pane.navigate(d)
                             else root.pane.navigate(column.folder, { select: [r.path] })
                         }
+                        onDoubleClicked: { const d = root.pane.browsePath(r); if (d) root.pane.navigate(d) }
                     }
                     ItemMouse {
                         anchors.fill: parent
@@ -398,16 +421,24 @@ Item {
                         pane: root.pane
                         row: r.index
                         iconUrl: Theme.iconUrl(r.iconName)
-                        onLeftPressed: (mods) => { if (root.pane.browsePath(r) && !(mods & (Qt.ShiftModifier | Qt.ControlModifier)) && !((mods & Qt.AltModifier) && !r.isDir)) openTimer.restart() }
+                        onLeftPressed: (mods) => { if (r.clickOpens() && !(mods & (Qt.ShiftModifier | Qt.ControlModifier))) openTimer.restart() }
                         Timer { id: openTimer; interval: 1; onTriggered: if (root.fm.selectionCount === 1) root.pane.navigate(root.pane.browsePath(r)) }
                     }
                     FolderDrop { id: drop; anchors.fill: parent; pane: root.pane; path: r.path; enabledFor: r.isDir }
+                    // An archive's arrow: show what's inside (as a folder).
+                    MouseArea {
+                        id: arrowMouse
+                        visible: r.arrowButton
+                        anchors.right: parent.right; anchors.rightMargin: 4
+                        width: sizeLbl.implicitWidth + chevron.implicitWidth + 4 + 22; height: parent.height
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: { root.pane.activated(); root.pane.forceActiveFocus(); root.pane.navigate(root.pane.browsePath(r)) }
+                        GTip { visible: parent.containsMouse; text: "Show what's inside “" + r.name + "” (or double-click it, or press →)" }
+                    }
                     // A name cut short shows in full on hover.
                     HoverHandler { acceptedDevices: PointerDevice.AllDevices; id: rowHover }
-                    // Archives: how to see one's own info instead of its contents.
-                    readonly property bool archiveRow: r.isArchive && !r.isDir && root.pane.archiveLike(r)
-                    GTip { visible: rowHover.hovered && (colName.truncated || r.archiveRow) && !r.renaming
-                           text: r.archiveRow ? r.name + " — " + r.sizeText + "\nClick to open it like a folder. Alt+click to select it and see its info." : r.name }
+                    GTip { visible: rowHover.hovered && colName.truncated && !r.renaming; text: r.name }
                 }
             }
             Rectangle { visible: !column.isPreview; anchors.right: parent.right; width: 1; height: parent.height; color: Theme.separator }
