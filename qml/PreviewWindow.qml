@@ -94,7 +94,7 @@ ApplicationWindow {
         if (undo.length > 200) undo.shift()
         update(old, Object.assign({ undo: undo, redo: [], dirty: true }, patch))
     }
-    function canEditDoc(d) { return d.kind === "image" || (!!d.info && d.info.isPdf && !d.info.converted) }
+    function canEditDoc(d) { return d.kind === "image" || (d.kind === "pdf" && !!d.info && d.info.isPdf && !d.info.converted) }
     function undo() {
         if (!cur || !(cur.undo || []).length) return
         const u = cur.undo.slice(), last = u.pop()
@@ -174,6 +174,9 @@ ApplicationWindow {
                     const ws = Object.assign({}, x.widgets); ws[p] = w
                     update(x, { widgets: ws })
                 })
+            } else if (r.kind === "text") {
+                // Text, code, Markdown, web pages: as grove's Quick Look shows them.
+                update(now, { kind: "text", loading: false, info: r })
             } else {
                 update(now, { kind: "image", loading: false, info: r, img: { w: r.w, h: r.h, alpha: [], adjust: {}, ops: [], crop: null, rotate: 0, flipH: false, flipV: false, resize: null, dpi: null } })
             }
@@ -913,15 +916,15 @@ ApplicationWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 4
                 GButton { iconName: "documentinfo|dialog-information"; checked: inspector.visible; tip: "Inspector: about this file (" + pw.keyFor("pv.inspector") + ")"; onClicked: pw.menuAction("inspector") }
-                GButton { iconName: "zoom-out"; tip: "Zoom out (" + pw.keyFor("pv.zoomout") + ")"; enabled: !!pw.cur; onClicked: pw.menuAction("zoomout") }
+                GButton { iconName: "zoom-out"; visible: !pw.cur || pw.cur.kind !== "text"; tip: "Zoom out (" + pw.keyFor("pv.zoomout") + ")"; enabled: !!pw.cur; onClicked: pw.menuAction("zoomout") }
                 GLabel {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 44; horizontalAlignment: Text.AlignHCenter
-                    text: !pw.cur ? "" : (pw.isPdf ? docView.percent : imageView.percent) + "%"
+                    text: !pw.cur || pw.cur.kind === "text" ? "" : (pw.isPdf ? docView.percent : imageView.percent) + "%"
                     color: Theme.fgSecondary; font.pixelSize: Theme.small
                     MouseArea { anchors.fill: parent; hoverEnabled: true; onClicked: pw.menuAction("fit"); GTip { visible: parent.containsMouse; text: "Click to zoom to fit (" + pw.keyFor("pv.fit") + ")" } }
                 }
-                GButton { iconName: "zoom-in"; tip: "Zoom in (" + pw.keyFor("pv.zoomin") + ")"; enabled: !!pw.cur; onClicked: pw.menuAction("zoomin") }
+                GButton { iconName: "zoom-in"; visible: !pw.cur || pw.cur.kind !== "text"; tip: "Zoom in (" + pw.keyFor("pv.zoomin") + ")"; enabled: !!pw.cur; onClicked: pw.menuAction("zoomin") }
                 GButton { iconName: "object-rotate-left"; tip: "Rotate left (" + pw.keyFor("pv.rotleft") + "); right-click to rotate right"; enabled: pw.canEdit; onClicked: pw.rotate(-90)
                     TapHandler { acceptedButtons: Qt.RightButton; onTapped: pw.rotate(90) } }
                 GButton { iconName: "draw-highlight"; visible: pw.isPdf; checked: pw.tool === "hl"; enabled: pw.canEdit; tip: "Highlight: select text to highlight it (" + pw.keyFor("pv.highlight") + ")"; onClicked: pw.setTool(pw.tool === "hl" ? "textsel" : "hl") }
@@ -1011,6 +1014,14 @@ ApplicationWindow {
             clip: true
             PvDocView { id: docView; anchors.fill: parent; win: pw; doc: pw.isPdf ? pw.cur : null; visible: pw.isPdf && !pw.cur.locked }
             PvImageView { id: imageView; anchors.fill: parent; win: pw; doc: pw.cur && pw.cur.kind === "image" && pw.cur.img ? pw.cur : null; visible: !!doc }
+            DocView {
+                id: textView
+                anchors.fill: parent
+                visible: !!pw.cur && pw.cur.kind === "text" && !!pw.cur.info
+                active: visible
+                path: visible ? pw.cur.path : ""
+                mode: visible ? pw.cur.info.mode : ""
+            }
             BusyDots { anchors.centerIn: parent; running: !!pw.cur && pw.cur.loading }
             Column {
                 anchors.centerIn: parent

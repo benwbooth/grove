@@ -191,4 +191,24 @@ ApplicationWindow {
         else if ((request.filters || []).length) chooserPane.model.applyPatterns(JSON.stringify(request.filters[0].patterns))
         if (nameField.visible) { nameField.forceActiveFocus(); const d = nameField.text.lastIndexOf("."); nameField.select(0, d > 0 ? d : nameField.text.length) }
     }
+
+    // Resize from any edge: the window manager draws no borders of its own.
+    Repeater {
+        model: fc.visibility !== Window.Maximized && fc.visibility !== Window.FullScreen ? [
+            { e: Qt.LeftEdge, x: 0, y: 6, w: 5, h: -12, c: Qt.SizeHorCursor }, { e: Qt.RightEdge, x: -5, y: 6, w: 5, h: -12, c: Qt.SizeHorCursor },
+            { e: Qt.BottomEdge, x: 6, y: -5, w: -12, h: 5, c: Qt.SizeVerCursor }, { e: Qt.TopEdge, x: 6, y: 0, w: -12, h: 4, c: Qt.SizeVerCursor },
+            { e: Qt.BottomEdge | Qt.RightEdge, x: -10, y: -10, w: 10, h: 10, c: Qt.SizeFDiagCursor }, { e: Qt.BottomEdge | Qt.LeftEdge, x: 0, y: -10, w: 10, h: 10, c: Qt.SizeBDiagCursor },
+            { e: Qt.TopEdge | Qt.RightEdge, x: -10, y: 0, w: 10, h: 10, c: Qt.SizeBDiagCursor }, { e: Qt.TopEdge | Qt.LeftEdge, x: 0, y: 0, w: 10, h: 10, c: Qt.SizeFDiagCursor } ] : []
+        MouseArea {
+            required property var modelData
+            parent: fc.contentItem
+            z: 1000
+            x: modelData.x < 0 ? fc.contentItem.width + modelData.x : modelData.x
+            y: modelData.y < 0 ? fc.contentItem.height + modelData.y : modelData.y
+            width: modelData.w <= 0 ? fc.contentItem.width + modelData.w : modelData.w
+            height: modelData.h <= 0 ? fc.contentItem.height + modelData.h : modelData.h
+            cursorShape: modelData.c
+            onPressed: fc.startSystemResize(modelData.e)
+        }
+    }
 }

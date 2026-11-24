@@ -22,7 +22,7 @@ Item {
         for (const d of win.docs) {
             if (many) r.push({ t: "doc", doc: d })
             if (many && d.collapsed) continue
-            if (d.kind === "image") r.push({ t: "image", doc: d, i: 0 })
+            if (d.kind === "image" || d.kind === "text") r.push({ t: "image", doc: d, i: 0 })
             else for (let i = 0; i < d.pages.length; i++) r.push({ t: "page", doc: d, i: i })
         }
         return r

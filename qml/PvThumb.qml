@@ -9,9 +9,10 @@ Item {
     property var doc
     property var pg: null            // a page; null: the picture document itself
     property real box: 120           // the longer side
-    readonly property bool isImage: !pg
-    readonly property real w0: pg ? pg.w : (doc && doc.img ? doc.img.w : 100)
-    readonly property real h0: pg ? pg.h : (doc && doc.img ? doc.img.h : 100)
+    readonly property bool isText: !pg && !!doc && doc.kind === "text"
+    readonly property bool isImage: !pg && !isText
+    readonly property real w0: pg ? pg.w : isText ? 85 : (doc && doc.img ? doc.img.w : 100)
+    readonly property real h0: pg ? pg.h : isText ? 110 : (doc && doc.img ? doc.img.h : 100)
     readonly property int rot: pg ? pg.rot : (doc && doc.img ? doc.img.rotate : 0)
     readonly property bool sideways: rot % 180 !== 0
     readonly property real k: box / Math.max(1, sideways ? Math.max(h0, w0) : Math.max(w0, h0))
@@ -30,10 +31,13 @@ Item {
             yScale: !t.pg && t.doc && t.doc.img && t.doc.img.flipV ? -1 : 1
         }
         Rectangle { anchors.fill: parent; color: t.isImage ? "transparent" : "white" }
+        // A text file: its kind's icon on a page.
+        GIcon { visible: t.isText; anchors.centerIn: parent; size: Math.round(parent.width * 0.5); name: t.doc && t.doc.info && t.doc.info.mode === "markdown" ? "text-markdown|text-x-generic" : t.doc && t.doc.info && t.doc.info.mode === "html" ? "text-html|text-x-generic" : "text-x-script|text-x-generic" }
         PvCanvas {
             anchors.fill: parent
             readonly property int px: Math.ceil(t.box * Screen.devicePixelRatio / 64) * 64
             request: !t.doc ? ""
+                   : t.isText ? ""
                    : t.isImage ? JSON.stringify({ kind: "image", path: t.doc.path, px: px, alpha: t.doc.img ? t.doc.img.alpha : [], adjust: t.doc.img ? t.doc.img.adjust : {} })
                    : t.pg.blank ? ""
                    : t.pg.image ? JSON.stringify({ kind: "image", path: t.pg.image, px: px })
