@@ -178,6 +178,103 @@ pub fn fat_resize(path: &str, number: u32, start: i64, end: i64) -> Result<(), S
     }
 }
 
+// ---- btrfs: how many subvolumes and snapshots (no root needed) ----
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct RootRef {
+    treeid: u64,
+    dirid: u64,
+}
+
+#[repr(C)]
+struct GetSubvolRootrefArgs {
+    min_treeid: u64,
+    rootref: [RootRef; 255],
+    num_items: u8,
+    align: [u8; 7],
+}
+
+#[repr(C)]
+struct InoLookupUserArgs {
+    dirid: u64,
+    treeid: u64,
+    name: [u8; 256],
+    path: [u8; 3824],
+}
+
+const fn iowr(nr: u64, size: usize) -> u64 {
+    (3 << 30) | ((size as u64) << 16) | (0x94 << 8) | nr
+}
+const IOC_GET_SUBVOL_ROOTREF: u64 = iowr(61, std::mem::size_of::<GetSubvolRootrefArgs>());
+const IOC_INO_LOOKUP_USER: u64 = iowr(62, std::mem::size_of::<InoLookupUserArgs>());
+const _: () = assert!(std::mem::size_of::<InoLookupUserArgs>() == 4096 && std::mem::size_of::<GetSubvolRootrefArgs>() == 4096);
+
+fn cstr(b: &[u8]) -> String {
+    let n = b.iter().position(|&c| c == 0).unwrap_or(b.len());
+    String::from_utf8_lossy(&b[..n]).into_owned()
+}
+
+/// The subvolumes directly inside the subvolume mounted or found at `dir`
+/// (their paths), through GET_SUBVOL_ROOTREF and INO_LOOKUP_USER (kernel
+/// 4.18+, no root needed). Ones the user can't reach are left out.
+fn child_subvolumes(dir: &std::path::Path) -> Vec<(u64, std::path::PathBuf)> {
+    use std::os::fd::AsRawFd;
+    let Ok(f) = File::open(dir) else { return vec![] };
+    let mut out = vec![];
+    let mut args: Box<GetSubvolRootrefArgs> = Box::new(unsafe { std::mem::zeroed() });
+    loop {
+        let r = unsafe { libc::ioctl(f.as_raw_fd(), IOC_GET_SUBVOL_ROOTREF as _, &mut *args as *mut GetSubvolRootrefArgs) };
+        let more = r < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EOVERFLOW);
+        if r < 0 && !more {
+            break;
+        }
+        let n = (args.num_items as usize).min(255);
+        for rr in &args.rootref[..n] {
+            let mut l: Box<InoLookupUserArgs> = Box::new(unsafe { std::mem::zeroed() });
+            l.dirid = rr.dirid;
+            l.treeid = rr.treeid;
+            if unsafe { libc::ioctl(f.as_raw_fd(), IOC_INO_LOOKUP_USER as _, &mut *l as *mut InoLookupUserArgs) } == 0 {
+                out.push((rr.treeid, dir.join(cstr(&l.path)).join(cstr(&l.name))));
+            }
+        }
+        if !more || n == 0 {
+            break;
+        }
+        args.min_treeid = args.rootref[n - 1].treeid + 1;
+    }
+    out
+}
+
+/// Subvolumes and snapshots on a mounted btrfs filesystem, found from
+/// each place it's mounted (counted once each; at most 100,000 looked at).
+pub fn btrfs_counts(mounts: &[String]) -> Option<(u32, u32)> {
+    let mut seen = std::collections::BTreeSet::new();
+    let (mut subvols, mut snaps) = (0u32, 0u32);
+    let mut todo: Vec<std::path::PathBuf> = mounts.iter().map(std::path::PathBuf::from).collect();
+    let mut any = false;
+    while let Some(dir) = todo.pop() {
+        if seen.len() > 100_000 {
+            break;
+        }
+        let Some(info) = crate::btrfs::info(&dir) else { continue };
+        any = true;
+        if info.id != 0 && !seen.insert(info.id) {
+            continue;
+        }
+        // The filesystem's own top level (id 5) isn't a subvolume of its own.
+        if info.id != 5 {
+            if info.snapshot { snaps += 1 } else { subvols += 1 }
+        }
+        for (id, p) in child_subvolumes(&dir) {
+            if !seen.contains(&id) {
+                todo.push(p);
+            }
+        }
+    }
+    any.then_some((subvols, snaps))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

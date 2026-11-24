@@ -69,6 +69,11 @@ pub struct Part {
     /// member): nothing may change it until it's let go.
     #[serde(default)]
     pub busy: bool,
+    /// btrfs, mounted: subvolumes and snapshots on it (None: not known).
+    #[serde(default)]
+    pub subvols: Option<u32>,
+    #[serde(default)]
+    pub snapshots: Option<u32>,
     /// Changed by the queue (shown highlighted).
     #[serde(default)]
     pub pending: bool,

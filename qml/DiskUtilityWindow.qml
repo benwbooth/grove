@@ -36,9 +36,10 @@ Window {
     readonly property int pending: queue.ops.length
     readonly property real mib: 1048576
 
-    width: Math.round(1060 * Theme.pt)
-    height: Math.round(720 * Theme.pt)
-    minimumWidth: 760
+    // Fits the screen it opens on (the window manager doesn't shrink it).
+    width: Math.min(Math.round(1060 * Theme.pt), Math.round((Screen.desktopAvailableWidth || 1600) * 0.8))
+    height: Math.min(Math.round(680 * Theme.pt), Math.round((Screen.desktopAvailableHeight || 1000) * 0.75))
+    minimumWidth: 640
     minimumHeight: 480
     color: Theme.window
     title: "Grove Disk Utility" + (base ? " — " + base.device : "")
@@ -87,6 +88,7 @@ Window {
     function clearQueue() { if (pending && !applying) setQueue([]) }
     function toast(msg) { toastLabel.text = msg; toastBox.opacity = 1; toastTimer.restart() }
     function size(n) { return app.size(n) }
+    function plural(n, w) { return n + " " + w + (n === 1 ? "" : "s") }
     function mb(n) { return Math.round(n / mib) }
     function segIndexOf(id) { return (view.segments || []).findIndex(s => s.part >= 0 && view.parts[s.part].id === id) }
 
@@ -254,13 +256,7 @@ Window {
                 Item { width: 8; height: 1 }
                 GButton { text: "Partition"; enabled: !!dk.base; tip: "Everything you can do with the selected partition"; onClicked: partMenu.popup(this, 0, height) }
                 GButton { text: "Device"; enabled: !!dk.base; tip: "The whole disk: new partition table, refresh"; onClicked: devMenu.popup(this, 0, height) }
-            }
-            GButton {
-                anchors.right: parent.right; anchors.rightMargin: 12; y: 10
-                iconName: "view-refresh"
-                enabled: !dk.applying
-                tip: "Look at the disks again (F5). Pending operations are kept."
-                onClicked: dk.reload(true)
+                GButton { iconName: "view-refresh"; enabled: !dk.applying; tip: "Look at the disks again (F5). Pending operations are kept."; onClicked: dk.reload(true) }
             }
 
             // Disk header and lock banner.
@@ -315,7 +311,7 @@ Window {
                 id: map
                 x: 16; y: head.y + head.height + 12
                 width: main.width - 32
-                height: Math.round(66 * Theme.pt)
+                height: Math.round(98 * Theme.pt)
                 visible: !!dk.view
                 readonly property var segs: dk.view ? (dk.view.segments || []) : []
                 readonly property real total: dk.view ? Math.max(1, dk.view.size) : 1
@@ -400,6 +396,30 @@ Window {
                                     width: Math.min(implicitWidth, cell.width - 8); elide: Text.ElideRight
                                     text: cell.s ? dk.size(cell.s.size) : ""
                                     font.pixelSize: Theme.caption; color: Theme.fgSecondary
+                                }
+                                // How full it is.
+                                GLabel {
+                                    visible: !!cell.p && cell.p.used !== null && cell.p.used !== undefined && cell.p.fs !== "swap"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: Math.min(implicitWidth, cell.width - 8); elide: Text.ElideRight
+                                    text: cell.p && cell.p.used !== null && cell.p.used !== undefined ? dk.size(cell.p.used) + " used · " + dk.size(Math.max(0, cell.p.size - cell.p.used)) + " free" : ""
+                                    font.pixelSize: Theme.caption; color: Theme.fgSecondary
+                                }
+                                // btrfs: its subvolumes and snapshots (when mounted).
+                                GLabel {
+                                    visible: !!cell.p && cell.p.subvols !== null && cell.p.subvols !== undefined
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: Math.min(implicitWidth, cell.width - 8); elide: Text.ElideRight
+                                    text: visible ? dk.plural(cell.p.subvols, "subvolume") + " · " + dk.plural(cell.p.snapshots, "snapshot") : ""
+                                    font.pixelSize: Theme.caption; color: Theme.fgSecondary
+                                }
+                                // Where it's open (every mount point; swap: "swap").
+                                GLabel {
+                                    visible: !!cell.p && (cell.p.mounts.length > 0 || (cell.p.busy && cell.p.fs === "swap"))
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: Math.min(implicitWidth, cell.width - 8); elide: Text.ElideMiddle
+                                    text: cell.p ? (cell.p.mounts.length ? cell.p.mounts.join(", ") : "swap") : ""
+                                    font.pixelSize: Theme.caption; color: Theme.accent
                                 }
                             }
                         }
@@ -604,6 +624,34 @@ Window {
             Behavior on opacity { NumberAnimation { duration: 200 } }
             GLabel { id: toastLabel; anchors.centerIn: parent }
             Timer { id: toastTimer; interval: 3500; onTriggered: toastBox.opacity = 0 }
+        }
+    }
+
+    // Move by dragging the toolbar's empty space; double-click zooms.
+    MouseArea {
+        parent: dk.contentItem
+        x: side.width; width: dk.width - side.width; height: Math.round(48 * Theme.pt)
+        z: -1
+        onPressed: dk.startSystemMove()
+        onDoubleClicked: dk.visibility === Window.Maximized ? dk.showNormal() : dk.showMaximized()
+    }
+    // Resize from any edge: the window manager draws no borders of its own.
+    Repeater {
+        model: dk.visibility !== Window.Maximized && dk.visibility !== Window.FullScreen ? [
+            { e: Qt.LeftEdge, x: 0, y: 6, w: 5, h: -12, c: Qt.SizeHorCursor }, { e: Qt.RightEdge, x: -5, y: 6, w: 5, h: -12, c: Qt.SizeHorCursor },
+            { e: Qt.BottomEdge, x: 6, y: -5, w: -12, h: 5, c: Qt.SizeVerCursor }, { e: Qt.TopEdge, x: 6, y: 0, w: -12, h: 4, c: Qt.SizeVerCursor },
+            { e: Qt.BottomEdge | Qt.RightEdge, x: -10, y: -10, w: 10, h: 10, c: Qt.SizeFDiagCursor }, { e: Qt.BottomEdge | Qt.LeftEdge, x: 0, y: -10, w: 10, h: 10, c: Qt.SizeBDiagCursor },
+            { e: Qt.TopEdge | Qt.RightEdge, x: -10, y: 0, w: 10, h: 10, c: Qt.SizeBDiagCursor }, { e: Qt.TopEdge | Qt.LeftEdge, x: 0, y: 0, w: 10, h: 10, c: Qt.SizeFDiagCursor } ] : []
+        MouseArea {
+            required property var modelData
+            parent: dk.contentItem
+            z: 1000
+            x: modelData.x < 0 ? dk.contentItem.width + modelData.x : modelData.x
+            y: modelData.y < 0 ? dk.contentItem.height + modelData.y : modelData.y
+            width: modelData.w <= 0 ? dk.contentItem.width + modelData.w : modelData.w
+            height: modelData.h <= 0 ? dk.contentItem.height + modelData.h : modelData.h
+            cursorShape: modelData.c
+            onPressed: dk.startSystemResize(modelData.e)
         }
     }
 
@@ -1009,6 +1057,7 @@ Window {
                     ["Ends at", "sector " + (Math.round((infoSheet.p.offset + infoSheet.p.size) / dk.base.sector) - 1)],
                     ["Type", infoSheet.p.ptype || "—"],
                     ["Flags", (infoSheet.p.flags || []).join(", ") || "—"],
+                    ["Subvolumes", infoSheet.p.subvols !== null && infoSheet.p.subvols !== undefined ? dk.plural(infoSheet.p.subvols, "subvolume") + ", " + dk.plural(infoSheet.p.snapshots, "snapshot") : infoSheet.p.fs === "btrfs" ? "mount it to see" : "—"],
                     ["Mounted at", (infoSheet.p.mounts || []).join(", ") || "not mounted"],
                     ["Status", infoSheet.p.pending ? "changed by pending operations" : infoSheet.p.busy ? "in use" : "not in use"]
                 ].reduce((a, r) => a.concat(r), [])

@@ -271,6 +271,12 @@ pub fn disks() -> Result<Vec<Disk>, String> {
             };
             if let Some(m) = fsm.first() {
                 p.used = statvfs_used(m);
+                if p.fs == "btrfs" {
+                    if let Some((sv, sn)) = grove_core::diskops::btrfs_counts(&fsm) {
+                        p.subvols = Some(sv);
+                        p.snapshots = Some(sn);
+                    }
+                }
             }
             if p.fs == "swap" {
                 p.used = Some(0);
