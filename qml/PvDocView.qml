@@ -41,7 +41,12 @@ Item {
         fit = "none"
         keepCenter(before)
     }
-    function zoomBy(f) { setZoom(k * f) }
+    // Zoom steps stop at 100% on the way past it (buttons, keys, Ctrl+wheel).
+    function zoomBy(f) {
+        const one = 96 / 72, to = dv.k * f
+        if ((dv.k < one * 0.995 && to > one * 1.005) || (dv.k > one * 1.005 && to < one * 0.995) || Math.abs(to - one) < one * 0.03) { dv.fit = "actual"; return }
+        setZoom(to)
+    }
     function keepCenter(before) {
         const cy = (list.contentY + list.height / 2) / Math.max(1, list.contentHeight)
         const cx = (list.contentX + list.width / 2) / Math.max(1, list.contentWidth)

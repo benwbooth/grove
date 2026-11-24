@@ -33,7 +33,12 @@ Item {
     onKChanged: { zooming = true; settle.restart() }
     Timer { id: settle; interval: 220; onTriggered: { iv.renderK = iv.k; iv.zooming = false } }
     function setZoom(z) { zoom = Math.max(0.02, Math.min(32, z)); fit = "none" }
-    function zoomBy(f) { setZoom(k * f) }
+    // Zoom steps stop at 100% on the way past it (buttons, keys, Ctrl+wheel).
+    function zoomBy(f) {
+        const one = 1 / iv.dpr, to = iv.k * f
+        if ((iv.k < one * 0.995 && to > one * 1.005) || (iv.k > one * 1.005 && to < one * 0.995) || Math.abs(to - one) < one * 0.03) { iv.fit = "actual"; return }
+        setZoom(to)
+    }
     readonly property string key: doc ? doc.id + ":img" : ""
     readonly property var rectSel: win.rectSel && win.rectSel.key === key ? win.rectSel.rect : null
 

@@ -886,8 +886,6 @@ ApplicationWindow {
                 x: 12
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 4
-                GButton { id: menuBtn; iconName: "application-menu|open-menu"; tip: "Menu: File, Edit, View, Go, Tools, Help"
-                    onClicked: { if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close(); else appMenu.openBelow(menuBtn) } }
                 GButton { id: sbBtn; iconName: "view-split-left-right|sidebar-show"; checked: pw.sidebarShown; tip: "Show or hide the sidebar (" + pw.keyFor("pv.sidebar") + "). Right-click to choose what it shows"
                     onClicked: pw.sidebarShown = !pw.sidebarShown
                     TapHandler { acceptedButtons: Qt.RightButton; onTapped: sbMenu.popup(sbBtn, 0, sbBtn.height) } }
@@ -922,6 +920,14 @@ ApplicationWindow {
                     TapHandler { acceptedButtons: Qt.RightButton; onTapped: pw.rotate(90) } }
                 GButton { iconName: "draw-highlight"; visible: pw.isPdf; checked: pw.tool === "hl"; enabled: pw.canEdit; tip: "Highlight: select text to highlight it (" + pw.keyFor("pv.highlight") + ")"; onClicked: pw.setTool(pw.tool === "hl" ? "textsel" : "hl") }
                 GButton { iconName: "draw-freehand|document-edit"; checked: pw.markupShown; enabled: pw.canEdit; tip: "Show the Markup toolbar: draw, shapes, text, signatures… (" + pw.keyFor("pv.markup") + ")"; onClicked: pw.markupShown = !pw.markupShown }
+                // The menus, as grove's ☰ (same icon, look and menu).
+                GButton {
+                    id: menuBtn
+                    iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
+                    tip: "Menus: Preview, File, Edit, View, Go, Tools, Help (also in the menu bar at the top of the screen)"
+                    // A second click closes it: the press outside already closed it.
+                    onClicked: { if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close(); else appMenu.openBelow(menuBtn) }
+                }
                 GField {
                     id: searchField
                     width: Math.round(190 * Theme.pt)
