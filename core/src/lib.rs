@@ -11,6 +11,7 @@ pub mod av;
 pub mod burnlib;
 pub mod dmg;
 pub mod docs;
+pub mod pdfedit;
 pub mod officehtml;
 pub mod iso9660;
 pub mod textenc;
