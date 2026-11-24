@@ -9,10 +9,37 @@ use grove_core::{imgedit, pdfedit, util};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
-/// Kinds MuPDF opens as paged documents; everything else is a picture.
+/// Office documents LibreOffice turns into PDFs.
+const OFFICE: &[&str] = &["odt", "ods", "odp", "odg", "ott", "ots", "otp", "docx", "xlsx", "pptx", "doc", "dot", "xls", "ppt", "rtf"];
+
+fn ext_of(path: &str) -> String {
+    Path::new(path).extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default()
+}
+
+/// Paged documents (shown as PDF pages); everything else is a picture.
 pub fn is_document(path: &str) -> bool {
-    let ext = Path::new(path).extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-    matches!(ext.as_str(), "pdf" | "xps" | "oxps" | "epub" | "cbz" | "fb2" | "mobi" | "ai")
+    let ext = ext_of(path);
+    ext == "pdf" || ext == "ai" || crate::docconv::kind(path).is_some() || OFFICE.contains(&ext.as_str())
+}
+
+/// Documents that aren't PDFs (EPUB, MOBI, FB2, XPS, CBZ/CBR/CB7/CBT,
+/// DjVu, PostScript/EPS, Office) as a PDF made once and cached — the same
+/// conversions Quick Look uses. None for PDFs themselves.
+fn converted(path: &str) -> Option<Result<PathBuf, String>> {
+    let ext = ext_of(path);
+    if ext == "pdf" || ext == "ai" {
+        return None;
+    }
+    if OFFICE.contains(&ext.as_str()) {
+        let never = std::sync::atomic::AtomicBool::new(false);
+        return Some(grove_core::previews::office_pdf(Path::new(path), &never).ok_or_else(|| "LibreOffice couldn't turn this document into pages (is LibreOffice installed?).".to_string()));
+    }
+    crate::docconv::kind(path).map(|_| crate::docconv::to_pdf(path))
+}
+
+fn converted_needed(path: &str) -> bool {
+    let ext = ext_of(path);
+    is_document(path) && ext != "pdf" && ext != "ai"
 }
 
 fn res(r: Result<String, String>) -> Value {
@@ -45,12 +72,8 @@ fn write_to(dest: &Path, make: impl Fn(&Path) -> Result<(), String>) -> Value {
 impl ffi::Grove {
     pub fn pv_info(&self, key: &QString, path: &QString, password: &QString) {
         let (p, pw) = (path.to_string(), password.to_string());
-        self.answer_on("pv", key, move || {
-            if is_document(&p) {
-                let mut v = res(pdfedit::info(&p, &pw));
-                v["kind"] = json!("pdf");
-                v
-            } else {
+        let info = move || {
+            if !is_document(&p) {
                 // The first save with text would wait for the font list.
                 static WARM: std::sync::Once = std::sync::Once::new();
                 WARM.call_once(|| {
@@ -58,9 +81,32 @@ impl ffi::Grove {
                 });
                 let mut v = imgedit::info(Path::new(&p));
                 v["kind"] = json!("image");
-                v
+                return v;
             }
-        });
+            match converted(&p) {
+                None => {
+                    let mut v = res(pdfedit::info(&p, &pw));
+                    v["kind"] = json!("pdf");
+                    v
+                }
+                Some(Err(e)) => json!({"error": e}),
+                Some(Ok(pdf)) => {
+                    // Shown (and searched, printed, exported) from its PDF.
+                    let mut v = res(pdfedit::info(&pdf.to_string_lossy(), ""));
+                    v["kind"] = json!("pdf");
+                    v["viewPath"] = json!(pdf.to_string_lossy());
+                    v["converted"] = json!(true);
+                    v["from"] = json!(ext_of(&p).to_uppercase());
+                    v
+                }
+            }
+        };
+        // Conversions take seconds (LibreOffice, Ghostscript): their own thread.
+        if converted_needed(&path.to_string()) {
+            self.answer(key, info);
+        } else {
+            self.answer_on("pv", key, info);
+        }
     }
 
     #[allow(clippy::too_many_arguments)]

@@ -113,6 +113,7 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Feature | Preview | grove |
 |---|---|---|
 | Several documents in one window, sidebar of thumbnails | ✅ | ✅ drag pages to reorder or into another PDF; drop files to insert |
+| EPUB, MOBI, FB2, XPS, comics (CBZ/CBR/CB7/CBT), DjVu, PostScript/EPS, Office documents | 🟡 | ✅ read-only: shown, searched, printed and exported as PDF from a PDF made once (Quick Look's conversions; Office through LibreOffice) |
 | Table of contents, highlights and notes, bookmarks, contact sheet | ✅ | ✅ |
 | Continuous, single page, two pages; actual size, fit, zoom, pinch | ✅ | ✅ |
 | Search with results list, text selection, copy, links | ✅ | ✅ |

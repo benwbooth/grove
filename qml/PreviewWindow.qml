@@ -31,7 +31,10 @@ ApplicationWindow {
     property int currentPage: 0
     property var pageOf: ({})
     readonly property bool isPdf: !!cur && cur.kind === "pdf"
-    readonly property bool canEdit: !!cur && (cur.kind === "image" || (cur.info && cur.info.isPdf))
+    readonly property bool canEdit: !!cur && canEditDoc(cur)
+    // Documents shown from a PDF made of them (EPUB, DjVu, PostScript, Office, comics) can be
+    // read, searched, printed and exported as PDF, not changed.
+    readonly property bool canExport: !!cur && (canEdit || (!!cur.info && !!cur.info.converted))
 
     // ---------- tools and style ----------
     property string tool: "textsel"
@@ -64,7 +67,7 @@ ApplicationWindow {
 
     function toast(level, msg) { toastBox.show(level, msg) }
     function keyFor(id) { return Help.keysFor(id) }
-    function isDocumentPath(p) { return /\.(pdf|xps|oxps|epub|cbz|fb2|mobi|ai)$/i.test(p) }
+    function isDocumentPath(p) { return /\.(pdf|ai|xps|oxps|epub|mobi|azw|azw3|fb2|fbz|cbz|cbr|cb7|cbt|djvu|djv|ps|eps|epsf|odt|ods|odp|odg|ott|ots|otp|docx|xlsx|pptx|doc|dot|xls|ppt|rtf)$/i.test(p) }
     function docById(id) { for (const d of docs) if (d.id === id) return d; return null }
     function passwordFor(src) { for (const d of docs) if (d.path === src && d.password) return d.password; return "" }
     function nameOf(p) { return p.substring(p.lastIndexOf("/") + 1) }
@@ -91,7 +94,7 @@ ApplicationWindow {
         if (undo.length > 200) undo.shift()
         update(old, Object.assign({ undo: undo, redo: [], dirty: true }, patch))
     }
-    function canEditDoc(d) { return d.kind === "image" || (d.info && d.info.isPdf) }
+    function canEditDoc(d) { return d.kind === "image" || (!!d.info && d.info.isPdf && !d.info.converted) }
     function undo() {
         if (!cur || !(cur.undo || []).length) return
         const u = cur.undo.slice(), last = u.pop()
@@ -162,16 +165,17 @@ ApplicationWindow {
             if (r.error) { update(now, { loading: false, error: r.error }); if (cur && cur.id === d.id) toast("error", "“" + now.name + "” can't be opened: " + r.error); return }
             if (r.kind === "pdf" && r.locked) { update(now, { loading: false, info: r, locked: true }); if (password) toast("error", "That password isn't right."); askPassword(now); return }
             if (r.kind === "pdf") {
-                const pages = r.sizes.map((s, i) => ({ src: p, page: i, w: s[0], h: s[1], rot: 0, annots: [], delAnnots: [], crop: null, key: "p" + i + "-" + now.rev }))
-                const n = update(now, { loading: false, locked: false, info: r, pages: pages, password: pw0, encryptedWith: r.encrypted ? pw0 : "" })
-                if (r.isPdf) Async.call(app.grove, k => app.grove.pvWidgets(k, p, pw0), w => {
+                const src = r.viewPath || p
+                const pages = r.sizes.map((s, i) => ({ src: src, page: i, w: s[0], h: s[1], rot: 0, annots: [], delAnnots: [], crop: null, key: "p" + i + "-" + now.rev }))
+                const n = update(now, { kind: "pdf", loading: false, locked: false, info: r, pages: pages, password: pw0, encryptedWith: r.encrypted ? pw0 : "" })
+                if (r.isPdf && !r.converted) Async.call(app.grove, k => app.grove.pvWidgets(k, p, pw0), w => {
                     const x = docById(d.id)
                     if (!x || !Array.isArray(w) || !w.length) return
                     const ws = Object.assign({}, x.widgets); ws[p] = w
                     update(x, { widgets: ws })
                 })
             } else {
-                update(now, { loading: false, info: r, img: { w: r.w, h: r.h, alpha: [], adjust: {}, ops: [], crop: null, rotate: 0, flipH: false, flipV: false, resize: null, dpi: null } })
+                update(now, { kind: "image", loading: false, info: r, img: { w: r.w, h: r.h, alpha: [], adjust: {}, ops: [], crop: null, rotate: 0, flipH: false, flipV: false, resize: null, dpi: null } })
             }
         })
     }
@@ -518,7 +522,7 @@ ApplicationWindow {
             return { src: p.src || "", page: p.page, blank: p.blank || null, image: p.image || null, rot: p.rot, crop: p.crop, fields: fields, delAnnots: p.delAnnots || [], annots: p.annots || [] }
         })
         const enc = encrypt !== undefined ? encrypt : (d.encryptedWith ? { user: d.encryptedWith, owner: d.encryptedWith } : null)
-        return { primary: d.info && d.info.isPdf ? d.path : "", passwords: pw0, pages: pages, meta: d.meta || {}, encrypt: enc }
+        return { primary: d.info && d.info.isPdf && !d.info.converted ? d.path : "", passwords: pw0, pages: pages, meta: d.meta || {}, encrypt: enc }
     }
     function imageSpec(d) {
         const i = d.img
@@ -645,8 +649,8 @@ ApplicationWindow {
                 { id: "duplicate", icon: "edit-copy", text: "Duplicate", shortcut: k("pv.duplicate"), enabled: !!d && ed },
                 { id: "revert", icon: "document-revert", text: "Revert to Saved", enabled: !!d && d.dirty },
                 { separator: true },
-                { id: "export", icon: "document-export", text: "Export…", enabled: !!d && ed },
-                { id: "exportpdf", icon: "application-pdf", text: "Export as PDF…", enabled: !!d && ed },
+                { id: "export", icon: "document-export", text: "Export…", enabled: pw.canExport },
+                { id: "exportpdf", icon: "application-pdf", text: "Export as PDF…", enabled: pw.canExport },
                 { id: "picspdf", icon: "application-pdf", text: "Save All Pictures as One PDF…", enabled: docs.filter(x => x.kind === "image").length > 1 },
                 { separator: true },
                 { id: "print", icon: "document-print", text: "Print…", shortcut: k("pv.print"), enabled: !!d }
