@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Grove Preview
+GenericName=Document and Image Viewer
+Comment=View and mark up PDFs and pictures: sign, fill in forms, rearrange pages, adjust colours, export and print
+Exec=grove --preview %U
+Icon=grove
+Terminal=false
+Categories=Qt;Graphics;Viewer;Office;
+MimeType=application/pdf;application/x-pdf;application/oxps;application/vnd.ms-xpsdocument;application/epub+zip;application/vnd.comicbook+zip;application/x-cbz;image/png;image/jpeg;image/gif;image/webp;image/tiff;image/bmp;image/x-bmp;image/x-icon;image/vnd.microsoft.icon;image/x-tga;image/x-portable-pixmap;image/x-portable-graymap;image/x-portable-bitmap;image/x-portable-anymap;image/qoi;image/heic;image/heif;image/avif;image/jxl;image/svg+xml;image/x-canon-cr2;image/x-nikon-nef;image/x-sony-arw;image/x-adobe-dng;
+Keywords=pdf;image;picture;photo;viewer;preview;markup;annotate;sign;form;okular;gwenview;
+StartupWMClass=grove

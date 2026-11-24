@@ -83,9 +83,21 @@ Item {
     }
     // Tests: grove --play FILE --screenshot out.png grabs the player and quits.
     Timer { id: playShot; interval: Number(grove.env("GROVE_PLAY_SHOT_MS") || 3500); onTriggered: { grove.grabWindows(app.screenshot); Qt.quit() } }
+    // Grove Preview windows (macOS Preview): all the files of one request
+    // in one window.
+    Component { id: previewComp; PreviewWindow {} }
+    property var previews: []
+    function preview(paths) {
+        const w = previewComp.createObject(null, { app: app, initialPaths: paths })
+        previews = previews.concat([w])
+        w.closing.connect(() => Qt.callLater(() => { previews = previews.filter(x => x !== w) }))
+        w.show(); w.raise(); w.requestActivate()
+        return w
+    }
     function handleOpen(req) {
         const paths = req.paths || []
         if (req.action === "play") { play(paths); return }
+        if (req.action === "preview") { preview(paths); return }
         if (archiver.handle(req)) return
         if (req.action === "properties") {
             for (const p of paths) {

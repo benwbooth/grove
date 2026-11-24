@@ -412,6 +412,10 @@ pub mod ffi {
         /// A picture through the pipeline (imgedit::Spec JSON) as `format`.
         #[qinvokable]
         fn pv_export_image(self: &Grove, key: &QString, src: &QString, spec: &QString, mode: &QString, dest: &QString, format: &QString, quality: i32);
+        /// One page of the document (pdfedit::Spec JSON, with its changes)
+        /// as a picture at `dpi`, written to `dest` as `format`.
+        #[qinvokable]
+        fn pv_export_page(self: &Grove, key: &QString, spec: &QString, page: i32, dest: &QString, format: &QString, quality: i32, dpi: i32);
         /// Pictures (each with its edits) as one PDF, a page each.
         #[qinvokable]
         fn pv_images_pdf(self: &Grove, key: &QString, items: &QString, dest: &QString);

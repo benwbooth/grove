@@ -121,6 +121,32 @@ impl ffi::Grove {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn pv_export_page(&self, key: &QString, spec: &QString, page: i32, dest: &QString, format: &QString, quality: i32, dpi: i32) {
+        let (s, dest, fmt) = (spec.to_string(), PathBuf::from(dest.to_string()), format.to_string());
+        self.answer(key, move || {
+            let spec: pdfedit::Spec = match serde_json::from_str(&s) {
+                Ok(v) => v,
+                Err(e) => return json!({"error": e.to_string()}),
+            };
+            write_to(&dest, |d| {
+                let tmp = grove_core::previews::temp_file("pdf");
+                let r = (|| {
+                    pdfedit::save(&spec, &tmp)?;
+                    let t = tmp.to_string_lossy().into_owned();
+                    let info: Value = serde_json::from_str(&pdfedit::info(&t, "")?).map_err(|e| e.to_string())?;
+                    let w = info["sizes"][page.max(0) as usize][0].as_f64().unwrap_or(612.0) as f32;
+                    let px = (w * dpi.clamp(36, 1200) as f32 / 72.0).round() as u32;
+                    let (iw, ih, buf) = pdfedit::render(&t, "", page.max(0) as u32, px, &[])?;
+                    let img = image::RgbaImage::from_raw(iw, ih, buf).ok_or("The page couldn't be drawn.")?;
+                    imgedit::encode(&img, &fmt, quality.clamp(1, 100) as u8, dpi as f32, d)
+                })();
+                let _ = std::fs::remove_file(&tmp);
+                r
+            })
+        });
+    }
+
     pub fn pv_images_pdf(&self, key: &QString, items: &QString, dest: &QString) {
         let (items, dest) = (items.to_string(), PathBuf::from(dest.to_string()));
         self.answer(key, move || {

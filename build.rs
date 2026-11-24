@@ -39,7 +39,7 @@ fn main() {
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
     files.sort();
-    let singletons = ["Theme.qml", "Async.qml", "Help.qml"];
+    let singletons = ["Theme.qml", "Async.qml", "Help.qml", "PvShapes.qml"];
     let qml_files: Vec<QmlFile> = files
         .iter()
         .map(|f| {
