@@ -224,6 +224,23 @@ impl ffi::Grove {
                 });
             }
         });
+        // Phones and e-readers (MTP) plugged in or out: the sidebar lists
+        // them (sysfs, read every 2 s: a couple of dozen tiny files).
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let mut last: Vec<String> = vec![];
+            loop {
+                let now: Vec<String> = crate::mtp::devices().into_iter().map(|d| d.name).collect();
+                if now != last {
+                    last = now;
+                    let _ = qt.queue(|mut g| {
+                        let r = *g.places_revision() + 1;
+                        g.as_mut().set_places_revision(r);
+                    });
+                }
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+        });
         // hearth's accounts service: saved servers and Google sign-ins.
         let qt = self.qt_thread();
         crate::accounts::watch(move |available| {

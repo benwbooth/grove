@@ -111,6 +111,16 @@ pub fn places(favs: &[String]) -> Value {
             locations.push(v);
         }
     }
+    // Phones and e-readers (MTP) not opened yet: click to open.
+    for d in crate::mtp::devices() {
+        let mp = crate::remote::mount_point(&d.name).to_string_lossy().into_owned();
+        if locations.iter().any(|l| l["path"] == mp.as_str()) {
+            continue;
+        }
+        let lower = d.name.to_lowercase();
+        let icon = if ["kindle", "kobo", "boox", "pocketbook", "remarkable", "nook"].iter().any(|k| lower.contains(k)) { "ebook-reader|phone|smartphone" } else { "phone|smartphone" };
+        locations.push(json!({"name": d.name, "path": "", "device": d.name, "icon": icon, "kind": "mtp", "ejectable": false}));
+    }
     // Disks not mounted yet: click to mount.
     for d in &devs {
         if d["mount"].as_str().map(|s| s.is_empty()).unwrap_or(true) {

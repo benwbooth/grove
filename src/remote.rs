@@ -281,7 +281,17 @@ fn mount_rclone_named(s: &Server, mp: &std::path::Path) -> Result<(), String> {
 }
 
 fn mount_mtp(s: &Server, mp: &std::path::Path) -> Result<(), String> {
-    let dev = if s.device.is_empty() { "1".to_string() } else { s.device.clone() };
+    // A device's name (from the sidebar): its number in simple-mtpfs's list.
+    let dev = if s.device.is_empty() {
+        "1".to_string()
+    } else if s.device.parse::<u32>().is_ok() {
+        s.device.clone()
+    } else if which("simple-mtpfs") {
+        let list = Command::new("simple-mtpfs").arg("-l").output().map(|o| String::from_utf8_lossy(&o.stdout).into_owned()).unwrap_or_default();
+        crate::mtp::device_number(&s.device, &list).ok_or("The device isn't there any more (unplugged?).")?
+    } else {
+        "1".to_string()
+    };
     let o = if which("simple-mtpfs") {
         Command::new("simple-mtpfs").args(["--device", &dev]).arg(mp).output()
     } else if which("jmtpfs") {

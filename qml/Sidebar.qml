@@ -292,11 +292,18 @@ Item {
                         label: modelData.name; icon: modelData.icon; path: modelData.path
                         total: modelData.total || 0; free: modelData.free || 0
                         ejectable: !!modelData.ejectable
-                        dim: modelData.kind === "unmounted"
-                        dropTarget: modelData.kind !== "unmounted"
-                        tip: modelData.kind === "unmounted" ? "Click to open this disk" : modelData.total ? modelData.path + " — " + sb.app.size(modelData.free) + " free of " + sb.app.size(modelData.total) : modelData.path
+                        dim: modelData.kind === "unmounted" || modelData.kind === "mtp"
+                        dropTarget: modelData.kind !== "unmounted" && modelData.kind !== "mtp"
+                        tip: modelData.kind === "unmounted" ? "Click to open this disk"
+                           : modelData.kind === "mtp" ? "“" + modelData.name + "” is plugged in (USB). Click to open it. If it doesn't open, unlock it and allow file transfer on it, then click again."
+                           : modelData.total ? modelData.path + " — " + sb.app.size(modelData.free) + " free of " + sb.app.size(modelData.total) : modelData.path
                         onActivated: {
-                            if (modelData.kind === "unmounted") {
+                            if (modelData.kind === "mtp") {
+                                sb.win.toast("info", "Opening “" + modelData.name + "”…")
+                                Async.call(sb.app.grove, k => sb.app.grove.connectServer(k, JSON.stringify({ name: modelData.name, kind: "mtp", device: modelData.device, remember: false })), r => {
+                                    if (r.error) sb.win.toast("error", r.error); else { sb.reload(); sb.win.go(r.path) }
+                                })
+                            } else if (modelData.kind === "unmounted") {
                                 Async.call(sb.app.grove, k => sb.app.grove.mountDevice(k, modelData.device), r => {
                                     if (r.error) sb.win.toast("error", r.error); else { sb.reload(); sb.win.go(r.path) }
                                 })
