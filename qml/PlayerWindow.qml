@@ -137,51 +137,51 @@ Window {
         sized = true
     }
     // ---------- resizing ----------
-    // The window keeps the movie's shape (no black bars) while dragging its
-    // right and bottom edges: the size is worked out here, one step per
-    // frame. Left and top edges go through the compositor (a Wayland window
-    // can't move itself); the height then snaps to the movie's shape.
+    // Every edge goes through the compositor's own resize (it keeps the
+    // opposite edge still), and each size it hands us is put back to the
+    // movie's shape at once, as mpv does on Wayland (xdg-shell lets an app
+    // with an aspect ratio use another size while resizing). So the
+    // picture never letterboxes while dragging, except maximized or full
+    // screen, and nothing jumps between fill and letterbox.
     readonly property real aspect: mp.hasVideo && videoW > 0 && videoH > 0 ? videoW / videoH : 0
-    property size resizeFrom
-    property int resizeEdges: 0
-    property size pendingSize: Qt.size(0, 0)
     property bool systemResizing: false
-    function beginResize(edges) { sized = true; resizeFrom = Qt.size(width, height); resizeEdges = edges; pendingSize = Qt.size(0, 0); resizeTick.start() }
-    function dragResize(dx, dy) {
-        let w = resizeFrom.width, h = resizeFrom.height
-        const horiz = resizeEdges & Qt.RightEdge, vert = resizeEdges & Qt.BottomEdge
-        if (horiz && vert) {
-            // The corner follows whichever way the pointer went further.
-            if (Math.abs(dx) * h >= Math.abs(dy) * w) { w += dx; h = w / aspect } else { h += dy; w = h * aspect }
-        } else if (horiz) { w += dx; h = w / aspect }
-        else { h += dy; w = h * aspect }
-        // Within the minimum and the screen, still the movie's shape.
-        const maxW = Screen.desktopAvailableWidth, maxH = Screen.desktopAvailableHeight
-        const k = Math.min(1, maxW / w, maxH / h)
-        w *= k; h *= k
-        const m = Math.max(1, minimumWidth / w, minimumHeight / h)
-        pendingSize = Qt.size(Math.round(w * m), Math.round(h * m))
+    property size lastSize: Qt.size(0, 0)
+    property bool fixing: false
+    function beginSystemResize(edges) {
+        sized = true
+        systemResizing = true
+        lastSize = Qt.size(width, height)
+        resizeIdle.restart()
+        startSystemResize(edges)
     }
-    function endResize() { resizeTick.stop(); applyPending(); resizeEdges = 0 }
-    function applyPending() {
-        if (pendingSize.width <= 0) return
-        // One geometry change (width then height separately: the second
-        // request went out with the old width).
-        if (width !== pendingSize.width || height !== pendingSize.height) setGeometry(x, y, pendingSize.width, pendingSize.height)
-        pendingSize = Qt.size(0, 0)
+    // The dimension that changed more leads; the other follows the shape.
+    function keepShape() {
+        if (!systemResizing || fixing || aspect <= 0 || fullScreen || pip || visibility !== Window.Windowed) return
+        const w = width, h = height
+        const dw = lastSize.width > 0 ? Math.abs(w - lastSize.width) / lastSize.width : 1
+        const dh = lastSize.height > 0 ? Math.abs(h - lastSize.height) / lastSize.height : 0
+        let nw = w, nh = h
+        if (dw >= dh) nh = Math.round(w / aspect)
+        else nw = Math.round(h * aspect)
+        // No bigger than the screen.
+        const big = Math.min(1, Screen.desktopAvailableWidth / nw, Screen.desktopAvailableHeight / nh)
+        if (big < 1) { nw = Math.round(nw * big); nh = Math.round(nh * big) }
+        if (nw < minimumWidth || nh < minimumHeight) {
+            const k = Math.max(minimumWidth / nw, minimumHeight / nh)
+            nw = Math.round(nw * k); nh = Math.round(nh * k)
+        }
+        lastSize = Qt.size(nw, nh)
+        if (Math.abs(nw - w) > 1 || Math.abs(nh - h) > 1) {
+            fixing = true
+            setGeometry(x, y, nw, nh)
+            fixing = false
+        }
     }
-    Timer { id: resizeTick; interval: 16; repeat: true; onTriggered: pw.applyPending() }
-    // After the compositor's resize (left/top edges): the movie's shape again.
-    function snapToMovie() {
-        if (!systemResizing) return
-        systemResizing = false
-        if (aspect <= 0 || fullScreen || pip || visibility !== Window.Windowed) return
-        const h = Math.round(width / aspect)
-        if (Math.abs(h - height) > 1) height = Math.max(minimumHeight, h)
-    }
-    Timer { id: snapTimer; interval: 180; onTriggered: pw.snapToMovie() }
-    onWidthChanged: if (systemResizing) snapTimer.restart()
-    onHeightChanged: if (systemResizing) snapTimer.restart()
+    // A resize has no "released" event for us (the compositor has the
+    // pointer): it's over once sizes stop coming.
+    Timer { id: resizeIdle; interval: 600; onTriggered: pw.systemResizing = false }
+    onWidthChanged: if (systemResizing) { resizeIdle.restart(); Qt.callLater(keepShape) }
+    onHeightChanged: if (systemResizing) { resizeIdle.restart(); Qt.callLater(keepShape) }
 
     function actualSize() {
         if (!videoW) return
@@ -1072,14 +1072,7 @@ Window {
                 height: modelData.h <= 0 ? root.height + modelData.h : modelData.h
                 hoverEnabled: true
                 cursorShape: modelData.c
-                readonly property bool own: pw.aspect > 0 && !(modelData.e & (Qt.LeftEdge | Qt.TopEdge))
-                property point start
-                onPressed: (m) => {
-                    if (own) { start = mapToGlobal(m.x, m.y); pw.beginResize(modelData.e) }
-                    else { pw.sized = true; pw.systemResizing = true; pw.startSystemResize(modelData.e) }
-                }
-                onPositionChanged: (m) => { if (own && pressed) { const g = mapToGlobal(m.x, m.y); pw.dragResize(g.x - start.x, g.y - start.y) } }
-                onReleased: if (own) pw.endResize()
+                onPressed: pw.beginSystemResize(modelData.e)
             }
         }
 
@@ -1187,8 +1180,8 @@ Window {
 
     // ---------- tests ----------
     // GROVE_PLAYER_TEST: "controls", "trim", "clips", "inspector", "pip", "width:N",
-// "drag:dx,dy" (bottom-right corner, a second after loading; set
-// GROVE_PLAY_SHOT_MS=8000), "sysresize:W" (a compositor resize, then the snap),
+// "drag:dx" / "sysresize:W" (compositor resize steps to that width, a
+// second after loading; set GROVE_PLAY_SHOT_MS=8000),
     // "export:<preset>:<file>" (trims to 20%..60%, exports, quits when done).
     readonly property string testSpec: app ? app.grove.env("GROVE_PLAYER_TEST") : ""
     readonly property bool testExport: testSpec.indexOf("export:") === 0
@@ -1203,16 +1196,11 @@ Window {
             else if (t === "clips") { pw.seekTo(pw.total * 0.4); Qt.callLater(() => { splitTimer.start() }) }
             else if (t === "inspector") { mp.setProp("pause", "yes"); inspector.show() }
             else if (t === "pip") pw.enterPip()
-            else if (t.indexOf("drag:") === 0) {
-                // A drag of the bottom-right corner by dx,dy.
+            else if (t.indexOf("drag:") === 0 || t.indexOf("sysresize:") === 0) {
+                // Compositor resize steps (a right-edge drag): sizes as the
+                // compositor would hand them over.
+                mp.setProp("pause", "yes"); pw.controls = true
                 dragTest.start()
-                mp.setProp("pause", "yes"); pw.controls = true
-            }
-            else if (t.indexOf("sysresize:") === 0) {
-                // The compositor resized the width (a left-edge drag).
-                pw.systemResizing = true; pw.width = Number(t.substring(10))
-                mp.setProp("pause", "yes"); pw.controls = true
-                snapLog.start()
             }
             else if (t.indexOf("width:") === 0) { pw.sized = true; pw.width = Number(t.substring(6)); pw.controls = true; mp.setProp("pause", "yes") }
             else if (pw.testExport) {
@@ -1225,14 +1213,19 @@ Window {
     Timer {
         id: dragTest
         interval: 1000
+        property int step: 0
         onTriggered: {
-            const d = pw.testSpec.substring(5).split(",").map(Number)
-            pw.beginResize(Qt.RightEdge | Qt.BottomEdge); pw.dragResize(d[0], d[1])
-            pw.endResize()
-            pw.dbg("after drag", pw.width, pw.height, (pw.width / pw.height).toFixed(4), pw.aspect.toFixed(4), pw.panFill)
+            const t = pw.testSpec
+            if (step === 0) { pw.sized = true; pw.systemResizing = true; pw.lastSize = Qt.size(pw.width, pw.height); resizeIdle.restart() }
+            const target = t.indexOf("sysresize:") === 0 ? Number(t.substring(10)) : pw.width + Number(t.substring(5).split(",")[0])
+            // Five steps toward the target width, the height left as it was.
+            step++
+            const w = Math.round(pw.width + (target - pw.width) / (6 - step))
+            pw.setGeometry(pw.x, pw.y, w, pw.height)
+            if (step < 5) { interval = 60; start() } else snapLog.start()
         }
     }
-    Timer { id: snapLog; interval: 600; onTriggered: pw.dbg("after snap", pw.width, pw.height, (pw.width / pw.height).toFixed(4), pw.aspect.toFixed(4), pw.panFill) }
+    Timer { id: snapLog; interval: 400; onTriggered: pw.dbg("after resize", pw.width, pw.height, (pw.width / pw.height).toFixed(4), pw.aspect.toFixed(4), pw.panFill) }
     Timer { id: splitTimer; interval: 600; onTriggered: { pw.splitClip(); mp.setProp("pause", "yes") } }
     Connections {
         target: mp
