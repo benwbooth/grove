@@ -160,7 +160,7 @@ impl ops::Host for JobHost {
 }
 
 impl ffi::Grove {
-    fn answer(&self, key: &QString, f: impl FnOnce() -> Value + Send + 'static) {
+    pub(crate) fn answer(&self, key: &QString, f: impl FnOnce() -> Value + Send + 'static) {
         let key = key.to_string();
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -169,7 +169,7 @@ impl ffi::Grove {
         });
     }
 
-    fn answer_on(&self, name: &'static str, key: &QString, f: impl FnOnce() -> Value + Send + 'static) {
+    pub(crate) fn answer_on(&self, name: &'static str, key: &QString, f: impl FnOnce() -> Value + Send + 'static) {
         let key = key.to_string();
         let qt = self.qt_thread();
         lane(name, move || {
@@ -1541,7 +1541,7 @@ fn sibling_name(p: &Path, tag: &str, ext: &str) -> PathBuf {
 /// Write a new version of `orig` with `make(dest)`: next to it ("copy") or
 /// in its place ("replace": the original goes to the Trash; Undo puts it
 /// back). Answers {path} or {error}.
-fn save_edit(orig: &Path, mode: &str, tag: &str, ext: &str, label: &str, qt: &CxxQtThread<ffi::Grove>, make: impl Fn(&Path) -> Result<(), String>) -> Value {
+pub(crate) fn save_edit(orig: &Path, mode: &str, tag: &str, ext: &str, label: &str, qt: &CxxQtThread<ffi::Grove>, make: impl Fn(&Path) -> Result<(), String>) -> Value {
     let same_ext = orig.extension().map(|e| e.to_string_lossy().to_lowercase()) == Some(ext.to_lowercase());
     if mode == "replace" && same_ext {
         let dir = orig.parent().unwrap_or(Path::new("/"));

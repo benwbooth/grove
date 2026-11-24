@@ -1042,6 +1042,16 @@ QString grove_clipboard()
 
 void grove_set_clipboard_text(const QString& text) { QGuiApplication::clipboard()->setText(text); }
 
+void grove_set_clipboard_png(rust::Slice<const uint8_t> data)
+{
+    const QByteArray png(reinterpret_cast<const char*>(data.data()), qsizetype(data.size()));
+    auto* md = new QMimeData;
+    md->setData(QStringLiteral("image/png"), png);
+    QImage img;
+    if (img.loadFromData(png, "PNG")) md->setImageData(img);
+    QGuiApplication::clipboard()->setMimeData(md);
+}
+
 bool grove_can_read_image(const QString& path)
 {
     QImageReader r(path);

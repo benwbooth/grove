@@ -30,6 +30,8 @@ mod model;
 mod places;
 mod portal;
 mod preview;
+mod pvcanvas;
+mod pvdoc;
 mod compare;
 mod google;
 mod remote;
@@ -71,6 +73,8 @@ fn main() {
             "--select" | "-s" => action = "items",
             // Grove Player: play the files in a QuickTime-style window.
             "--play" | "-p" => action = "play",
+            // Grove Preview (macOS Preview's features): PDFs and pictures.
+            "--preview" | "-P" => action = "preview",
             // Grove Archiver (7-Zip's features, grove's look): browse an
             // archive, extract it beside itself or somewhere picked, add
             // files to a new archive, test it.
@@ -90,7 +94,7 @@ fn main() {
                 i += 1;
             }
             "--help" | "-h" => {
-                println!("grove [--new-window] [--select] [--play] [PATH|URI ...]\n\nA Finder-style file manager. Press F1 in a window for help and shortcuts.\n--play opens the files in Grove Player.\n\nGrove Archiver:\n  --archive [ARCHIVE ...]   browse archives (7-Zip-style window)\n  --extract-here ARCHIVE    extract next to it\n  --extract-to ARCHIVE      pick where and how to extract\n  --compress PATH ...       Add to Archive (format, level, password, volumes)\n  --test-archive ARCHIVE    check an archive for damage");
+                println!("grove [--new-window] [--select] [--play] [PATH|URI ...]\n\nA Finder-style file manager. Press F1 in a window for help and shortcuts.\n--play opens the files in Grove Player.\n--preview opens PDFs and pictures in Grove Preview.\n\nGrove Archiver:\n  --archive [ARCHIVE ...]   browse archives (7-Zip-style window)\n  --extract-here ARCHIVE    extract next to it\n  --extract-to ARCHIVE      pick where and how to extract\n  --compress PATH ...       Add to Archive (format, level, password, volumes)\n  --test-archive ARCHIVE    check an archive for damage");
                 return;
             }
             "--version" => {

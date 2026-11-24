@@ -1016,6 +1016,7 @@ dependencies = [
  "cxx",
  "cxx-qt",
  "cxx-qt-build",
+ "image",
  "qt-build-utils",
 ]
 
@@ -1649,6 +1650,7 @@ dependencies = [
  "futures-channel",
  "git2",
  "grove-core",
+ "image",
  "imagesize",
  "libc",
  "mdns-sd",

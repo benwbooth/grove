@@ -23,6 +23,8 @@ pub mod ffi {
         fn grove_set_clipboard(paths_newline: &QString, cut: bool);
         fn grove_clipboard() -> QString;
         fn grove_set_clipboard_text(text: &QString);
+        /// A PNG on the clipboard (Grove Preview's Copy of a selection).
+        fn grove_set_clipboard_png(data: &[u8]);
         fn grove_can_read_image(path: &QString) -> bool;
         fn grove_image_rotate(path: &QString, degrees: i32) -> QString;
         fn grove_image_convert(path: &QString, format: &QString) -> QString;
@@ -384,6 +386,49 @@ pub mod ffi {
         fn arc_unique(self: &Grove, key: &QString, path: &QString);
         #[qinvokable]
         fn arc_member(self: &Grove, key: &QString, archive: &QString, inner: &QString, password: &QString);
+
+        // --- Grove Preview (macOS Preview's features; src/pvdoc.rs) ---
+        /// A document or picture: {kind: "pdf"|"image", pages, sizes,
+        /// outline, metadata, locked...} or picture info, or {error}.
+        #[qinvokable]
+        fn pv_info(self: &Grove, key: &QString, path: &QString, password: &QString);
+        /// Text selection between two points (page space). mode: 0 chars,
+        /// 1 words, 2 lines, 3 page. {quads, text}
+        #[qinvokable]
+        fn pv_select(self: &Grove, key: &QString, path: &QString, password: &QString, page: i32, ax: f64, ay: f64, bx: f64, by: f64, mode: i32);
+        /// Every match: [{page, quads, line}].
+        #[qinvokable]
+        fn pv_search(self: &Grove, key: &QString, path: &QString, password: &QString, needle: &QString);
+        #[qinvokable]
+        fn pv_links(self: &Grove, key: &QString, path: &QString, password: &QString, page: i32);
+        #[qinvokable]
+        fn pv_widgets(self: &Grove, key: &QString, path: &QString, password: &QString);
+        #[qinvokable]
+        fn pv_annots(self: &Grove, key: &QString, path: &QString, password: &QString, page: i32);
+        /// Write a PDF (pdfedit::Spec JSON). mode: replace (the original to
+        /// the Trash, Undo puts it back), copy (beside it) or to (`dest`).
+        #[qinvokable]
+        fn pv_save_pdf(self: &Grove, key: &QString, path: &QString, spec: &QString, mode: &QString, dest: &QString);
+        /// A picture through the pipeline (imgedit::Spec JSON) as `format`.
+        #[qinvokable]
+        fn pv_export_image(self: &Grove, key: &QString, src: &QString, spec: &QString, mode: &QString, dest: &QString, format: &QString, quality: i32);
+        /// Pictures (each with its edits) as one PDF, a page each.
+        #[qinvokable]
+        fn pv_images_pdf(self: &Grove, key: &QString, items: &QString, dest: &QString);
+        /// The printers: [{name, info, location, default, color, duplex, media}].
+        #[qinvokable]
+        fn pv_printers(self: &Grove, key: &QString);
+        /// Print: {printer, path, title, pdf: Spec?, image: {spec}?, options: {copies, ...}}.
+        #[qinvokable]
+        fn pv_print(self: &Grove, key: &QString, job: &QString);
+        /// A rectangle of a page or picture copied as a picture.
+        #[qinvokable]
+        fn pv_copy_region(self: &Grove, key: &QString, what: &QString);
+        /// Saved signatures (JSON list) / save them.
+        #[qinvokable]
+        fn pv_signatures(self: &Grove, key: &QString);
+        #[qinvokable]
+        fn pv_set_signatures(self: &Grove, key: &QString, list: &QString);
 
         // --- Quick Look editing ---
         /// Save markup over a picture. mode: "replace" (the original goes to

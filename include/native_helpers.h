@@ -23,6 +23,8 @@ void grove_set_clipboard(const QString& pathsNewline, bool cut);
 QString grove_clipboard();
 // Put plain text on the clipboard (Copy Path).
 void grove_set_clipboard_text(const QString& text);
+// A PNG on the clipboard (image/png and as an image).
+void grove_set_clipboard_png(rust::Slice<const uint8_t> data);
 // Markdown as styled HTML for a RichText view (Quick Look): grove's
 // colours for `dark`, the body font, pictures resolved against `baseDir`
 // and fitted to `maxWidth`. Safe off the UI thread.
