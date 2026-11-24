@@ -118,8 +118,10 @@ pub fn versions(path: &Path) -> Vec<Version> {
         let copy = dir.join("snapshot").join(&rel);
         let Ok(m) = std::fs::symlink_metadata(&copy) else { continue };
         let key = (m.mtime(), m.len());
-        // Only when it differs from the newer one (folders: their mtime).
-        if Some(key) == last {
+        // Files: only when it differs from the newer one. Folders: every
+        // snapshot, since a folder's own date only changes when items
+        // directly in it come or go, not when files deeper down change.
+        if Some(key) == last && !m.is_dir() {
             continue;
         }
         last = Some(key);

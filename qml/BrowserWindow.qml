@@ -1647,6 +1647,7 @@ ApplicationWindow {
         else if (cmd === "snapshots") showSnapshots(arg || p.path)
         else if (cmd === "share") share([arg])
         else if (cmd === "versions") showVersions(arg)
+        else if (cmd === "vview") versionsSheet.testAction(arg)
         else if (cmd === "panel") setPanel(arg, true)
         else if (cmd === "group") p.setGroupBy(arg)
         else if (cmd === "viewopts") viewOptions.open()

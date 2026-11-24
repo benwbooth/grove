@@ -1441,7 +1441,8 @@ impl ffi::Grove {
 
     pub fn versions(&self, key: &QString, path: &QString) {
         let p = PathBuf::from(path.to_string());
-        self.answer(key, move || json!(grove_core::versions::versions(&p)));
+        // {list, snapshots: the disk has any (snapper), for the sheet's wording}.
+        self.answer(key, move || json!({"list": grove_core::versions::versions(&p), "snapshots": grove_core::versions::snapshot_root(&p).is_some()}));
     }
 
     pub fn git_action(&self, key: &QString, dir: &QString, action: &QString, paths: &QString, arg: &QString) {
