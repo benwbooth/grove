@@ -389,7 +389,10 @@ pub fn preview(path: &str, dark: bool) -> Value {
             // The whole text is read by Quick Look's TextDoc; here only
             // whether there is any.
             let has_text = previews::office_text(p, 2000, &never).is_some();
-            return with(json!({"kind": "office", "hasText": has_text, "canConvert": previews::has_libreoffice()}));
+            // Help files (.hlp, .chm) are only ever shown as their HTML:
+            // LibreOffice can't open them.
+            let help = lower.ends_with(".hlp") || lower.ends_with(".chm");
+            return with(json!({"kind": "office", "hasText": has_text, "canConvert": !help && previews::has_libreoffice()}));
         }
         _ => {}
     }

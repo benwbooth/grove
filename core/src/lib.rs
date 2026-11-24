@@ -3,6 +3,7 @@
 pub mod archiver;
 pub mod apps;
 pub mod checksum;
+pub mod chm;
 pub mod du;
 pub mod gdocs;
 pub mod versions;

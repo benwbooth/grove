@@ -385,6 +385,10 @@ pub fn office_xml_text(xml: &str, limit: usize) -> String {
 
 /// An office document's text (the start of it).
 pub fn office_text(path: &Path, limit: usize, cancel: &AtomicBool) -> Option<String> {
+    // Compiled HTML Help (.chm): its pages' text (chm.rs).
+    if path.to_string_lossy().to_lowercase().ends_with(".chm") {
+        return crate::chm::text(path, limit);
+    }
     // WinHelp (.hlp): its topics' text (winhelp.rs).
     if path.to_string_lossy().to_lowercase().ends_with(".hlp") {
         let t = crate::winhelp::text(path)?;
@@ -472,8 +476,8 @@ pub fn kind_of(mimes: &[String], name: &str) -> Kind {
     if m.starts_with("application/vnd.comicbook") || matches!(ext, "cbz" | "cbr" | "cb7" | "cbt") {
         return Kind::Comic;
     }
-    if m.starts_with("application/vnd.oasis.opendocument") || m.starts_with("application/vnd.openxmlformats-officedocument") || m == "application/msword" || m == "application/winhlp"
-        || matches!(ext, "odt" | "ods" | "odp" | "odg" | "docx" | "xlsx" | "pptx" | "ott" | "ots" | "otp" | "doc" | "dot" | "hlp")
+    if m.starts_with("application/vnd.oasis.opendocument") || m.starts_with("application/vnd.openxmlformats-officedocument") || m == "application/msword" || m == "application/winhlp" || m == "application/vnd.ms-htmlhelp"
+        || matches!(ext, "odt" | "ods" | "odp" | "odg" | "docx" | "xlsx" | "pptx" | "ott" | "ots" | "otp" | "doc" | "dot" | "hlp" | "chm")
     {
         return Kind::Office;
     }
