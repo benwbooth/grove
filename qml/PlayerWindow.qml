@@ -127,21 +127,67 @@ Window {
     function fitToVideo(force) {
         dbg("fit", sized, force, music, videoW, videoH, width, height, Screen.devicePixelRatio, Screen.desktopAvailableWidth)
         if ((sized && !force) || fullScreen || pip) return
-        if (music) { width = 380; height = 380 + 90; sized = true; return }
+        if (music) { setGeometry(x, y, 380, 380 + 90); sized = true; return }
         if (!videoW || !videoH) return
         const dpr = Screen.devicePixelRatio || 1
         const maxW = Screen.desktopAvailableWidth * 0.8, maxH = Screen.desktopAvailableHeight * 0.8
         const w = videoW / dpr, h = videoH / dpr
         const s = Math.min(1, maxW / w, maxH / h)
-        width = Math.max(minimumWidth, Math.round(w * s))
-        height = Math.max(minimumHeight, Math.round(h * s))
+        setGeometry(x, y, Math.max(minimumWidth, Math.round(w * s)), Math.max(minimumHeight, Math.round(h * s)))
         sized = true
     }
+    // ---------- resizing ----------
+    // The window keeps the movie's shape (no black bars) while dragging its
+    // right and bottom edges: the size is worked out here, one step per
+    // frame. Left and top edges go through the compositor (a Wayland window
+    // can't move itself); the height then snaps to the movie's shape.
+    readonly property real aspect: mp.hasVideo && videoW > 0 && videoH > 0 ? videoW / videoH : 0
+    property size resizeFrom
+    property int resizeEdges: 0
+    property size pendingSize: Qt.size(0, 0)
+    property bool systemResizing: false
+    function beginResize(edges) { sized = true; resizeFrom = Qt.size(width, height); resizeEdges = edges; pendingSize = Qt.size(0, 0); resizeTick.start() }
+    function dragResize(dx, dy) {
+        let w = resizeFrom.width, h = resizeFrom.height
+        const horiz = resizeEdges & Qt.RightEdge, vert = resizeEdges & Qt.BottomEdge
+        if (horiz && vert) {
+            // The corner follows whichever way the pointer went further.
+            if (Math.abs(dx) * h >= Math.abs(dy) * w) { w += dx; h = w / aspect } else { h += dy; w = h * aspect }
+        } else if (horiz) { w += dx; h = w / aspect }
+        else { h += dy; w = h * aspect }
+        // Within the minimum and the screen, still the movie's shape.
+        const maxW = Screen.desktopAvailableWidth, maxH = Screen.desktopAvailableHeight
+        const k = Math.min(1, maxW / w, maxH / h)
+        w *= k; h *= k
+        const m = Math.max(1, minimumWidth / w, minimumHeight / h)
+        pendingSize = Qt.size(Math.round(w * m), Math.round(h * m))
+    }
+    function endResize() { resizeTick.stop(); applyPending(); resizeEdges = 0 }
+    function applyPending() {
+        if (pendingSize.width <= 0) return
+        // One geometry change (width then height separately: the second
+        // request went out with the old width).
+        if (width !== pendingSize.width || height !== pendingSize.height) setGeometry(x, y, pendingSize.width, pendingSize.height)
+        pendingSize = Qt.size(0, 0)
+    }
+    Timer { id: resizeTick; interval: 16; repeat: true; onTriggered: pw.applyPending() }
+    // After the compositor's resize (left/top edges): the movie's shape again.
+    function snapToMovie() {
+        if (!systemResizing) return
+        systemResizing = false
+        if (aspect <= 0 || fullScreen || pip || visibility !== Window.Windowed) return
+        const h = Math.round(width / aspect)
+        if (Math.abs(h - height) > 1) height = Math.max(minimumHeight, h)
+    }
+    Timer { id: snapTimer; interval: 180; onTriggered: pw.snapToMovie() }
+    onWidthChanged: if (systemResizing) snapTimer.restart()
+    onHeightChanged: if (systemResizing) snapTimer.restart()
+
     function actualSize() {
         if (!videoW) return
         if (fullScreen) showNormal()
         const dpr = Screen.devicePixelRatio || 1
-        width = Math.round(videoW / dpr); height = Math.round(videoH / dpr)
+        setGeometry(x, y, Math.round(videoW / dpr), Math.round(videoH / dpr))
         fill = false
     }
 
@@ -181,9 +227,14 @@ Window {
         const lift = (trimming || clipEditing ? 96 + 18 : (pip ? 42 + 8 : 72 + 22)) + 8
         return Math.max(50, Math.round(100 * (1 - lift / height)))
     }
-    onSubPosChanged: mp.setProp("sub-pos", String(subPos))
+    // (Applied a moment later: a resize changes it every pixel.)
+    onSubPosChanged: subPosTimer.restart()
+    Timer { id: subPosTimer; interval: 120; onTriggered: mp.setProp("sub-pos", String(pw.subPos)) }
     property bool fill: false
-    onFillChanged: mp.setProp("panscan", fill ? "1.0" : "0.0")
+    // Fill screen, or a window within 2% of the movie's shape (rounding
+    // would leave a hairline of black): no bars.
+    readonly property bool panFill: fill || (!fullScreen && aspect > 0 && height > 0 && Math.abs(width / height / aspect - 1) < 0.02)
+    onPanFillChanged: mp.setProp("panscan", panFill ? "1.0" : "0.0")
     property bool onTop: false
     property bool subsShown: true
     onSubsShownChanged: mp.setProp("sub-visibility", subsShown ? "yes" : "no")
@@ -1021,7 +1072,14 @@ Window {
                 height: modelData.h <= 0 ? root.height + modelData.h : modelData.h
                 hoverEnabled: true
                 cursorShape: modelData.c
-                onPressed: pw.startSystemResize(modelData.e)
+                readonly property bool own: pw.aspect > 0 && !(modelData.e & (Qt.LeftEdge | Qt.TopEdge))
+                property point start
+                onPressed: (m) => {
+                    if (own) { start = mapToGlobal(m.x, m.y); pw.beginResize(modelData.e) }
+                    else { pw.sized = true; pw.systemResizing = true; pw.startSystemResize(modelData.e) }
+                }
+                onPositionChanged: (m) => { if (own && pressed) { const g = mapToGlobal(m.x, m.y); pw.dragResize(g.x - start.x, g.y - start.y) } }
+                onReleased: if (own) pw.endResize()
             }
         }
 
@@ -1129,6 +1187,8 @@ Window {
 
     // ---------- tests ----------
     // GROVE_PLAYER_TEST: "controls", "trim", "clips", "inspector", "pip", "width:N",
+// "drag:dx,dy" (bottom-right corner, a second after loading; set
+// GROVE_PLAY_SHOT_MS=8000), "sysresize:W" (a compositor resize, then the snap),
     // "export:<preset>:<file>" (trims to 20%..60%, exports, quits when done).
     readonly property string testSpec: app ? app.grove.env("GROVE_PLAYER_TEST") : ""
     readonly property bool testExport: testSpec.indexOf("export:") === 0
@@ -1143,6 +1203,17 @@ Window {
             else if (t === "clips") { pw.seekTo(pw.total * 0.4); Qt.callLater(() => { splitTimer.start() }) }
             else if (t === "inspector") { mp.setProp("pause", "yes"); inspector.show() }
             else if (t === "pip") pw.enterPip()
+            else if (t.indexOf("drag:") === 0) {
+                // A drag of the bottom-right corner by dx,dy.
+                dragTest.start()
+                mp.setProp("pause", "yes"); pw.controls = true
+            }
+            else if (t.indexOf("sysresize:") === 0) {
+                // The compositor resized the width (a left-edge drag).
+                pw.systemResizing = true; pw.width = Number(t.substring(10))
+                mp.setProp("pause", "yes"); pw.controls = true
+                snapLog.start()
+            }
             else if (t.indexOf("width:") === 0) { pw.sized = true; pw.width = Number(t.substring(6)); pw.controls = true; mp.setProp("pause", "yes") }
             else if (pw.testExport) {
                 const [, preset, out] = t.split(":")
@@ -1151,6 +1222,17 @@ Window {
             }
         }
     }
+    Timer {
+        id: dragTest
+        interval: 1000
+        onTriggered: {
+            const d = pw.testSpec.substring(5).split(",").map(Number)
+            pw.beginResize(Qt.RightEdge | Qt.BottomEdge); pw.dragResize(d[0], d[1])
+            pw.endResize()
+            pw.dbg("after drag", pw.width, pw.height, (pw.width / pw.height).toFixed(4), pw.aspect.toFixed(4), pw.panFill)
+        }
+    }
+    Timer { id: snapLog; interval: 600; onTriggered: pw.dbg("after snap", pw.width, pw.height, (pw.width / pw.height).toFixed(4), pw.aspect.toFixed(4), pw.panFill) }
     Timer { id: splitTimer; interval: 600; onTriggered: { pw.splitClip(); mp.setProp("pause", "yes") } }
     Connections {
         target: mp
