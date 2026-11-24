@@ -79,10 +79,6 @@ pub struct Settings {
     /// what they are (off: they're always plain text).
     #[serde(default)]
     pub guess_txt_language: bool,
-    /// Column view: a click on a folder opens it (off: it selects it and
-    /// shows its info; its arrow button opens it).
-    #[serde(default)]
-    pub column_click_opens: bool,
     /// Search content as well as names in the toolbar search.
     #[serde(default)]
     pub search_contents: bool,

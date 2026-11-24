@@ -143,7 +143,6 @@ Window {
                 ToggleRow { label: "Folders first"; help: "Keep folders above files when sorting by name."; key: "folders_first" }
                 ToggleRow { label: "Open with a single click"; help: "Dolphin's style. Off: double-click to open, like Finder."; key: "single_click" }
                 ToggleRow { label: "Colour .txt files by their contents"; help: "Text files named .txt that are really code, JSON, logs or the like get syntax colours, when Magika (a small AI model in grove) is sure what they are. Off: .txt files are always plain text."; key: "guess_txt_language" }
-                ToggleRow { label: "Column view: click a folder to open it"; help: "Off: a click selects a folder and shows its info, and its arrow button (or a double-click, or →) opens it, like an archive's."; key: "column_click_opens" }
                 ToggleRow { label: "Browse archives as folders"; help: "Opening a .zip, .tar or .7z shows what's inside instead of extracting it."; key: "browse_archives" }
                 ToggleRow { label: "Ask before moving to the Trash"; help: "Moving to the Trash can always be undone, so this is off by default."; key: "confirm_trash" }
                 ToggleRow { label: "Ask before emptying the Trash"; help: "Emptying the Trash can't be undone."; key: "confirm_empty_trash" }

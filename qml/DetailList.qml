@@ -302,18 +302,6 @@ Item {
                         id: disclosure
                         x: rowItem.depth * 16 + (root.pane.selectionMode ? rowCheck.width + 6 : 0)
                         width: 16; height: parent.height
-                        // An unopened archive's arrow is a small button.
-                        Rectangle {
-                            visible: rowItem.isArchive && !rowItem.isDir && !rowItem.expanded
-                            anchors.centerIn: parent
-                            width: 18; height: 18; radius: 5
-                            color: discMouse.pressed ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.22)
-                                 : discMouse.containsMouse ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.14)
-                                 : Qt.rgba(0, 0, 0, Theme.dark ? 0.18 : 0.05)
-                            border.width: 1
-                            border.color: discMouse.containsMouse ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.35) : Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.12)
-                            Behavior on color { ColorAnimation { duration: 90 } }
-                        }
                         GLabel {
                             anchors.centerIn: parent
                             visible: rowItem.expandable
@@ -321,18 +309,12 @@ Item {
                             rotation: rowItem.expanded ? 90 : 0
                             font.pixelSize: Theme.title
                             color: rowItem.dimColor
-                            // An archive's: grey until it's opened.
-                            opacity: rowItem.isArchive && !rowItem.isDir && !rowItem.expanded && !discMouse.containsMouse ? 0.6 : 1
                             Behavior on rotation { NumberAnimation { duration: 120 } }
                         }
                         MouseArea {
-                            id: discMouse
                             anchors.fill: parent
                             enabled: rowItem.expandable
-                            hoverEnabled: rowItem.isArchive && !rowItem.isDir
-                            cursorShape: rowItem.isArchive && !rowItem.isDir ? Qt.PointingHandCursor : Qt.ArrowCursor
                             onClicked: root.fm.toggleExpanded(rowItem.index)
-                            GTip { visible: parent.containsMouse && !rowItem.expanded; text: "Show what's inside “" + rowItem.name + "” (double-click opens it like a folder)" }
                         }
                     }
                     GIcon {
