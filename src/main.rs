@@ -78,6 +78,8 @@ fn main() {
             "--play" | "-p" => {
                 action = "play";
                 std::env::set_var("GROVE_NO_DBUS", "1");
+                // Its own app in the dock and menu bar (grove-player.desktop).
+                std::env::set_var("GROVE_APP_ID", "grove-player");
                 std::env::set_var("QSG_RHI_BACKEND", "opengl");
             }
             // Grove Preview (macOS Preview's features): PDFs and pictures.
@@ -86,6 +88,7 @@ fn main() {
             "--preview" | "-P" => {
                 action = "preview";
                 std::env::set_var("GROVE_NO_DBUS", "1");
+                std::env::set_var("GROVE_APP_ID", "grove-preview");
             }
             // Grove Archiver (7-Zip's features, grove's look): browse an
             // archive, extract it beside itself or somewhere picked, add

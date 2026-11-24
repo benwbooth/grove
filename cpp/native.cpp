@@ -925,7 +925,13 @@ void grove_create_app()
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Grove"));
     QGuiApplication::setApplicationVersion(QStringLiteral(GROVE_VERSION));
     QGuiApplication::setOrganizationName(QStringLiteral("grove"));
-    QGuiApplication::setDesktopFileName(QStringLiteral("grove"));
+    // Grove Player and Grove Preview run as processes of their own and show
+    // as their own apps (dock, menu bar, window icon): GROVE_APP_ID names
+    // their desktop entry and icon.
+    const QString appId = qEnvironmentVariableIsSet("GROVE_APP_ID") ? QString::fromLocal8Bit(qgetenv("GROVE_APP_ID")) : QStringLiteral("grove");
+    QGuiApplication::setDesktopFileName(appId);
+    if (appId == QLatin1String("grove-player")) QGuiApplication::setApplicationDisplayName(QStringLiteral("Grove Player"));
+    else if (appId == QLatin1String("grove-preview")) QGuiApplication::setApplicationDisplayName(QStringLiteral("Grove Preview"));
     // Inter (SF Pro's open relative) when SF Pro isn't installed: the
     // package hands its folder over in GROVE_FONT_DIR, as hearth does.
     const QString fontDir = QString::fromLocal8Bit(qgetenv("GROVE_FONT_DIR"));
@@ -954,7 +960,7 @@ void grove_create_app()
     QIcon::setFallbackThemeName(QStringLiteral("breeze"));
     if (qEnvironmentVariableIsSet("GROVE_DEBUG_ICONS"))
         qWarning() << "grove icons: theme" << QIcon::themeName() << "paths" << QIcon::themeSearchPaths() << "has folder" << QIcon::hasThemeIcon(QStringLiteral("folder"));
-    QGuiApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("grove"), QIcon::fromTheme(QStringLiteral("system-file-manager"))));
+    QGuiApplication::setWindowIcon(QIcon::fromTheme(QGuiApplication::desktopFileName(), QIcon::fromTheme(QStringLiteral("grove"), QIcon::fromTheme(QStringLiteral("system-file-manager")))));
 }
 
 int grove_run(const QString& url, const QString& importPath)

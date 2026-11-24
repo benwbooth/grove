@@ -98,7 +98,10 @@
             installPhase = ''
               runHook preInstall
               install -Dm755 target/release/grove $out/bin/grove
-              install -Dm644 icons/grove.svg $out/share/icons/hicolor/scalable/apps/grove.svg
+              # grove, grove-player, grove-preview, grove-archiver (scripts/gen-icons.py).
+              for f in icons/*.svg; do
+                install -Dm644 "$f" $out/share/icons/hicolor/scalable/apps/$(basename "$f")
+              done
               install -Dm644 data/grove.desktop $out/share/applications/grove.desktop
               install -Dm644 data/grove-portal.desktop $out/share/applications/grove-portal.desktop
               install -Dm644 data/grove-player.desktop $out/share/applications/grove-player.desktop

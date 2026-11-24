@@ -51,7 +51,7 @@ Window {
     color: "black"
     title: fileName
     flags: Qt.Window | Qt.FramelessWindowHint | (onTop ? Qt.WindowStaysOnTopHint : 0)
-    minimumWidth: music ? 300 : 320
+    minimumWidth: trimming || clipEditing ? 520 : music ? 300 : 320
     minimumHeight: music ? 300 : 180
     width: 960
     height: 560
@@ -657,7 +657,7 @@ Window {
             visible: (pw.music && !mp.albumArt) || (!pw.loaded && pw.errorText === "" && pw.mode === "")
             GIcon {
                 anchors.horizontalCenter: parent.horizontalCenter
-                name: pw.music ? "audio-x-generic" : "video-x-generic"
+                name: pw.music ? "audio-x-generic" : "grove-player|video-x-generic"
                 size: pw.music ? 128 : 96
                 opacity: pw.music ? 1 : 0.7
             }
@@ -784,6 +784,14 @@ Window {
             width: Math.min(parent.width - (pw.pip ? 16 : 32), 560)
             height: pw.pip ? 42 : 72
             HoverHandler { id: barHover; onHoveredChanged: if (hovered) pw.poke() }
+            // What fits: the least important go first as the bar narrows
+            // (volume slider, sound output, picture in picture, subtitles,
+            // the ±15 s buttons), so nothing overlaps.
+            readonly property bool roomSlider: width >= 470
+            readonly property bool roomOutput: width >= 430
+            readonly property bool roomPip: width >= 395
+            readonly property bool roomSubs: width >= 350
+            readonly property bool roomSkip: width >= 300
 
             // Volume, left.
             Row {
@@ -794,7 +802,7 @@ Window {
                     tint: "white"; iconSize: 16; tip: mp.muted ? "Unmute (M)" : "Mute (M)"; onClicked: mp.setProp("mute", mp.muted ? "no" : "yes"); anchors.verticalCenter: parent.verticalCenter }
                 PlayerSlider {
                     width: 78; anchors.verticalCenter: parent.verticalCenter
-                    visible: bar.width >= 480
+                    visible: bar.roomSlider
                     value: mp.muted ? 0 : mp.volume / 100
                     onMoved: v => pw.setVolume(v * 100)
                     tip: "Volume " + Math.round(mp.volume) + "% (↑/↓)"
@@ -805,21 +813,21 @@ Window {
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: pw.pip ? 3 : 4
                 spacing: 16
-                GButton { iconName: "media-seek-backward"; tint: "white"; iconSize: 20; tip: "Back 15 seconds (Shift+←)"; onClicked: pw.seekBy(-15); anchors.verticalCenter: parent.verticalCenter }
+                GButton { iconName: "media-seek-backward"; tint: "white"; iconSize: 20; tip: "Back 15 seconds (Shift+←)"; onClicked: pw.seekBy(-15); anchors.verticalCenter: parent.verticalCenter; visible: bar.roomSkip }
                 GButton { iconName: pw.playing ? "media-playback-pause" : "media-playback-start"; tint: "white"; iconSize: 28
                     tip: (pw.playing ? "Pause" : "Play") + " (Space)"; onClicked: pw.toggle(); anchors.verticalCenter: parent.verticalCenter }
-                GButton { iconName: "media-seek-forward"; tint: "white"; iconSize: 20; tip: "Forward 15 seconds (Shift+→)"; onClicked: pw.seekBy(15); anchors.verticalCenter: parent.verticalCenter }
+                GButton { iconName: "media-seek-forward"; tint: "white"; iconSize: 20; tip: "Forward 15 seconds (Shift+→)"; onClicked: pw.seekBy(15); anchors.verticalCenter: parent.verticalCenter; visible: bar.roomSkip }
             }
             // Sound output, subtitles, PiP, full screen, right.
             Row {
                 anchors.right: parent.right; anchors.rightMargin: 10
                 y: pw.pip ? 5 : 8
                 spacing: 2
-                GButton { id: outBtn; iconName: "audio-headphones"; tint: "white"; iconSize: 16; visible: !pw.pip && pw.outputs.length > 1
+                GButton { id: outBtn; iconName: "audio-headphones"; tint: "white"; iconSize: 16; visible: !pw.pip && pw.outputs.length > 1 && bar.roomOutput
                     tip: "Play sound through… (like AirPlay: speakers, headphones, HDMI)"; onClicked: outMenu.popup(outBtn, 0, -outMenu.implicitHeight - 4); anchors.verticalCenter: parent.verticalCenter }
-                GButton { id: subBtn; iconName: "media-view-subtitles-symbolic"; tint: "white"; iconSize: 16; visible: !pw.pip && pw.loaded && (pw.subTracks.length > 0 || pw.audioTracks.length > 1 || mp.hasVideo)
+                GButton { id: subBtn; iconName: "media-view-subtitles-symbolic"; tint: "white"; iconSize: 16; visible: !pw.pip && pw.loaded && (pw.subTracks.length > 0 || pw.audioTracks.length > 1 || mp.hasVideo) && bar.roomSubs
                     tip: "Subtitles and audio languages"; onClicked: subMenu.popup(subBtn, 0, -subMenu.implicitHeight - 4); anchors.verticalCenter: parent.verticalCenter }
-                GButton { iconName: pw.pip ? "view-fullscreen" : "view-restore"; tint: "white"; iconSize: 16; visible: mp.hasVideo
+                GButton { iconName: pw.pip ? "view-fullscreen" : "view-restore"; tint: "white"; iconSize: 16; visible: mp.hasVideo && (pw.pip || bar.roomPip)
                     tip: pw.pip ? "Back to the full window (Esc)" : "Picture in picture: a small window that stays on top (" + pw.k("pl.pip") + ")"; onClicked: pw.menuAction("pip"); anchors.verticalCenter: parent.verticalCenter }
                 GButton { iconName: pw.fullScreen ? "view-restore" : "view-fullscreen"; tint: "white"; iconSize: 16; visible: !pw.pip && !pw.music
                     tip: (pw.fullScreen ? "Exit full screen" : "Full screen") + " (F, double-click)"; onClicked: pw.toggleFullScreen(); anchors.verticalCenter: parent.verticalCenter }
@@ -996,6 +1004,27 @@ Window {
             }
         }
 
+        // Resize from every edge and corner: the window has no frame, so
+        // the window manager draws no borders to drag.
+        Repeater {
+            model: pw.visibility !== Window.Maximized && !pw.fullScreen ? [
+                { e: Qt.LeftEdge, x: 0, y: 8, w: 6, h: -16, c: Qt.SizeHorCursor }, { e: Qt.RightEdge, x: -6, y: 8, w: 6, h: -16, c: Qt.SizeHorCursor },
+                { e: Qt.TopEdge, x: 8, y: 0, w: -16, h: 5, c: Qt.SizeVerCursor }, { e: Qt.BottomEdge, x: 8, y: -6, w: -16, h: 6, c: Qt.SizeVerCursor },
+                { e: Qt.TopEdge | Qt.LeftEdge, x: 0, y: 0, w: 10, h: 10, c: Qt.SizeFDiagCursor }, { e: Qt.TopEdge | Qt.RightEdge, x: -10, y: 0, w: 10, h: 10, c: Qt.SizeBDiagCursor },
+                { e: Qt.BottomEdge | Qt.LeftEdge, x: 0, y: -10, w: 10, h: 10, c: Qt.SizeBDiagCursor }, { e: Qt.BottomEdge | Qt.RightEdge, x: -10, y: -10, w: 10, h: 10, c: Qt.SizeFDiagCursor } ] : []
+            MouseArea {
+                required property var modelData
+                z: 100
+                x: modelData.x < 0 ? root.width + modelData.x : modelData.x
+                y: modelData.y < 0 ? root.height + modelData.y : modelData.y
+                width: modelData.w <= 0 ? root.width + modelData.w : modelData.w
+                height: modelData.h <= 0 ? root.height + modelData.h : modelData.h
+                hoverEnabled: true
+                cursorShape: modelData.c
+                onPressed: pw.startSystemResize(modelData.e)
+            }
+        }
+
         // Exports in progress (each with Cancel) and the last result.
         Column {
             anchors.right: parent.right; anchors.rightMargin: 14
@@ -1099,7 +1128,7 @@ Window {
     }
 
     // ---------- tests ----------
-    // GROVE_PLAYER_TEST: "controls", "trim", "clips", "inspector", "pip",
+    // GROVE_PLAYER_TEST: "controls", "trim", "clips", "inspector", "pip", "width:N",
     // "export:<preset>:<file>" (trims to 20%..60%, exports, quits when done).
     readonly property string testSpec: app ? app.grove.env("GROVE_PLAYER_TEST") : ""
     readonly property bool testExport: testSpec.indexOf("export:") === 0
@@ -1114,6 +1143,7 @@ Window {
             else if (t === "clips") { pw.seekTo(pw.total * 0.4); Qt.callLater(() => { splitTimer.start() }) }
             else if (t === "inspector") { mp.setProp("pause", "yes"); inspector.show() }
             else if (t === "pip") pw.enterPip()
+            else if (t.indexOf("width:") === 0) { pw.sized = true; pw.width = Number(t.substring(6)); pw.controls = true; mp.setProp("pause", "yes") }
             else if (pw.testExport) {
                 const [, preset, out] = t.split(":")
                 pw.startTrim(); pw.trimA = pw.total * 0.2; pw.trimB = pw.total * 0.6; pw.applyTrim()
