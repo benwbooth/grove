@@ -21,6 +21,12 @@ Window {
     title: "Extract “" + name(archive) + "”"
 
     function name(p) { return p.substring(p.lastIndexOf("/") + 1) }
+    // "Game 1.2.zip" -> "Game 1.2", "x.tar.gz" -> "x", "x.7z.001" -> "x".
+    function stem(n) {
+        n = n.replace(/\.\d{3}$/, "").replace(/\.part\d+(?=\.rar$)/i, "")
+        const m = n.match(/^(.+?)(\.tar\.(gz|xz|bz2|zst|zstd|lz4|lz|lzma|z))$/i) || n.match(/^(.+)\.[^.]+$/)
+        return m ? m[1] : n + " contents"
+    }
     function dirOf(p) { return p.substring(0, p.lastIndexOf("/")) || "/" }
 
     readonly property var folderModes: [
@@ -32,9 +38,11 @@ Window {
         { v: "rename", t: "Keep both (number the new one)" }, { v: "renameExisting", t: "Keep both (number the old one)" }]
 
     function go() {
+        if (folderName.text.indexOf("/") >= 0) return
         const a = {
             archive: archive, dest: dest.text.trim(),
             folder: folderModes[folderBox.currentIndex].v,
+            folderName: folderName.text.trim(),
             keepPaths: pathsBox.currentIndex === 0,
             overwrite: overwriteModes[overBox.currentIndex].v,
             password: pwField.text, only: extra.only || [], strip: extra.strip || ""
@@ -93,6 +101,22 @@ Window {
         }
         Row {
             spacing: 8
+            visible: ed.folderModes[folderBox.currentIndex].v !== "never"
+            Label2 { text: "Folder name" }
+            GField {
+                id: folderName
+                width: 260
+                text: ed.stem(ed.name(ed.archive))
+                selectByMouse: true
+                tip: ed.folderModes[folderBox.currentIndex].v === "auto"
+                     ? "The new folder's name (used when a folder is made: the archive has several items at the top)"
+                     : "The new folder's name"
+                onAccepted: ed.go()
+            }
+            GLabel { visible: folderName.text.indexOf("/") >= 0; text: "No “/” in names"; color: Theme.danger; height: Theme.controlHeight; font.pixelSize: Theme.small }
+        }
+        Row {
+            spacing: 8
             Label2 { text: "Folders inside" }
             GCombo {
                 id: pathsBox
@@ -141,5 +165,13 @@ Window {
     }
 
     // Tests: GROVE_ARC_TEST containing "ok" presses Extract.
-    Timer { interval: 600; running: (ed.app.grove.env("GROVE_ARC_TEST") || "").indexOf("ok") >= 0; onTriggered: ed.go() }
+    Timer {
+        interval: 600; running: (ed.app.grove.env("GROVE_ARC_TEST") || "") !== ""
+        onTriggered: {
+            const t = ed.app.grove.env("GROVE_ARC_TEST")
+            const m = t.match(/fname=([^;]*)/)
+            if (m) { folderName.text = m[1]; folderBox.currentIndex = 1 }
+            if (t.indexOf("ok") >= 0) ed.go()
+        }
+    }
 }

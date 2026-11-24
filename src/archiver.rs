@@ -125,7 +125,17 @@ fn do_extract(a: &Value, p: &Progress) -> Result<Value, ArcError> {
             i.path = i.path.strip_prefix(&strip).unwrap_or(&i.path).to_string();
         }
     }
-    let (dest, shown) = arc::destination(&archive, &view, &base, mode);
+    let (mut dest, mut shown) = arc::destination(&archive, &view, &base, mode);
+    // The folder's own name, typed in the Extract dialog.
+    let custom = s(a, "folderName");
+    let custom = custom.trim();
+    if dest != base && !custom.is_empty() && !custom.contains('/') && custom != "." && custom != ".." {
+        let d = base.join(custom);
+        if dest.file_name().map(|n| n.to_string_lossy() != custom).unwrap_or(true) {
+            dest = if d.exists() { grove_core::ops::unique_name(&d) } else { d };
+            shown = dest.clone();
+        }
+    }
     let o = ExtractOpts {
         password,
         only,
