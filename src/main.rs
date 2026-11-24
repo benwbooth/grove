@@ -74,7 +74,12 @@ fn main() {
             // Grove Player: play the files in a QuickTime-style window.
             "--play" | "-p" => action = "play",
             // Grove Preview (macOS Preview's features): PDFs and pictures.
-            "--preview" | "-P" => action = "preview",
+            // Its own process, never handed to a running grove (one from
+            // before Preview existed would drop the request).
+            "--preview" | "-P" => {
+                action = "preview";
+                std::env::set_var("GROVE_NO_DBUS", "1");
+            }
             // Grove Archiver (7-Zip's features, grove's look): browse an
             // archive, extract it beside itself or somewhere picked, add
             // files to a new archive, test it.
@@ -127,7 +132,7 @@ fn main() {
             return;
         }
     }
-    if !paths.is_empty() || action == "archive" {
+    if !paths.is_empty() || action == "archive" || action == "preview" {
         std::env::set_var("GROVE_OPEN", serde_json::json!({"action": action, "paths": paths}).to_string());
     }
     // hearth's light/dark mode and accent, so grove matches the shell.

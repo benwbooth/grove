@@ -65,11 +65,26 @@ Item {
                 }
             }
             MouseArea {
+                id: headArea
                 anchors.fill: parent
                 visible: row.r.t === "doc"
-                onClicked: sb.win.toggleCollapsed(row.r.doc)
-                GTip { visible: parent.containsMouse; text: "Show or hide this document's pages" }
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                onClicked: (m) => {
+                    if (m.button === Qt.RightButton) { sb.menuDoc = row.r.doc; docMenu.popup(); return }
+                    sb.win.toggleCollapsed(row.r.doc)
+                }
+                GTip { visible: parent.containsMouse && !closeBtn.hovered; text: "Show or hide this document's pages (right-click to close it)" }
                 hoverEnabled: true
+            }
+            // Close this document (asks to save changes first).
+            GButton {
+                id: closeBtn
+                visible: row.r.t === "doc" && (headArea.containsMouse || hovered)
+                anchors.right: parent.right; anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                iconName: "window-close"; iconSize: 10
+                tip: "Close “" + (row.r.doc ? row.r.doc.name : "") + "” (other documents stay open)"
+                onClicked: sb.win.closeDoc(row.r.doc)
             }
             // A page (or the picture).
             Rectangle {
@@ -172,6 +187,12 @@ Item {
         }
     }
 
+    property var menuDoc: null
+    GMenu {
+        id: docMenu
+        GMenuItem { text: "Close Document"; iconName: "document-close"; onTriggered: sb.win.closeDoc(sb.menuDoc) }
+        GMenuItem { text: "Close Other Documents"; iconName: "document-close"; onTriggered: { for (const d of sb.win.docs.slice()) if (d.id !== sb.menuDoc.id) sb.win.closeDoc(d) } }
+    }
     GMenu {
         id: pageMenu
         GMenuItem { text: "Rotate Left"; iconName: "object-rotate-left"; shortcutText: sb.win.keyFor("pv.rotleft"); onTriggered: sb.win.rotate(-90) }

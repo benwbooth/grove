@@ -55,6 +55,8 @@ pub mod qobject {
         fn size(self: &PvCanvas) -> QSizeF;
         #[inherit]
         fn update(self: Pin<&mut PvCanvas>);
+        #[inherit]
+        fn smooth(self: &PvCanvas) -> bool;
     }
 
     impl cxx_qt::Threading for PvCanvas {}
@@ -182,7 +184,8 @@ impl qobject::PvCanvas {
         let Some(p) = (unsafe { painter.as_mut() }) else { return };
         let mut p = unsafe { Pin::new_unchecked(p) };
         let s = self.size();
-        p.as_mut().set_render_hint(cxx_qt_lib::QPainterRenderHint::SmoothPixmapTransform, true);
+        // Not smooth while pinching or zooming: fast scaling, then a fresh picture.
+        p.as_mut().set_render_hint(cxx_qt_lib::QPainterRenderHint::SmoothPixmapTransform, self.smooth());
         p.as_mut().draw_image(&QRect::new(0, 0, s.width().round() as i32, s.height().round() as i32), img);
     }
 }

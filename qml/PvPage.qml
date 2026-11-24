@@ -13,6 +13,8 @@ Item {
     property int index: 0
     property var pg: null
     property real k: 1
+    property real renderK: k
+    property bool zooming: false
     readonly property bool sideways: pg ? pg.rot % 180 !== 0 : false
     readonly property real pw: pg ? pg.w : 612
     readonly property real ph: pg ? pg.h : 792
@@ -62,7 +64,8 @@ Item {
         PvCanvas {
             id: canvas
             anchors.fill: parent
-            readonly property int px: Math.min(5000, Math.ceil(pp.pw * pp.k * pp.dpr / 96) * 96)
+            readonly property int px: Math.min(5000, Math.ceil(pp.pw * pp.renderK * pp.dpr / 96) * 96)
+            smooth: !pp.zooming
             request: !pp.pg || pp.pg.blank ? ""
                    : pp.pg.image ? JSON.stringify({ kind: "image", path: pp.pg.image, px: px })
                    : JSON.stringify({ kind: "pdf", path: pp.pg.src, page: pp.pg.page, password: pp.win.passwordFor(pp.pg.src), hide: pp.pg.delAnnots || [], px: px, rev: pp.doc ? pp.doc.rev || 0 : 0 })

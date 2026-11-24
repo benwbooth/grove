@@ -29,6 +29,11 @@ Item {
         if (fit === "actual") return 96 / 72
         return zoom
     }
+    // The zoom pages are drawn for: follows `k` once it stops changing.
+    property real renderK: k
+    property bool zooming: false
+    onKChanged: { zooming = true; settle.restart() }
+    Timer { id: settle; interval: 220; onTriggered: { dv.renderK = dv.k; dv.zooming = false } }
     readonly property real percent: Math.round(k * 72 / 96 * 100)
     function setZoom(z) {
         const before = k
@@ -127,6 +132,8 @@ Item {
                             index: slot.pi
                             pg: dv.pages[slot.pi] || null
                             k: dv.k
+                            renderK: dv.renderK
+                            zooming: dv.zooming
                         }
                     }
                 }

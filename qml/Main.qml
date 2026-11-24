@@ -239,7 +239,7 @@ Item {
         let req = null
         try { req = JSON.parse(grove.env("GROVE_OPEN") || "null") } catch (e) {}
         if (portalMode) return
-        if (req && req.paths && (req.paths.length || req.action === "archive")) handleOpen(req)
+        if (req && req.paths && (req.paths.length || req.action === "archive" || req.action === "preview")) handleOpen(req)
         else if (!service) {
             let sess = null
             try { sess = JSON.parse(grove.session() || "null") } catch (e) {}

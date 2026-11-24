@@ -54,18 +54,34 @@ pub fn load_scaled(path: &Path, px: u32) -> Result<(Arc<RgbaImage>, (u32, u32)),
     if let Some(c) = cache.lock().iter().find(|c| c.0 == path && c.1 == mtime && c.2 == px) {
         return Ok((c.3.clone(), c.4));
     }
-    let full = load(path)?;
+    // The whole picture is decoded once and kept (the last two), so a new
+    // zoom only scales it.
+    static FULL: OnceLock<Mutex<Vec<(PathBuf, i64, Arc<RgbaImage>)>>> = OnceLock::new();
+    let fulls = FULL.get_or_init(Default::default);
+    let hit = fulls.lock().iter().find(|f| f.0 == path && f.1 == mtime).map(|f| f.2.clone());
+    let full = match hit {
+        Some(f) => f,
+        None => {
+            let f = Arc::new(load(path)?);
+            let mut l = fulls.lock();
+            l.push((path.to_path_buf(), mtime, f.clone()));
+            if l.len() > 2 {
+                l.remove(0);
+            }
+            f
+        }
+    };
     let size = full.dimensions();
     let img = if size.0.max(size.1) > px {
         let k = px as f32 / size.0.max(size.1) as f32;
-        image::imageops::resize(&full, ((size.0 as f32 * k).round() as u32).max(1), ((size.1 as f32 * k).round() as u32).max(1), image::imageops::FilterType::Triangle)
+        image::imageops::thumbnail(&*full, ((size.0 as f32 * k).round() as u32).max(1), ((size.1 as f32 * k).round() as u32).max(1))
     } else {
-        full
+        (*full).clone()
     };
     let img = Arc::new(img);
     let mut c = cache.lock();
     c.push((path.to_path_buf(), mtime, px, img.clone(), size));
-    if c.len() > 4 {
+    if c.len() > 6 {
         c.remove(0);
     }
     Ok((img, size))

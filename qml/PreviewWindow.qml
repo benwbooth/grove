@@ -600,7 +600,11 @@ ApplicationWindow {
     function openDialog() {
         chooseFiles("Open in Preview", { mode: "open", multiple: true, currentFolder: cur ? cur.path.substring(0, cur.path.lastIndexOf("/")) : app.grove.home(),
                                           filters: [{ name: "PDFs and pictures", patterns: [{ mime: true, pattern: "application/pdf" }, { mime: true, pattern: "image/*" }] }, { name: "All files", patterns: [{ mime: false, pattern: "*" }] }] },
-                    paths => openFiles(paths, true))
+                    paths => {
+                        // As in Preview: a window that has files gets a new one for these.
+                        if (docs.length && app.preview) app.preview(paths)
+                        else openFiles(paths, true)
+                    })
     }
     function toggleAdjustColor() { if (adjustColor.visible) adjustColor.close(); else if (cur && cur.kind === "image") adjustColor.open() }
     function showAdjustSize() { if (cur && cur.kind === "image") sizeSheet.open2(cur) }

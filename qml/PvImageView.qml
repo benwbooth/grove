@@ -26,6 +26,12 @@ Item {
         return zoom
     }
     readonly property real percent: Math.round(k * dpr * 100)
+    // The zoom pictures are drawn for: follows `k` once it stops changing
+    // (pinching only stretches what's there).
+    property real renderK: k
+    property bool zooming: false
+    onKChanged: { zooming = true; settle.restart() }
+    Timer { id: settle; interval: 220; onTriggered: { iv.renderK = iv.k; iv.zooming = false } }
     function setZoom(z) { zoom = Math.max(0.02, Math.min(32, z)); fit = "none" }
     function zoomBy(f) { setZoom(k * f) }
     readonly property string key: doc ? doc.id + ":img" : ""
@@ -89,7 +95,8 @@ Item {
                 PvCanvas {
                     id: canvas
                     anchors.fill: parent
-                    readonly property int px: Math.min(Math.max(iv.iw, iv.ih), Math.ceil(Math.max(iv.iw, iv.ih) * iv.k * iv.dpr / 128) * 128)
+                    readonly property int px: Math.min(Math.max(iv.iw, iv.ih), Math.ceil(Math.max(iv.iw, iv.ih) * iv.renderK * iv.dpr / 128) * 128)
+                    smooth: !iv.zooming
                     request: iv.doc ? JSON.stringify({ kind: "image", path: iv.doc.path, px: Math.max(64, px), alpha: iv.img.alpha, adjust: iv.img.adjust, rev: iv.doc.rev || 0 }) : ""
                 }
                 BusyDots { anchors.centerIn: parent; running: !canvas.ready && canvas.error === "" }
