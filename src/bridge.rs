@@ -151,6 +151,19 @@ pub mod ffi {
         fn rename_path(self: &Grove, key: &QString, path: &QString, name: &QString);
         #[qinvokable]
         fn new_folder(self: &Grove, key: &QString, dir: &QString, name: &QString);
+        /// btrfs: what `path` is ({btrfs, subvol, kind, info, snapper,
+        /// place, snapshotName, needsRoot}).
+        #[qinvokable]
+        fn subvol_info(self: &Grove, key: &QString, path: &QString);
+        /// btrfs: a new subvolume in `dir` ({path} or {error}).
+        #[qinvokable]
+        fn new_subvolume(self: &Grove, key: &QString, dir: &QString, name: &QString);
+        /// btrfs: snapshot of the subvolume `src` in `dest` ("": the default place).
+        #[qinvokable]
+        fn snapshot_subvolume(self: &Grove, key: &QString, src: &QString, dest: &QString, name: &QString, read_only: bool);
+        /// btrfs: delete a subvolume or snapshot (as root through pkexec when needed).
+        #[qinvokable]
+        fn delete_subvolume(self: &Grove, key: &QString, path: &QString);
         #[qinvokable]
         fn new_file(self: &Grove, key: &QString, dir: &QString, name: &QString);
         #[qinvokable]

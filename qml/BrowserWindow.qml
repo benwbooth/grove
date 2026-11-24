@@ -19,7 +19,7 @@ ApplicationWindow {
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
     property var currentTab: tabRepeater.count > 0 ? tabRepeater.itemAt(tabBar.currentIndex) : null
     property var activePane: currentTab ? currentTab.activePane : null
-    property bool modalOpen: burnSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened || aboutSheet.opened
+    property bool modalOpen: burnSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || subvolSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened || aboutSheet.opened
 
     width: 1180
     height: 720
@@ -911,6 +911,26 @@ ApplicationWindow {
     }
     property var menuApps: []
     onMenuTargetChanged: appsTimer.restart()
+    // btrfs facts about the folder shown (New Subvolume, Take Snapshot).
+    property var hereSubvol: ({})
+    readonly property string herePath: activePane ? activePane.path : ""
+    onHerePathChanged: subvolTimer.restart()
+    Timer {
+        id: subvolTimer
+        interval: 150
+        onTriggered: {
+            const path = bw.herePath
+            if (path.indexOf("/") !== 0) { bw.hereSubvol = ({}); return }
+            Async.call(bw.app.grove, k => bw.app.grove.subvolInfo(k, path), r => { if (bw.herePath === path) bw.hereSubvol = r || ({}) })
+        }
+    }
+    // The subvolume File › Take Snapshot / Delete Subvolume act on: the
+    // selected one, else the folder shown when it is one.
+    readonly property string subvolTarget: menuTarget && menuTarget.subvol ? menuTarget.path
+        : (menuSel === 0 && hereSubvol.subvol ? herePath : "")
+    function newSubvolume() { if (activePane) activePane.newSubvolume() }
+    function snapshotSubvolume(path) { if (path) subvolSheet.snapshot(path) }
+    function deleteSubvolume(path) { if (path) subvolSheet.remove(path) }
     Timer {
         id: appsTimer
         interval: 150
@@ -961,6 +981,7 @@ ApplicationWindow {
                 { id: "newtab", icon: "tab-new", text: "New Tab", shortcut: k("newtab") },
                 { id: "newfolder", icon: "folder-new", text: "New Folder", shortcut: k("newfolder"), enabled: ok && !special },
                 { id: "newfile", icon: "document-new", text: "New File", shortcut: k("newfile"), enabled: ok && !special },
+                { id: "newsubvol", icon: "folder-new", text: "New Subvolume", shortcut: k("newsubvol"), enabled: ok && !special && !!hereSubvol.btrfs },
                 { separator: true },
                 { id: "open", icon: "document-open", text: "Open", shortcut: k("open"), enabled: sel > 0 && !trash },
                 { id: "opentab", icon: "tab-new-background", text: "Open in New Tab", shortcut: "Ctrl+Return", enabled: !!t && !!t.isDir && !trash },
@@ -976,6 +997,9 @@ ApplicationWindow {
                 { id: "extractto", icon: "folder-open", text: "Extract To…", enabled: !!t && p.archiveLike(t) && !special },
                 { id: "burn", icon: "tools-media-optical-burn", text: "Burn to Disc…", enabled: ok && (sel > 0 || !special) },
                 { id: "share", icon: "document-share", text: "Share with Nearby Device…", enabled: sel > 0 && !special && !(t && t.isDir) },
+                { separator: true },
+                { id: "snapshot", icon: "camera-photo", text: subvolTarget ? "Take Snapshot of “" + subvolTarget.substring(subvolTarget.lastIndexOf("/") + 1) + "”…" : "Take Snapshot…", shortcut: k("snapshot"), enabled: subvolTarget !== "" },
+                { id: "deletesubvol", icon: "edit-delete", text: "Delete Subvolume…", enabled: subvolTarget !== "" && !(t && t.subvol === "Snapper Snapshot") && !(menuSel === 0 && hereSubvol.snapper) },
                 { separator: true },
                 { id: "putback", icon: "edit-undo", text: "Put Back", enabled: trash && sel > 0 },
                 { id: "movetotrash", icon: "user-trash", text: trash ? "Delete Immediately…" : "Move to Trash", shortcut: k("movetotrash"), enabled: sel > 0 && (!special || trash) },
@@ -1138,6 +1162,9 @@ ApplicationWindow {
             switch (id) {
             case "newfolder": p.newFolder(); break
             case "newfile": p.newFile(""); break
+            case "newsubvol": p.newSubvolume(); break
+            case "snapshot": snapshotSubvolume(subvolTarget); break
+            case "deletesubvol": deleteSubvolume(subvolTarget); break
             case "open": p.openSelected(false); break
             case "opentab": p.openSelected(true); break
             case "quicklook": p.quickLook(); break
@@ -1248,6 +1275,7 @@ ApplicationWindow {
     }
     BatchRename { id: renameSheet; app: bw.app; win: bw }
     VersionsSheet { id: versionsSheet; app: bw.app; win: bw }
+    SubvolumeSheet { id: subvolSheet; app: bw.app; win: bw }
     ShareSheet { id: shareSheet; app: bw.app; win: bw }
     Sheet {
         id: commitSheet
@@ -1381,6 +1409,8 @@ ApplicationWindow {
     Key { act: "rename"; onActivated: bw.activePane.rename() }
     Key { act: "batchrename"; onActivated: { const s = bw.activePane.selectedPaths(); if (s.length) bw.batchRename(s) } }
     Key { act: "newfolder"; onActivated: bw.activePane.newFolder() }
+    Key { act: "newsubvol"; onActivated: bw.activePane.newSubvolume() }
+    Key { act: "snapshot"; onActivated: bw.snapshotSubvolume(bw.subvolTarget) }
     Key { act: "newfile"; onActivated: bw.activePane.newFile("") }
     Key { act: "movetotrash"; onActivated: bw.activePane.trashSelected() }
     Key { act: "delete"; onActivated: bw.activePane.deleteSelected() }
@@ -1464,6 +1494,13 @@ ApplicationWindow {
         else if (cmd === "pxwheel") { const v = p.viewLoaderItem(); if (v && v.testPixelWheel) v.testPixelWheel(Number(arg)) }
         else if (cmd === "swipe") { const v = p.viewLoaderItem(); if (v && v.testSwipe) v.testSwipe(Number(arg)) }
         else if (cmd === "du") bw.showDiskUsage(arg || p.path)
+        // btrfs: newsubvol=NAME, snapshot=PATH (sheet), snapgo, delsubvol=PATH (sheet), delgo, subvoldump
+        else if (cmd === "newsubvol") Async.call(app.grove, k => app.grove.newSubvolume(k, p.path, arg || ""), r => console.warn("grove test newsubvol", JSON.stringify(r)))
+        else if (cmd === "snapshot") bw.snapshotSubvolume(arg || bw.subvolTarget)
+        else if (cmd === "snapgo") subvolSheet.go()
+        else if (cmd === "delsubvol") bw.deleteSubvolume(arg || bw.subvolTarget)
+        else if (cmd === "delgo") subvolSheet.go()
+        else if (cmd === "subvoldump") Async.call(app.grove, k => app.grove.subvolInfo(k, arg || p.path), r => console.warn("grove test subvol", JSON.stringify(r)))
         else if (cmd === "cloud") bw.addCloudDrive()
         else if (cmd === "cloudpick") { const f = cloudSheet.providers.find(x => x.name === arg); if (f) cloudSheet.pick(f) }
         else if (cmd === "cloudnext") cloudSheet.page === "name" ? cloudSheet.begin() : cloudSheet.send(arg || "")

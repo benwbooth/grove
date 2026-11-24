@@ -278,7 +278,7 @@ const ROLES: &[&str] = &[
     "name", "path", "isDir", "isLink", "size", "sizeText", "mtime", "dateText", "kind", "mime", "iconName", "hidden", "selected", "depth",
     "expanded", "tags", "tagColors", "note", "git", "cut", "thumb", "row", "broken", "ext", "created", "createdText",
     "rating", "addedText", "openedText", "permissions", "owner", "group", "fullPath", "section", "dims", "duration",
-    "badge", "isArchive",
+    "badge", "isArchive", "subvol",
 ];
 
 fn qs(s: &str) -> QString {
@@ -412,7 +412,8 @@ impl qobject::FolderModel {
             "dateText" => QVariant::from(&qs(&date_text(it.e.mtime))),
             "created" => QVariant::from(&(it.e.btime as f64)),
             "createdText" => QVariant::from(&qs(&date_text(it.e.btime))),
-            "kind" => QVariant::from(&qs(&it.mime.comment)),
+            "kind" => QVariant::from(&qs(if it.e.subvol.is_empty() { &it.mime.comment } else { it.e.subvol })),
+            "subvol" => QVariant::from(&qs(it.e.subvol)),
             "mime" => QVariant::from(&qs(&it.mime.name)),
             "iconName" => QVariant::from(&qs(&it.icon)),
             "rating" => QVariant::from(&(it.rating as i32)),
@@ -441,6 +442,10 @@ impl qobject::FolderModel {
             "dims" => QVariant::from(&qs(&self.media_of(&it, false).dims)),
             "duration" => QVariant::from(&qs(&self.media_of(&it, true).duration)),
             // On the icon: a video's or recording's length, an archive's item count.
+            // A btrfs subvolume's or snapshot's kind, in short.
+            "badge" if !it.e.subvol.is_empty() => {
+                QVariant::from(&qs(if it.e.subvol.contains("Snapshot") { "Snapshot" } else { "Subvolume" }))
+            }
             "badge" => {
                 let m = self.media_of(&it, true);
                 QVariant::from(&qs(if m.items.is_empty() { &m.duration } else { &m.items }))
@@ -1114,7 +1119,7 @@ impl qobject::FolderModel {
         let b = it.borrow();
         let v = serde_json::json!({
             "path": b.e.path, "name": b.e.name, "isDir": b.e.is_dir, "isLink": b.e.is_link, "size": b.e.size,
-            "mtime": b.e.mtime, "mime": b.mime.name, "kind": b.mime.comment, "icon": b.icon,
+            "mtime": b.e.mtime, "mime": b.mime.name, "kind": if b.e.subvol.is_empty() { b.mime.comment.as_str() } else { b.e.subvol }, "subvol": b.e.subvol, "icon": b.icon,
             "note": b.e.note, "key": b.e.key, "tags": b.tags, "depth": b.e.depth, "expanded": b.expanded,
             "thumb": mime::thumbable(&b.e, &b.mime), "target": b.e.target, "selected": b.selected, "rating": b.rating,
             "hidden": b.e.hidden, "git": b.git, "cut": self.rust().cut.contains(&b.e.path),
@@ -1500,6 +1505,7 @@ pub fn special_list(p: &str) -> Vec<RawItem> {
                     depth: 0,
                     note: a.mtime_text,
                     key: String::new(),
+                    subvol: "",
                 };
                 let mime = mime::for_entry(&e);
                 RawItem { icon: mime::icon_for(&e, &mime), e, mime, tags: vec![], rating: 0 }

@@ -9,6 +9,7 @@ pub mod gdocs;
 pub mod versions;
 pub mod archives;
 pub mod av;
+pub mod btrfs;
 pub mod burnlib;
 pub mod dmg;
 pub mod docs;

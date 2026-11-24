@@ -71,6 +71,8 @@ QtObject {
         { id: "batchrename", group: "Edit", action: "Batch rename", defaults: ["Shift+F2"], fixed: "", note: "" },
         { id: "newfolder", group: "Edit", action: "New folder", defaults: ["Ctrl+Shift+N", "F10"], fixed: "", note: "Finder: ⇧⌘N  ·  Dolphin: F10" },
         { id: "newfile", group: "Edit", action: "New file", defaults: ["Ctrl+Alt+N"], fixed: "", note: "" },
+        { id: "newsubvol", group: "Edit", action: "New btrfs subvolume (a folder that can be snapshotted on its own)", defaults: ["Ctrl+Alt+Shift+N"], fixed: "", note: "Only on btrfs disks" },
+        { id: "snapshot", group: "Edit", action: "Take a snapshot of the selected subvolume (or the one shown)", defaults: ["Ctrl+Alt+Shift+S"], fixed: "", note: "Read-only and named with the date by default" },
         { id: "movetotrash", group: "Edit", action: "Move to Trash", defaults: ["Delete", "Ctrl+Backspace"], fixed: "", note: "Dolphin: Del  ·  Finder: ⌘⌫" },
         { id: "delete", group: "Edit", action: "Delete permanently", defaults: ["Shift+Delete"], fixed: "", note: "Dolphin: Shift+Del (asks first)" },
         { id: "undo", group: "Edit", action: "Undo", defaults: ["Ctrl+Z"], fixed: "", note: "Both" },

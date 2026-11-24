@@ -39,6 +39,9 @@ pub struct Entry {
     pub note: String,
     /// Original-path or other key used by special folders (trash item id).
     pub key: String,
+    /// A btrfs subvolume's kind ("Subvolume", "Read-only Snapshot"...; ""
+    /// for everything else).
+    pub subvol: &'static str,
 }
 
 impl Entry {
@@ -79,6 +82,8 @@ impl Entry {
             depth: 0,
             note: String::new(),
             key: String::new(),
+            // Only a folder whose inode is 256 can be one: the rest cost nothing.
+            subvol: if !is_link && meta.is_dir() && meta.ino() == 256 { crate::btrfs::kind(path) } else { "" },
         }
     }
 

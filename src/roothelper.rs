@@ -1,7 +1,9 @@
 //! Permission and owner changes done by grove itself (no chmod/chown
 //! commands), recursively without following symlinks. When the files
 //! aren't yours, `pkexec grove --root-helper ...` runs this same code as
-//! root (polkit asks for the password); nothing else runs as root.
+//! root (polkit asks for the password); so does deleting a btrfs
+//! subvolume when the disk doesn't let users do that. Nothing else runs as
+//! root.
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -65,7 +67,14 @@ pub fn run(args: &[String]) -> i32 {
             Err(_) => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "bad mode")),
         },
         [op, owner, group, rec, path] if op == "chown" => chown(Path::new(path), owner, group, rec == "1"),
-        _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "usage: --root-helper chmod MODE 0|1 PATH | chown OWNER GROUP 0|1 PATH")),
+        // Deleting a btrfs subvolume or snapshot: grove-core refuses
+        // anything that isn't one (inode 256 on btrfs).
+        [op, path] if op == "subvol-delete" => match grove_core::btrfs::delete(Path::new(path)) {
+            Ok(()) => Ok(()),
+            Err(grove_core::btrfs::DeleteError::NeedsRoot) => Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "not allowed")),
+            Err(grove_core::btrfs::DeleteError::Other(m)) => Err(std::io::Error::other(m)),
+        },
+        _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "usage: --root-helper chmod MODE 0|1 PATH | chown OWNER GROUP 0|1 PATH | subvol-delete PATH")),
     };
     match r {
         Ok(()) => 0,

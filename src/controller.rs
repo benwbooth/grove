@@ -577,6 +577,27 @@ impl ffi::Grove {
         });
     }
 
+    pub fn subvol_info(&self, key: &QString, path: &QString) {
+        let p = path.to_string();
+        self.answer(key, move || crate::subvol::describe(&p));
+    }
+
+    pub fn new_subvolume(&self, key: &QString, dir: &QString, name: &QString) {
+        let (d, n) = (dir.to_string(), name.to_string());
+        self.answer_on("files", key, move || crate::subvol::create(&d, &n));
+    }
+
+    pub fn snapshot_subvolume(&self, key: &QString, src: &QString, dest: &QString, name: &QString, read_only: bool) {
+        let (s, d, n) = (src.to_string(), dest.to_string(), name.to_string());
+        self.answer_on("files", key, move || crate::subvol::snapshot(&s, &d, &n, read_only));
+    }
+
+    pub fn delete_subvolume(&self, key: &QString, path: &QString) {
+        let p = path.to_string();
+        // Not on the files lane: polkit's password prompt may wait a while.
+        self.answer(key, move || crate::subvol::delete(&p));
+    }
+
     pub fn new_file(&self, key: &QString, dir: &QString, name: &QString) {
         let d = PathBuf::from(dir.to_string());
         let n = name.to_string();

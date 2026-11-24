@@ -101,6 +101,7 @@ fn archive_info(path: &str) -> Value {
         depth: 0,
         note: String::new(),
         key: String::new(),
+        subvol: "",
     };
     let mime = crate::mime::for_entry(&e);
     let mimes = crate::mime::with_parents(&mime.name);
@@ -149,7 +150,8 @@ pub fn info(path: &str) -> Value {
         "isDir": m.is_dir(),
         "isLink": lm.file_type().is_symlink(),
         "target": std::fs::read_link(p).map(|t| t.display().to_string()).unwrap_or_default(),
-        "mime": mime.name, "kind": mime.comment, "icon": icon,
+        "mime": mime.name, "kind": entry.as_ref().filter(|e| !e.subvol.is_empty()).map_or(mime.comment.as_str(), |e| e.subvol), "icon": icon,
+        "subvol": entry.as_ref().filter(|e| !e.subvol.is_empty()).and_then(|_| grove_core::btrfs::info(p)),
         "isArchive": !m.is_dir() && crate::archive::is_archive(&mime.name, &p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()),
         "size": m.len(), "sizeText": grove_core::util::human_size(m.len()),
         "blocks": m.blocks() * 512,

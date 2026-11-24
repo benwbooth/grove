@@ -188,6 +188,9 @@ Window {
                 Fact { k: "Opened"; v: iw.fmt(iw.info.atime); visible: !iw.info.inArchive }
                 Fact { k: "In archive"; v: iw.info.archive || ""; visible: !!iw.info.inArchive }
                 Fact { k: "Points to"; v: iw.info.target || ""; visible: !!iw.info.isLink }
+                // btrfs subvolumes and snapshots.
+                Fact { k: "Subvolume"; visible: !!iw.info.subvol; v: iw.info.subvol ? "ID " + iw.info.subvol.id + (iw.info.subvol.read_only ? ", read-only" : "") + (iw.info.subvol.created ? ", made " + iw.fmt(iw.info.subvol.created) : "") : "" }
+                Fact { k: "Snapshot of"; visible: !!iw.info.subvol && !!iw.info.subvol.parent_uuid; v: iw.info.subvol ? (iw.info.subvol.parent_uuid || "") : "" }
                 Fact { k: "Disk"; visible: !iw.info.inArchive; v: iw.info.mount ? iw.info.mount + " — " + iw.app.size(iw.info.diskFree || 0) + " free of " + iw.app.size(iw.info.diskTotal || 0) : "" }
             }
 

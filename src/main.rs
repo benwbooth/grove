@@ -38,6 +38,7 @@ mod google;
 mod remote;
 mod vcs;
 mod roothelper;
+mod subvol;
 mod table;
 mod textdoc;
 mod secrets;

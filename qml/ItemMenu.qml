@@ -70,6 +70,7 @@ GMenu {
     GMenuItem { text: "Compare"; iconName: "kompare|document-compare|view-split-left-right"; visible: m.sel.length === 2; height: visible ? implicitHeight : 0; tip: "Show the differences between the two items"; onTriggered: m.pane.win.compareFiles(m.sel[0], m.sel[1]) }
     GMenuItem { text: "Copy to Other Side"; iconName: "edit-copy"; visible: m.split; height: visible ? implicitHeight : 0; shortcutText: Help.shown("Shift+F5"); onTriggered: m.pane.win.toOtherPane(false) }
     GMenuItem { text: "Move to Other Side"; iconName: "go-next"; visible: m.split; height: visible ? implicitHeight : 0; shortcutText: Help.shown("Shift+F6"); onTriggered: m.pane.win.toOtherPane(true) }
+    GMenuItem { text: "Take Snapshot…"; iconName: "camera-photo"; visible: m.one && !!m.target.subvol; height: visible ? implicitHeight : 0; tip: "An instant copy of this btrfs " + (m.target.subvol || "").toLowerCase() + " as it is now (read-only by default)"; onTriggered: m.pane.win.snapshotSubvolume(m.target.path) }
     GMenuItem { text: "Browse Previous Versions…"; iconName: "document-open-recent"; enabled: m.one && !m.pane.special; tip: "Earlier copies from the hourly snapshots; show or restore them"; onTriggered: m.pane.win.showVersions(m.target.path) }
     GMenuItem { text: m.one ? "Burn “" + m.target.name + "” to Disc…" : "Burn " + m.sel.length + " Items to Disc…"; iconName: "media-optical-burn|media-optical"; enabled: !m.pane.special; tip: "Put these on a CD, DVD or Blu-ray (or a disc image file)"; onTriggered: m.pane.win.burn(m.sel) }
     GMenuItem { text: "Share with Nearby Device…"; iconName: "document-share|send-to|network-wireless"; enabled: !m.pane.special && !m.target.isDir; tip: "Send to a phone or computer running LocalSend (like AirDrop)"; onTriggered: m.pane.win.share(m.sel) }
@@ -179,5 +180,14 @@ GMenu {
     }
     GMenuSeparator {}
     GMenuItem { text: m.trash ? "Delete Immediately…" : "Move to Trash"; iconName: m.trash ? "edit-delete" : "user-trash"; shortcutText: m.trash ? "Delete" : "Delete"; enabled: !m.pane.special || m.trash; onTriggered: m.pane.trashSelected() }
+    GMenuItem {
+        text: "Delete " + (m.target.subvol || "").replace("Read-only ", "") + "…"
+        iconName: "edit-delete"
+        visible: m.one && !!m.target.subvol && !m.trash
+        height: visible ? implicitHeight : 0
+        enabled: m.target.subvol !== "Snapper Snapshot"
+        tip: m.target.subvol === "Snapper Snapshot" ? "Snapper made this snapshot and removes it itself; Grove doesn't delete it" : "Delete this btrfs " + (m.target.subvol || "").toLowerCase() + " and everything in it at once (asks first)"
+        onTriggered: m.pane.win.deleteSubvolume(m.target.path)
+    }
     GMenuItem { text: "Delete Permanently…"; iconName: "edit-delete"; visible: !m.trash; height: visible ? implicitHeight : 0; shortcutText: Help.shown("Shift+Delete"); enabled: !m.pane.special; onTriggered: m.pane.deleteSelected() }
 }

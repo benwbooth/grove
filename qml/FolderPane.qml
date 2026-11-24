@@ -452,6 +452,16 @@ FocusScope {
             selectWhenThere(r.path, true)
         })
     }
+    // A btrfs subvolume, named and renamed like a new folder.
+    function newSubvolume() {
+        if (special) return
+        Async.call(grove, k => grove.newSubvolume(k, pane.path, ""), r => {
+            if (r.error) { win.toast("error", r.error); return }
+            pane.pendingSelect = [r.path]
+            pane.renameWhenLoaded = r.path
+            selectWhenThere(r.path, true)
+        })
+    }
     function newFile(name) {
         if (special) return
         Async.call(grove, k => grove.newFile(k, pane.path, name || ""), r => {
@@ -915,6 +925,8 @@ FocusScope {
         id: bgMenu
         property var templates: []
         GMenuItem { text: "New Folder"; iconName: "folder-new"; shortcutText: Help.shown("Ctrl+Shift+N"); enabled: !pane.special; onTriggered: pane.newFolder() }
+        GMenuItem { text: "New Subvolume"; iconName: "folder-new"; shortcutText: Help.shown("Ctrl+Alt+Shift+N"); visible: !!pane.win.hereSubvol && !!pane.win.hereSubvol.btrfs && !pane.special; height: visible ? implicitHeight : 0; tip: "A btrfs subvolume: a folder that can be snapshotted (and kept out of other snapshots) on its own"; onTriggered: pane.newSubvolume() }
+        GMenuItem { text: "Take Snapshot of “" + pane.title + "”…"; iconName: "camera-photo"; shortcutText: Help.shown("Ctrl+Alt+Shift+S"); visible: !!pane.win.hereSubvol && !!pane.win.hereSubvol.subvol && !pane.special; height: visible ? implicitHeight : 0; tip: "An instant copy of this subvolume as it is now (read-only by default)"; onTriggered: pane.win.snapshotSubvolume(pane.path) }
         GMenu {
             id: newFileMenu
             title: "New File"
