@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Window
+import GlobalMenu
 
 // Grove Disk Utility: GParted's features in grove's look. Disks on the
 // left; the chosen disk's partition map drawn to scale (used space shaded,
@@ -254,9 +255,14 @@ Window {
                 GButton { iconName: "edit-undo"; enabled: dk.pending > 0 && !dk.applying; tip: "Undo the last pending operation (Ctrl+Z)"; onClicked: dk.undo() }
                 GButton { iconName: "dialog-ok-apply|checkmark"; enabled: dk.pending > 0 && !dk.applying && dk.planError === ""; tip: "Apply all pending operations (Ctrl+Return)"; onClicked: dk.applyAll() }
                 Item { width: 8; height: 1 }
-                GButton { text: "Partition"; enabled: !!dk.base; tip: "Everything you can do with the selected partition"; onClicked: partMenu.popup(this, 0, height) }
-                GButton { text: "Device"; enabled: !!dk.base; tip: "The whole disk: new partition table, refresh"; onClicked: devMenu.popup(this, 0, height) }
                 GButton { iconName: "view-refresh"; enabled: !dk.applying; tip: "Look at the disks again (F5). Pending operations are kept."; onClicked: dk.reload(true) }
+                // Every menu, for desktops without a global menu bar.
+                GButton {
+                    id: menuButton
+                    iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
+                    tip: "Menus: Disk Utility, Edit, Partition, Disk, Window, Help (also in the menu bar at the top of the screen)"
+                    onClicked: dk.toggleAppMenu(menuButton)
+                }
             }
 
             // Disk header and lock banner.
@@ -660,6 +666,106 @@ Window {
             cursorShape: modelData.c
             onPressed: dk.startSystemResize(modelData.e)
         }
+    }
+
+    // ---- menus: one model for the ☰ button and the global menu bar ----
+    readonly property var menuModel: {
+        const p = part, can = canEdit, free = !!seg && seg.part < 0
+        const fsItems = (info.filesystems || []).map(f => ({ id: "format." + f.id, icon: "", text: f.name, enabled: can && !!p && p.kind !== "extended" && !!f.caps && f.caps.format }))
+        return [
+            { title: "Disk Utility", icon: "drive-harddisk", items: [
+                { id: "refresh", icon: "view-refresh", text: "Refresh", shortcut: "F5", enabled: !applying },
+                { separator: true },
+                { id: "close", icon: "window-close", text: "Close Window", shortcut: "Ctrl+W" }
+            ] },
+            { title: "Edit", icon: "edit-undo", items: [
+                { id: "undo", icon: "edit-undo", text: "Undo Last Operation", shortcut: "Ctrl+Z", enabled: pending > 0 && !applying },
+                { id: "clear", icon: "edit-clear-all|edit-clear", text: "Clear All Operations", enabled: pending > 0 && !applying },
+                { id: "apply", icon: "dialog-ok-apply", text: "Apply All Operations", shortcut: "Ctrl+Return", enabled: pending > 0 && !applying && planError === "" },
+                { separator: true },
+                { id: "copy", icon: "edit-copy", text: "Copy Partition", shortcut: "Ctrl+C", enabled: !!p && p.number > 0 && p.kind !== "extended" },
+                { id: "paste", icon: "edit-paste", text: "Paste Partition…", shortcut: "Ctrl+V", enabled: can && !!clip && free }
+            ] },
+            { title: "Partition", icon: "drive-harddisk", items: [
+                { id: "new", icon: "list-add", text: "New…", shortcut: "Ctrl+N", enabled: can && free },
+                { id: "delete", icon: "list-remove|edit-delete", text: "Delete", shortcut: "Delete", enabled: can && !!p },
+                { id: "resize", icon: "transform-scale|zoom-fit-best", text: "Resize/Move…", shortcut: "Ctrl+R", enabled: can && !!p },
+                { separator: true },
+                { id: "formatmenu", icon: "drive-harddisk", text: "Format to", enabled: can && !!p && p.kind !== "extended", items: fsItems },
+                { id: "label", icon: "edit-rename", text: "Label and Name…", shortcut: "F2", enabled: can && !!p && p.kind !== "extended" },
+                { id: "flags", icon: "flag", text: "Manage Flags…", enabled: can && !!p },
+                { id: "check", icon: "tools-check-spelling|system-run", text: "Check and Repair", enabled: can && !!p && !!p.fs && p.kind !== "extended" },
+                { separator: true },
+                { id: "unmount", icon: "media-eject", text: p && p.fs === "swap" ? "Turn Swap Off" : "Unmount", enabled: !!p && p.busy && !applying },
+                { id: "mount", icon: "drive-harddisk", text: "Mount", enabled: !!p && !p.busy && !!p.fs && p.number > 0 && p.fs !== "swap" && !applying },
+                { id: "info", icon: "documentinfo|dialog-information", text: "Information", shortcut: "Ctrl+I", enabled: !!p }
+            ] },
+            { title: "Disk", icon: "drive-harddisk", items: [
+                { id: "newtable", icon: "document-new", text: "New Partition Table…", enabled: can },
+                { id: "unlock", icon: locked ? "object-unlocked|changes-allow" : "object-locked|changes-prevent", text: locked ? "Unlock System Disk…" : "Lock System Disk", enabled: !!base && base.system && !base.read_only && !applying }
+            ] },
+            { title: "Window", icon: "window-duplicate", items: [
+                { id: "minimize", icon: "window-minimize", text: "Minimize" },
+                { id: "zoom", icon: "window-maximize", text: "Zoom" }
+            ] },
+            { title: "Help", icon: "help-browser", items: [
+                { id: "help", icon: "help-contents", text: "Disk Utility Help and Shortcuts", shortcut: "F1" }
+            ] }
+        ]
+    }
+    function menuAction(id) {
+        if (id.indexOf("format.") === 0) { formatAs(id.substring(7)); return }
+        switch (id) {
+        case "refresh": if (!applying) reload(true); break
+        case "close": close(); break
+        case "undo": undo(); break
+        case "clear": clearQueue(); break
+        case "apply": applyAll(); break
+        case "copy": copyPartition(); break
+        case "paste": pastePartition(); break
+        case "new": newPartition(); break
+        case "delete": deletePartition(); break
+        case "resize": resizePartition(); break
+        case "label": labelPartition(); break
+        case "flags": flagsPartition(); break
+        case "check": checkPartition(); break
+        case "unmount": unmountSel(); break
+        case "mount": mountSel(); break
+        case "info": if (part) infoSheet.open(); break
+        case "newtable": newTable(); break
+        case "unlock":
+            if (locked) unlockSheet.open()
+            else { const u = Object.assign({}, unlocked); delete u[diskId]; unlocked = u; clearQueue() }
+            break
+        case "minimize": showMinimized(); break
+        case "zoom": visibility === Window.Maximized ? showNormal() : showMaximized(); break
+        case "help": showHelp(); break
+        }
+    }
+    // grove's Help window (searched for Disk Utility), from a browser window
+    // when there is one, else its own.
+    function showHelp() {
+        const w = app.activeWindow || app.windows[0]
+        if (w) { w.showHelp("Disk Utility"); return }
+        helpWin.query = "Disk Utility"; helpWin.show(); helpWin.raise(); helpWin.requestActivate()
+    }
+    HelpWindow { id: helpWin; app: dk.app }
+    Shortcut { sequence: "F1"; onActivated: dk.showHelp() }
+    GlobalMenuBar { id: globalMenu; window: dk; model: dk.menuModel; onTriggered: id => dk.menuAction(id) }
+    onVisibleChanged: if (visible) Qt.callLater(globalMenu.attach)
+    AppMenu {
+        id: appMenu
+        model: dk.menuModel
+        onTriggered: id => dk.menuAction(id)
+        accent: Theme.accent
+        dark: Theme.dark
+        popupType: Popup.Item
+        property real closedAt: 0
+        onClosed: closedAt = Date.now()
+    }
+    function toggleAppMenu(button) {
+        if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close()
+        else appMenu.openBelow(button)
     }
 
     // ---- menus ----
@@ -1112,6 +1218,7 @@ Window {
             else if (a[1] === "info") infoSheet.open(); else if (a[1] === "apply") applyAll(); else if (a[1] === "unlock") unlockSheet.open()
         }
         else if (cmd === "menu") partMenu.popup(map, 40, map.height)
+        else if (cmd === "appmenu") appMenu.openBelow(menuButton)
         else if (cmd === "dump") console.warn("grove test dk", JSON.stringify({ disks: disks.map(d => d.device + (d.system ? "(system)" : "")), disk: base ? base.device : "", table: view ? view.table : "", locked: locked, pending: pending, planError: planError, error: problem.opened ? problem.message : "", done: done.opened ? done.message : "",
             parts: view ? view.parts.map(p => ({ n: p.number, kind: p.kind, fs: p.fs, label: p.label, name: p.name, off: mb(p.offset), size: mb(p.size), flags: p.flags, used: p.used, busy: p.busy })) : [] }))
     }
