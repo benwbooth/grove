@@ -85,7 +85,25 @@ pub fn forget(folders: &[String]) {
     t.retain(|(_, tree)| !folders.iter().any(|f| Path::new(f).starts_with(&tree.root)));
 }
 
+/// The "measure shared data" setting (off: names and sizes only, like
+/// ncdu and gdu; on: each file is opened to ask btrfs what it shares).
+static SHARED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static SHARED_INIT: std::sync::Once = std::sync::Once::new();
+fn measure_shared() -> bool {
+    SHARED_INIT.call_once(|| SHARED.store(grove_core::settings::load().usage_shared, Ordering::Relaxed));
+    SHARED.load(Ordering::Relaxed)
+}
+pub fn set_measure_shared(on: bool) {
+    SHARED_INIT.call_once(|| {});
+    if SHARED.swap(on, Ordering::Relaxed) != on {
+        // Kept scans were made the other way.
+        trees().lock().unwrap().clear();
+    }
+}
+
 fn worker() {
+    // Out of the way of everything else: this works while you browse.
+    du::idle_priority();
     loop {
         let (folder, prog) = {
             let (m, cv) = state();
@@ -196,7 +214,7 @@ fn work(folder: &str, prog: &Arc<du::Progress>) -> bool {
         }
         if !m.is_dir() {
             let disk = m.blocks() * 512;
-            let shared = if m.nlink() > 1 { disk } else if btrfs && m.is_file() && disk > 0 { du::shared_bytes(&path, disk) } else { 0 };
+            let shared = if m.nlink() > 1 { disk } else if btrfs && measure_shared() && m.is_file() && disk > 0 { du::shared_bytes(&path, disk) } else { 0 };
             items.insert(key, item(disk, shared, 1, if m.nlink() > 1 { "hardlink" } else { "file" }, false));
             continue;
         }
@@ -243,7 +261,7 @@ fn work(folder: &str, prog: &Arc<du::Progress>) -> bool {
                     std::thread::sleep(Duration::from_millis(50));
                 }
             });
-            let r = du::scan_opts(&path, &one, true);
+            let r = du::scan_opts(&path, &one, measure_shared(), true);
             one.done.store(true, Ordering::Relaxed);
             let _ = watch.join();
             r

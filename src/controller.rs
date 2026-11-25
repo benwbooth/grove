@@ -900,6 +900,7 @@ impl ffi::Grove {
         match serde_json::from_value::<settings::Settings>(v) {
             Ok(s) => {
                 crate::langguess::set_txt_guessing(s.guess_txt_language);
+                crate::usage::set_measure_shared(s.usage_shared);
                 self.as_mut().rust_mut().settings = s;
                 self.save_settings();
             }

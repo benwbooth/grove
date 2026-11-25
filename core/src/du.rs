@@ -178,7 +178,18 @@ fn worker(sh: &Shared) {
 
 /// Scans `root` (a folder) into a tree. Cancel through `prog.cancel`.
 pub fn scan(root: &Path, prog: &Progress) -> Result<Tree, String> {
-    scan_opts(root, prog, false)
+    scan_opts(root, prog, false, false)
+}
+
+/// The calling thread runs only when nothing else wants the CPU or the
+/// disk (nice 19, idle I/O class): background scans stay out of the way.
+pub fn idle_priority() {
+    unsafe {
+        let tid = libc::syscall(libc::SYS_gettid) as libc::id_t;
+        libc::setpriority(libc::PRIO_PROCESS, tid, 19);
+        // ioprio_set(IOPRIO_WHO_PROCESS, tid, IOPRIO_CLASS_IDLE << 13)
+        libc::syscall(libc::SYS_ioprio_set, 1, tid, 3 << 13);
+    }
 }
 
 /// btrfs (the only filesystem whose shared extents are worth measuring here).
@@ -250,8 +261,11 @@ pub fn shared_extents(path: &Path) -> Vec<(u64, u64)> {
     shared
 }
 
-/// [`scan`], also measuring shared data when `fiemap` (and on btrfs).
-pub fn scan_opts(root: &Path, prog: &Progress, fiemap: bool) -> Result<Tree, String> {
+/// [`scan`], also measuring shared data when `fiemap` (and on btrfs; each
+/// file is opened for it, about 30 times the work of reading its size).
+/// `background`: half the cores at most, at idle priority (disk usage mode
+/// works while you browse); otherwise every core (the Disk Usage window).
+pub fn scan_opts(root: &Path, prog: &Progress, fiemap: bool, background: bool) -> Result<Tree, String> {
     let meta = std::fs::metadata(root).map_err(|e| crate::util::plain_error(&e, root))?;
     if !meta.is_dir() {
         return Err(format!("{} isn't a folder.", root.display()));
@@ -268,10 +282,16 @@ pub fn scan_opts(root: &Path, prog: &Progress, fiemap: bool) -> Result<Tree, Str
         prog,
         fiemap: fiemap && is_btrfs(root),
     };
-    let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 16);
+    let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    let n = if background { (cores / 2).clamp(1, 4) } else { cores.clamp(2, 16) };
     std::thread::scope(|s| {
         for _ in 0..n {
-            s.spawn(|| worker(&sh));
+            s.spawn(|| {
+                if background {
+                    idle_priority();
+                }
+                worker(&sh)
+            });
         }
     });
     let mut results = sh.results.into_inner().unwrap();

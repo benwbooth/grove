@@ -82,6 +82,10 @@ pub struct Settings {
     /// Disk Usage).
     #[serde(default)]
     pub usage_mode: bool,
+    /// Disk usage mode also measures data shared with other files and
+    /// snapshots (btrfs): every file is opened, about 30 times slower.
+    #[serde(default)]
+    pub usage_shared: bool,
     /// Colour .txt (and .text, .nfo...) files as code when Magika is sure
     /// what they are (off: they're always plain text).
     #[serde(default)]
