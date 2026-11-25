@@ -66,38 +66,44 @@ GButton {
                 Keys.onReturnPressed: if (list.currentIndex >= 0 && list.currentIndex < sp.shown.length) sp.choose(sp.shown[list.currentIndex])
                 Keys.onEscapePressed: menu.close()
             }
-            ListView {
-                id: list
+            Item {
                 width: parent.width
-                height: Math.min(contentHeight, Math.round(420 * Theme.pt) - search.height - 12)
-                clip: true
-                model: sp.shown
-                highlightMoveDuration: 0
-                // On the current choice (the list comes from a worker, so
-                // again once it's there).
-                function showCurrent() {
-                    currentIndex = Math.max(0, sp.shown.indexOf(sp.doc.syntax))
-                    positionViewAtIndex(currentIndex, ListView.Center)
-                }
-                onCountChanged: if (menu.visible && search.text === "") showCurrent()
-                ScrollBar.vertical: GScrollBar {}
-                delegate: ItemDelegate {
-                    id: d
-                    required property int index
-                    required property string modelData
-                    width: list.width - 4
-                    height: Theme.menuRow
-                    highlighted: list.currentIndex === index
-                    hoverEnabled: true
-                    onHoveredChanged: if (hovered) list.currentIndex = index
-                    background: Rectangle { radius: 6; color: d.highlighted ? Theme.accent : "transparent" }
-                    contentItem: GLabel {
-                        text: (d.modelData === sp.doc.syntax ? "✓ " : "    ") + (d.modelData === "" ? sp.autoLabel : d.modelData)
-                        color: d.highlighted ? Theme.accentText : Theme.fg
-                        elide: Text.ElideRight
-                        leftPadding: 4
+                height: list.height
+                // Wheel and trackpad scrolling with grove's glide.
+                KineticWheel { flickable: list; notch: Theme.menuRow * 3 }
+                ListView {
+                    id: list
+                    width: parent.width
+                    height: Math.min(contentHeight, Math.round(420 * Theme.pt) - search.height - 12)
+                    clip: true
+                    model: sp.shown
+                    highlightMoveDuration: 0
+                    // On the current choice (the list comes from a worker, so
+                    // again once it's there).
+                    function showCurrent() {
+                        currentIndex = Math.max(0, sp.shown.indexOf(sp.doc.syntax))
+                        positionViewAtIndex(currentIndex, ListView.Center)
                     }
-                    onClicked: sp.choose(d.modelData)
+                    onCountChanged: if (menu.visible && search.text === "") showCurrent()
+                    ScrollBar.vertical: GScrollBar {}
+                    delegate: ItemDelegate {
+                        id: d
+                        required property int index
+                        required property string modelData
+                        width: list.width - 4
+                        height: Theme.menuRow
+                        highlighted: list.currentIndex === index
+                        hoverEnabled: true
+                        onHoveredChanged: if (hovered) list.currentIndex = index
+                        background: Rectangle { radius: 6; color: d.highlighted ? Theme.accent : "transparent" }
+                        contentItem: GLabel {
+                            text: (d.modelData === sp.doc.syntax ? "✓ " : "    ") + (d.modelData === "" ? sp.autoLabel : d.modelData)
+                            color: d.highlighted ? Theme.accentText : Theme.fg
+                            elide: Text.ElideRight
+                            leftPadding: 4
+                        }
+                        onClicked: sp.choose(d.modelData)
+                    }
                 }
             }
         }
