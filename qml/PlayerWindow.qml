@@ -585,6 +585,8 @@ Window {
         model: pw.menuModel
         onTriggered: id => pw.menuAction(id)
         onAboutToShow: pw.refreshRecents()
+        property real closedAt: 0
+        onClosed: closedAt = Date.now()
     }
     HelpWindow { id: helpWin; app: pw.app }
 
@@ -784,6 +786,16 @@ Window {
                 text: pw.fileName + (pw.edited ? " — Edited" : "")
                 color: "white"; font.bold: true
                 elide: Text.ElideMiddle
+            }
+            // The menus, as grove's ☰ (for desktops without a global menu bar).
+            GButton {
+                id: menuBtn
+                x: 10; anchors.verticalCenter: parent.verticalCenter
+                iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
+                tint: "white"
+                tip: "Menus: File, Edit, View, Window, Help (also in the menu bar at the top of the screen, and on a right-click)"
+                // A second click closes it: the press outside already closed it.
+                onClicked: { if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close(); else { pw.refreshRecents(); appMenu.openAt(menuBtn, 0, menuBtn.height + 4) } }
             }
             WindowControls { window: pw; anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; tint: "white" }
         }
@@ -1146,7 +1158,7 @@ Window {
     }
 
     // ---------- tests ----------
-    // GROVE_PLAYER_TEST: "controls", "trim", "clips", "inspector", "pip", "width:N",
+    // GROVE_PLAYER_TEST: "controls", "trim", "clips", "inspector", "pip", "menu", "width:N",
     // "export:<preset>:<file>" (trims to 20%..60%, exports, quits when done).
     readonly property string testSpec: app ? app.grove.env("GROVE_PLAYER_TEST") : ""
     readonly property bool testExport: testSpec.indexOf("export:") === 0
@@ -1161,6 +1173,7 @@ Window {
             else if (t === "clips") { pw.seekTo(pw.total * 0.4); Qt.callLater(() => { splitTimer.start() }) }
             else if (t === "inspector") { mp.setProp("pause", "yes"); inspector.show() }
             else if (t === "pip") pw.enterPip()
+            else if (t === "menu") { mp.setProp("pause", "yes"); pw.controls = true; appMenu.openAt(menuBtn, 0, menuBtn.height + 4) }
             else if (t.indexOf("width:") === 0) { pw.sized = true; pw.width = Number(t.substring(6)); pw.controls = true; mp.setProp("pause", "yes") }
             else if (pw.testExport) {
                 const [, preset, out] = t.split(":")
