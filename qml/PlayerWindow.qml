@@ -788,14 +788,13 @@ Window {
                 elide: Text.ElideMiddle
             }
             // The menus, as grove's ☰ (for desktops without a global menu bar).
-            GButton {
+            MacMenuButton {
                 id: menuBtn
                 x: 10; anchors.verticalCenter: parent.verticalCenter
-                iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
-                tint: "white"
+                dark: true      // (white, over the video)
+                menu: appMenu
                 tip: "Menus: File, Edit, View, Window, Help (also in the menu bar at the top of the screen, and on a right-click)"
-                // A second click closes it: the press outside already closed it.
-                onClicked: { if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close(); else { pw.refreshRecents(); appMenu.openAt(menuBtn, 0, menuBtn.height + 4) } }
+                onAboutToOpen: pw.refreshRecents()
             }
             WindowControls { window: pw; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; tint: "white" }
         }

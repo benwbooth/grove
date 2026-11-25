@@ -19,7 +19,7 @@ Item {
         anchors.fill: parent
         active: g.vibrant
         sourceComponent: MacMenuBackground {
-            style: MacMenuStyle { dark: Theme.dark; accent: Theme.accent }
+            style: MacMenuStyle { dark: Theme.dark; appAccent: Theme.accent }
         }
     }
 

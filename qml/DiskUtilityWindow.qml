@@ -257,11 +257,11 @@ Window {
                 Item { width: 8; height: 1 }
                 GButton { iconName: "view-refresh"; enabled: !dk.applying; tip: "Look at the disks again (F5). Pending operations are kept."; onClicked: dk.reload(true) }
                 // Every menu, for desktops without a global menu bar.
-                GButton {
+                MacMenuButton {
                     id: menuButton
-                    iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
+                    dark: Theme.dark
+                    menu: appMenu
                     tip: "Menus: Disk Utility, Edit, Partition, Disk, Window, Help (also in the menu bar at the top of the screen)"
-                    onClicked: dk.toggleAppMenu(menuButton)
                 }
             }
 
@@ -763,10 +763,6 @@ Window {
         popupType: Popup.Item
         property real closedAt: 0
         onClosed: closedAt = Date.now()
-    }
-    function toggleAppMenu(button) {
-        if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close()
-        else appMenu.openBelow(button)
     }
 
     // ---- menus ----

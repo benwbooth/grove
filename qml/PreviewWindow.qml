@@ -931,12 +931,11 @@ ApplicationWindow {
                 GButton { iconName: "draw-highlight"; visible: pw.isPdf; checked: pw.tool === "hl"; enabled: pw.canEdit; tip: "Highlight: select text to highlight it (" + pw.keyFor("pv.highlight") + ")"; onClicked: pw.setTool(pw.tool === "hl" ? "textsel" : "hl") }
                 GButton { iconName: "draw-freehand|document-edit"; checked: pw.markupShown; enabled: pw.canEdit; tip: "Show the Markup toolbar: draw, shapes, text, signatures… (" + pw.keyFor("pv.markup") + ")"; onClicked: pw.markupShown = !pw.markupShown }
                 // The menus, as grove's ☰ (same icon, look and menu).
-                GButton {
+                MacMenuButton {
                     id: menuBtn
-                    iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
+                    dark: Theme.dark
+                    menu: appMenu
                     tip: "Menus: Preview, File, Edit, View, Go, Tools, Help (also in the menu bar at the top of the screen)"
-                    // A second click closes it: the press outside already closed it.
-                    onClicked: { if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close(); else appMenu.openBelow(menuBtn) }
                 }
                 GField {
                     id: searchField

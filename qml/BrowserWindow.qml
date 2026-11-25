@@ -794,13 +794,13 @@ ApplicationWindow {
     Component { id: tcSelection; GButton { iconName: "checkbox-checked|edit-select-all"; checked: bw.activePane && bw.activePane.selectionMode; tip: Help.tip("Selection mode: tick items with checkboxes", "Selection mode"); onClicked: bw.toggleSelectionMode() } }
     Component {
         id: tcAction
-        GButton {
+        // The ⋮ menu button every one of Ben's apps shares (a second click
+        // closes the menu).
+        MacMenuButton {
             id: ab
-            iconName: "view-more-horizontal-symbolic|application-menu|open-menu-symbolic|overflow-menu"
+            dark: Theme.dark
+            menu: appMenu
             tip: "Menus: Grove, File, Edit, View, Go, Window, Help (also in the menu bar at the top of the screen)"
-            // A second click closes it: the press outside already closed the
-            // menu, so don't open it again right away.
-            onClicked: bw.toggleAppMenu(ab)
             Component.onCompleted: bw.actionButton = this
             Component.onDestruction: if (bw.actionButton === this) bw.actionButton = null
         }
@@ -1229,10 +1229,6 @@ ApplicationWindow {
         popupType: Popup.Item
         property real closedAt: 0
         onClosed: closedAt = Date.now()
-    }
-    function toggleAppMenu(button) {
-        if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close()
-        else appMenu.openBelow(button)
     }
     Sheet {
         id: aboutSheet
