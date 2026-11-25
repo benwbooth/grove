@@ -808,6 +808,7 @@ ApplicationWindow {
     GlobalMenuBar { id: globalMenu; window: pw; model: pw.menuModel; onTriggered: id => pw.menuAction(id) }
     onVisibleChanged: if (visible) Qt.callLater(globalMenu.attach)
     AppMenu {
+        iconUrl: (n, px) => Theme.iconUrl(n) + "&exact=1"
         id: appMenu
         model: pw.menuModel
         onTriggered: id => pw.menuAction(id)

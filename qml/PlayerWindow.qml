@@ -580,6 +580,7 @@ Window {
     onVisibleChanged: if (visible) Qt.callLater(globalMenu.attach)
     property bool menuOpen: appMenu.visible
     AppMenu {
+        iconUrl: (n, px) => Theme.iconUrl(n) + "&exact=1"
         id: appMenu
         model: pw.menuModel
         onTriggered: id => pw.menuAction(id)

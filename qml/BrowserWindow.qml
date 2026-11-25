@@ -1239,6 +1239,10 @@ ApplicationWindow {
         onTriggered: id => bw.menuAction(id)
         accent: Theme.accent
         dark: Theme.dark
+        // Icons through grove's provider, off the UI thread (a theme lookup
+        // per row made clicking a file stall for seconds as Open With's
+        // rows were made again).
+        iconUrl: (n, px) => Theme.iconUrl(n) + "&exact=1"
         // In the window: a separate popup window gets a different scale
         // from arbor at 4/3 and loses pixels.
         popupType: Popup.Item

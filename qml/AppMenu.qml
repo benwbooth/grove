@@ -50,6 +50,13 @@ Menu {
     // own `delegate` too, for its rows (each opens a submenu).
     property Component submenuDelegate: glassSubmenu
     property Component separatorDelegate: glassSeparator
+    // Icons: by default an IconImage looks each name up in the icon theme,
+    // on the UI thread, every time a row is made: slow with many icon
+    // folders (NixOS), and the rows are made again whenever the menus'
+    // shape changes (an Open With list per file type). An app with its own
+    // image provider gives a function (name, pixels) → image URL instead,
+    // loaded off the UI thread: iconUrl: (n, px) => "image://icon/" + n
+    property var iconUrl: null
 
     // The root menu in the same look (submenus get it from glassSubmenu).
     topPadding: menuPad + 0.001
@@ -279,8 +286,9 @@ Menu {
     // whole points, then multiplies by the scale: 22 px can't be asked for at
     // 4/3), the one nearest the wanted size, placed on the device pixel grid.
     // At 4/3 that is 24 px (18 pt); at 1x and 2x, 16 and 32 px (16 pt).
-    component CrispIcon: IconImage {
+    component CrispIcon: Item {
         id: ci
+        property string name: ""
         property real size: 16
         readonly property real dpr: {
             const w = ci.Window.window
@@ -300,7 +308,29 @@ Menu {
         readonly property int pt: px > 0 ? Math.round(px / dpr) : Math.round(size)
         width: px > 0 ? px / dpr : size
         height: width
-        sourceSize: Qt.size(pt, pt)
+        // The theme lookup on the UI thread (no iconUrl), or the app's
+        // provider, asynchronously. (Only the one in use is made: an
+        // IconImage looks its name up even when hidden or empty.)
+        Loader {
+            anchors.fill: parent
+            sourceComponent: root.iconUrl ? providerIcon : themeIcon
+        }
+        Component {
+            id: themeIcon
+            IconImage {
+                name: ci.name.split("|")[0]
+                sourceSize: Qt.size(ci.pt, ci.pt)
+            }
+        }
+        Component {
+            id: providerIcon
+            Image {
+                source: ci.name ? root.iconUrl(ci.name, ci.px > 0 ? ci.px : Math.round(ci.size * ci.dpr)) : ""
+                sourceSize: Qt.size(ci.pt, ci.pt)
+                asynchronous: true
+                cache: true
+            }
+        }
         transform: Translate { id: gridSnap }
         function snap() {
             if (!visible || px <= 0) return
@@ -369,7 +399,8 @@ Menu {
                 CrispIcon {
                     id: rowIcon
                     visible: mi.iconName !== ""
-                    name: mi.iconName
+                    // (The whole "name|fallback" for an app's provider.)
+                    name: root.iconUrl ? (mi.icon.name || "") : mi.iconName
                     x: 2 + (16 - width) / 2
                     anchors.verticalCenter: parent.verticalCenter
                     opacity: mi.enabled ? 1 : 0.4
