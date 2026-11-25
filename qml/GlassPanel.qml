@@ -9,7 +9,23 @@ Item {
     property color tint: Theme.glass
     property real radius: Theme.glassRadius
     property bool shadow: true
+    // Menu-like popovers (the menu tint: pickers, completions, small
+    // confirmations) get the shared macOS menu glass (MacMenuBackground,
+    // hearth/shared/app-menus): the window behind blurred through a light
+    // tint, a specular top edge, a soft shadow. Sheets and panels keep this
+    // pane's look.
+    readonly property bool vibrant: tint === Theme.glassMenu
+    Loader {
+        anchors.fill: parent
+        active: g.vibrant
+        sourceComponent: MacMenuBackground {
+            style: MacMenuStyle { dark: Theme.dark; accent: Theme.accent }
+        }
+    }
 
+    Item {
+        anchors.fill: parent
+        visible: !g.vibrant
     Rectangle {
         visible: g.shadow
         anchors.fill: parent
@@ -46,5 +62,6 @@ Item {
         border.width: 1
         border.color: Theme.glassRim
         opacity: 0.9
+    }
     }
 }
