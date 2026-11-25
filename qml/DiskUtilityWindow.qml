@@ -350,7 +350,7 @@ Window {
                         readonly property var p: s && s.part >= 0 ? dk.view.parts[s.part] : null
                         readonly property bool ext: !!p && p.kind === "extended"
                         readonly property var lay: map.layout[index] || { x: 0, w: 0 }
-                        x: lay.x; width: lay.w
+                        x: Math.round(lay.x); width: Math.round(lay.x + lay.w) - Math.round(lay.x)
                         y: s && s.inExtended ? 5 : 0
                         height: s && s.inExtended ? map.height - 10 : map.height
                         z: s && s.inExtended ? 2 : 1
@@ -366,13 +366,18 @@ Window {
                                 width: parent.width; height: 6; radius: 3
                                 color: cell.p ? dk.fsColor(cell.p.fs) : "transparent"
                             }
-                            // Used space.
+                            // Used space: a thin bar along the bottom in the
+                            // filesystem's colour (like the sidebar's capacity bars).
                             Rectangle {
-                                visible: !!cell.p && !cell.ext && cell.p.used !== null && cell.p.used !== undefined
-                                x: 3; y: 9; height: parent.height - 12
-                                width: cell.p && cell.p.used ? Math.max(1, (parent.width - 6) * Math.min(1, cell.p.used / Math.max(1, cell.p.size))) : 0
-                                radius: 3
-                                color: Qt.rgba(0.95, 0.80, 0.35, 0.55)
+                                visible: !!cell.p && !cell.ext && cell.p.used !== null && cell.p.used !== undefined && cell.p.fs !== "swap"
+                                x: 6; y: parent.height - 9
+                                width: parent.width - 12; height: 4; radius: 2
+                                color: Theme.separator
+                                Rectangle {
+                                    width: cell.p && cell.p.used ? Math.max(2, parent.width * Math.min(1, cell.p.used / Math.max(1, cell.p.size))) : 0
+                                    height: parent.height; radius: 2
+                                    color: cell.p ? dk.fsColor(cell.p.fs) : "transparent"
+                                }
                             }
                             // Pending changes are hatched with the accent.
                             Rectangle {
@@ -382,44 +387,46 @@ Window {
                                 border.width: 2; border.color: Theme.accent
                             }
                             Column {
+                                id: cellText
                                 visible: cell.width > 46 && !cell.ext
-                                anchors.centerIn: parent
-                                anchors.verticalCenterOffset: 3
+                                // Whole pixels, so the native text stays crisp.
+                                x: Math.round((parent.width - width) / 2)
+                                y: Math.round((parent.height - height) / 2)
                                 GLabel {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    width: Math.min(implicitWidth, cell.width - 8); elide: Text.ElideRight
+                                    x: Math.round((cellText.width - width) / 2)
+                                    width: Math.ceil(Math.min(implicitWidth, cell.width - 8)); elide: Text.ElideRight
                                     text: cell.p ? (cell.p.label || cell.p.title.replace("/dev/", "")) : "unallocated"
                                     font.pixelSize: Theme.small
                                 }
                                 GLabel {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    width: Math.min(implicitWidth, cell.width - 8); elide: Text.ElideRight
+                                    x: Math.round((cellText.width - width) / 2)
+                                    width: Math.ceil(Math.min(implicitWidth, cell.width - 8)); elide: Text.ElideRight
                                     text: cell.s ? dk.size(cell.s.size) : ""
                                     font.pixelSize: Theme.caption; color: Theme.fgSecondary
                                 }
                                 // How full it is.
                                 GLabel {
                                     visible: !!cell.p && cell.p.used !== null && cell.p.used !== undefined && cell.p.fs !== "swap"
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    width: Math.min(implicitWidth, cell.width - 8); elide: Text.ElideRight
+                                    x: Math.round((cellText.width - width) / 2)
+                                    width: Math.ceil(Math.min(implicitWidth, cell.width - 8)); elide: Text.ElideRight
                                     text: cell.p && cell.p.used !== null && cell.p.used !== undefined ? dk.size(cell.p.used) + " used · " + dk.size(Math.max(0, cell.p.size - cell.p.used)) + " free" : ""
                                     font.pixelSize: Theme.caption; color: Theme.fgSecondary
                                 }
                                 // btrfs: its subvolumes and snapshots (when mounted).
                                 GLabel {
                                     visible: !!cell.p && cell.p.subvols !== null && cell.p.subvols !== undefined
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    width: Math.min(implicitWidth, cell.width - 8); elide: Text.ElideRight
+                                    x: Math.round((cellText.width - width) / 2)
+                                    width: Math.ceil(Math.min(implicitWidth, cell.width - 8)); elide: Text.ElideRight
                                     text: visible ? dk.plural(cell.p.subvols, "subvolume") + " · " + dk.plural(cell.p.snapshots, "snapshot") : ""
                                     font.pixelSize: Theme.caption; color: Theme.fgSecondary
                                 }
                                 // Where it's open (every mount point; swap: "swap").
                                 GLabel {
                                     visible: !!cell.p && (cell.p.mounts.length > 0 || (cell.p.busy && cell.p.fs === "swap"))
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    width: Math.min(implicitWidth, cell.width - 8); elide: Text.ElideMiddle
+                                    x: Math.round((cellText.width - width) / 2)
+                                    width: Math.ceil(Math.min(implicitWidth, cell.width - 8)); elide: Text.ElideMiddle
                                     text: cell.p ? (cell.p.mounts.length ? cell.p.mounts.join(", ") : "swap") : ""
-                                    font.pixelSize: Theme.caption; color: Theme.accent
+                                    font.pixelSize: Theme.caption; color: Theme.fg
                                 }
                             }
                         }
