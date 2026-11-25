@@ -957,7 +957,7 @@ ApplicationWindow {
                 window: pw
                 visible: pw.clientDecorations
                 anchors.right: parent.right
-                anchors.rightMargin: 10
+                anchors.rightMargin: 0
                 anchors.verticalCenter: parent.verticalCenter
             }
         }
@@ -1065,22 +1065,9 @@ ApplicationWindow {
             Toast { id: toastBox; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 64 }
         }
 
-        // Window edge resizing for grove's own decorations.
-        Repeater {
-            model: pw.clientDecorations && pw.visibility !== Window.Maximized && pw.visibility !== Window.FullScreen ? [
-                { e: Qt.LeftEdge, x: 0, y: 6, w: 5, h: -12, c: Qt.SizeHorCursor }, { e: Qt.RightEdge, x: -5, y: 6, w: 5, h: -12, c: Qt.SizeHorCursor },
-                { e: Qt.BottomEdge, x: 6, y: -5, w: -12, h: 5, c: Qt.SizeVerCursor }, { e: Qt.TopEdge, x: 6, y: 0, w: -12, h: 4, c: Qt.SizeVerCursor },
-                { e: Qt.BottomEdge | Qt.RightEdge, x: -8, y: -8, w: 8, h: 8, c: Qt.SizeFDiagCursor }, { e: Qt.BottomEdge | Qt.LeftEdge, x: 0, y: -8, w: 8, h: 8, c: Qt.SizeBDiagCursor } ] : []
-            MouseArea {
-                required property var modelData
-                x: modelData.x < 0 ? root.width + modelData.x : modelData.x
-                y: modelData.y < 0 ? root.height + modelData.y : modelData.y
-                width: modelData.w <= 0 ? root.width + modelData.w : modelData.w
-                height: modelData.h <= 0 ? root.height + modelData.h : modelData.h
-                cursorShape: modelData.c
-                onPressed: pw.startSystemResize(modelData.e)
-            }
-        }
+        // Window edge resizing for grove's own decorations (the shared
+        // ChromeResizeEdges, as every app).
+        ChromeResizeEdges { anchors.fill: parent; z: 1000; window: pw; enabled: pw.clientDecorations; visible: pw.clientDecorations && pw.visibility !== Window.Maximized && pw.visibility !== Window.FullScreen }
     }
     function highlightSelection(t) {
         const s = textSel

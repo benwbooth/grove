@@ -797,7 +797,7 @@ Window {
                 // A second click closes it: the press outside already closed it.
                 onClicked: { if (appMenu.visible || Date.now() - appMenu.closedAt < 250) appMenu.close(); else { pw.refreshRecents(); appMenu.openAt(menuBtn, 0, menuBtn.height + 4) } }
             }
-            WindowControls { window: pw; anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter; tint: "white" }
+            WindowControls { window: pw; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; tint: "white" }
         }
 
         // ---------- the floating control bar ----------
