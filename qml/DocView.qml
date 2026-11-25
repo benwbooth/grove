@@ -69,9 +69,12 @@ Item {
 
     // Tests (GROVE_TEST qlview=...): "end", "top", "dump".
     function testAction(a) {
-        if (a === "end") list.positionViewAtEnd()
+        // "syntax:Rust" picks a language, "syntax:" Automatic; "syntaxmenu" opens the menu.
+        if (a.startsWith("syntax:")) syntaxPicker.choose(a.substring(7))
+        else if (a === "syntaxmenu") syntaxPicker.open()
+        else if (a === "end") list.positionViewAtEnd()
         else if (a === "top") list.positionViewAtBeginning()
-        console.warn("grove test doc", a, "blocks", list.count, "lines", doc.lines, "loading", doc.loading, "y", Math.round(list.contentY))
+        console.warn("grove test doc", a, "blocks", list.count, "lines", doc.lines, "loading", doc.loading, "syntax", doc.syntax, "detected", doc.detected, "y", Math.round(list.contentY))
     }
 
     FontMetrics { id: fm; font.family: Theme.mono; font.pixelSize: Theme.body * 0.95 * prefs.textZoom }
@@ -141,7 +144,7 @@ Item {
     }
 
     // A toolbar above the text, like the window's: the length on the left;
-    // Rendered / Source (Markdown), text size and Wrap on the right.
+    // the language (code), Rendered / Source (Markdown), text size and Wrap on the right.
     Rectangle {
         id: opts
         width: parent.width
@@ -163,6 +166,14 @@ Item {
             anchors.right: parent.right
             anchors.rightMargin: dv.slim ? 4 : 8
             spacing: dv.slim ? 2 : 6
+            SyntaxPicker {
+                id: syntaxPicker
+                visible: dv.shownMode === "code" && dv.active
+                doc: doc
+                slim: dv.slim
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            Rectangle { visible: syntaxPicker.visible; width: 1; height: dv.slim ? 14 : 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
             Segmented {
                 visible: dv.renderable
                 height: Math.round((dv.slim ? 22 : 28) * Theme.pt)

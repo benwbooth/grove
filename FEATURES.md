@@ -106,6 +106,7 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Space to preview, arrows to move | ✅ | – | ✅ |
 | Images incl. HEIC/AVIF/RAW (via thumbnailers), video/audio, PDF, text/code with highlighting, Markdown, archives, folders | ✅ | 🟡 | ✅ |
 | Markup (draw/annotate), trim video | ✅ | – | ✅ Quick Look: pen, highlighter, shapes, arrows, text, crop, rotate; trim video/audio (ffmpeg stream copy when the cut starts on a keyframe, exact re-encode otherwise); Save (original to the Trash, Undo) or Save as Copy |
+| Choose the syntax colouring language per file | – | – | ✅ the language menu in a text viewer's bar (Quick Look, preview pane, gallery, Grove Preview): Automatic (shows what it guessed) or any language the colouring knows (sorted, type to narrow); kept on the file in the `user.grove.syntax` xattr (follows renames and moves), else in ~/.config/grove/syntax.json by path |
 | Tooltip previews | – | ✅ | ✅ Settings › Previews in tooltips: preview, kind, size, dimensions, date (icon and list views) |
 
 ## Grove Preview (macOS Preview; replaces Okular and Gwenview)

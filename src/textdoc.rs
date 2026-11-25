@@ -54,6 +54,12 @@ pub mod qobject {
         #[qproperty(QString, family)]
         #[qproperty(f64, pixel)]
         #[qproperty(f64, page_width, cxx_name = "pageWidth")]
+        /// Code: the language chosen for this file ("" = Automatic), and
+        /// the one Automatic picks.
+        #[qproperty(QString, syntax)]
+        #[qproperty(QString, detected)]
+        /// Every language there is, a JSON list (after requestLanguages()).
+        #[qproperty(QString, languages)]
         type TextDoc = super::TextDocRust;
     }
 
@@ -100,6 +106,13 @@ pub mod qobject {
         /// "" clears.
         #[qinvokable]
         fn load(self: Pin<&mut TextDoc>, path: &QString, mode: &QString, dark: bool);
+        /// Colour this file as `lang` from now on ("" = Automatic): saved
+        /// with the file (off the UI thread), then read again.
+        #[qinvokable]
+        fn choose_syntax(self: Pin<&mut TextDoc>, lang: &QString);
+        /// Fill `languages` (on a worker: the syntaxes load there).
+        #[qinvokable]
+        fn request_languages(self: Pin<&mut TextDoc>);
     }
 }
 
@@ -126,6 +139,12 @@ pub struct TextDocRust {
     family: QString,
     pixel: f64,
     page_width: f64,
+    syntax: QString,
+    detected: QString,
+    languages: QString,
+    /// The last load's mode and theme (choose_syntax reloads with them).
+    mode: String,
+    dark: bool,
     blocks: Vec<Block>,
     gen: u64,
     cancel: Option<Arc<AtomicBool>>,
@@ -221,6 +240,10 @@ impl qobject::TextDoc {
         self.as_mut().set_max_cols(0);
         let p = path.to_string();
         let mode = mode.to_string();
+        self.as_mut().rust_mut().mode = mode.clone();
+        self.as_mut().rust_mut().dark = dark;
+        self.as_mut().set_syntax(QString::default());
+        self.as_mut().set_detected(QString::default());
         self.as_mut().set_rich_all(mode == "markdown" || mode == "html");
         if p.is_empty() {
             self.as_mut().set_loading(false);
@@ -265,6 +288,58 @@ impl qobject::TextDoc {
             .spawn(move || whole_file(qt, gen, p, mode, dark, family, px, width, cancel))
             .ok();
     }
+}
+
+impl qobject::TextDoc {
+    fn choose_syntax(mut self: Pin<&mut Self>, lang: &QString) {
+        let p = self.rust().path.to_string();
+        if p.is_empty() {
+            return;
+        }
+        let lang = lang.to_string();
+        self.as_mut().set_syntax(qs(&lang));
+        let gen = self.rust().gen;
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let lang = Some(lang.as_str()).filter(|l| !l.is_empty());
+            if let Err(e) = grove_core::syntaxpref::set(std::path::Path::new(&p), lang) {
+                eprintln!("grove: the language for {p} wasn't saved: {e}");
+            }
+            let _ = qt.queue(move |mut m| {
+                if m.rust().gen == gen {
+                    let (path, mode, dark) = (m.rust().path.clone(), qs(&m.rust().mode), m.rust().dark);
+                    m.as_mut().load(&path, &mode, dark);
+                }
+            });
+        });
+    }
+
+    fn request_languages(self: Pin<&mut Self>) {
+        if !self.rust().languages.is_empty() {
+            return;
+        }
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let j = serde_json::to_string(&crate::preview::syntax_names()).unwrap_or_default();
+            let _ = qt.queue(move |m| m.set_languages(qs(&j)));
+        });
+    }
+}
+
+/// The language to colour `p` in: the one chosen for it (the viewer's
+/// menu) or Automatic's; tells the viewer both. (On a worker.)
+fn pick_language(qt: &cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: &str, text: &str, name: &str) -> (String, Option<String>) {
+    let auto = crate::langguess::name_for(p, text, name);
+    let detected = crate::preview::detected_name(text, &auto);
+    let chosen = grove_core::syntaxpref::get(std::path::Path::new(p));
+    let c2 = chosen.clone().unwrap_or_default();
+    let _ = qt.queue(move |mut m| {
+        if m.rust().gen == gen {
+            m.as_mut().set_detected(qs(&detected));
+            m.as_mut().set_syntax(qs(&c2));
+        }
+    });
+    (auto, chosen)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -348,8 +423,8 @@ fn whole_file(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, mo
                         let text = if text.contains('\t') { text.replace('\t', "    ") } else { text };
                         let cols = text.lines().map(|l| l.chars().count()).max().unwrap_or(0);
                         // No language from the name: guessed from the content (rules, then Magika).
-                        let name = crate::langguess::name_for(&p, &text, &name);
-                        let mut hl = crate::preview::Highlighter::new(&text, &name, dark);
+                        let (name, chosen) = pick_language(&qt, gen, &p, &text, &name);
+                        let mut hl = crate::preview::Highlighter::with_language(&text, &name, dark, chosen.as_deref());
                         let mut batch = vec![];
                         let mut first = true;
                         let mut chunk = String::new();
@@ -823,8 +898,8 @@ fn index_stream(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, 
                 let path = std::path::Path::new(&p);
                 let head = grove_core::textenc::decode(&head, enc);
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                let name = crate::langguess::name_for(&p, &head, &name);
-                let mut hl = crate::preview::Highlighter::new(&head, &name, dark);
+                let (name, chosen) = pick_language(&qt, gen, &p, &head, &name);
+                let mut hl = crate::preview::Highlighter::with_language(&head, &name, dark, chosen.as_deref());
                 while let Ok((row, start, end)) = crx.recv() {
                     if cancel.load(Ordering::Relaxed) {
                         return;

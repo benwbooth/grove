@@ -80,6 +80,24 @@ fn syntax_for<'a>(ss: &'a SyntaxSet, text: &str, name: &str) -> &'a syntect::par
         .unwrap_or_else(|| ss.find_syntax_plain_text())
 }
 
+/// Every language the colouring knows, by name, sorted (the viewer's
+/// language menu; "tessh" has its own grammar).
+pub fn syntax_names() -> Vec<String> {
+    let mut v: Vec<String> = syntaxes().syntaxes().iter().filter(|s| !s.hidden).map(|s| s.name.clone()).collect();
+    v.push("tessh".into());
+    v.sort_by_key(|n| n.to_lowercase());
+    v.dedup();
+    v
+}
+
+/// The language the colouring would pick for this file by itself.
+pub fn detected_name(text: &str, name: &str) -> String {
+    if is_tessh(name, text) {
+        return "tessh".into();
+    }
+    syntax_for(syntaxes(), text, name).name.clone()
+}
+
 /// Whether the name (or the first line, like a shebang) picks a language.
 pub fn known_by_name(name: &str, text: &str) -> bool {
     is_tessh(name, text) || syntax_for(syntaxes(), text, name).name != "Plain Text"
@@ -227,11 +245,24 @@ pub struct Highlighter {
 }
 
 impl Highlighter {
+    #[cfg(test)]
     pub fn new(text: &str, name: &str, dark: bool) -> Self {
+        Self::with_language(text, name, dark, None)
+    }
+
+    /// `lang`: a language chosen by name (the viewer's menu); None or an
+    /// unknown name: picked from the name and content.
+    pub fn with_language(text: &str, name: &str, dark: bool, lang: Option<&str>) -> Self {
         let ss = syntaxes();
-        let syntax = syntax_for(ss, text, name);
         let theme = &themes().themes[if dark { "base16-ocean.dark" } else { "InspiredGitHub" }];
-        Highlighter { h: syntect::easy::HighlightLines::new(syntax, theme), tessh: is_tessh(name, text).then_some(theme) }
+        let chosen = lang.filter(|l| *l != "tessh").and_then(|l| ss.find_syntax_by_name(l));
+        let tessh = match lang {
+            Some("tessh") => true,
+            Some(_) if chosen.is_some() => false,
+            _ => is_tessh(name, text),
+        };
+        let syntax = chosen.unwrap_or_else(|| syntax_for(ss, text, name));
+        Highlighter { h: syntect::easy::HighlightLines::new(syntax, theme), tessh: tessh.then_some(theme) }
     }
 
     /// Lines (no trailing newline) as `<pre>` HTML.
@@ -660,6 +691,20 @@ mod tests {
         assert_eq!(h.matches('\n').count(), 6, "{h}");
         let mut hl = super::Highlighter::new("", "a.tsh", false);
         assert_eq!(hl.html("echo hi 2>&1\nls").matches('\n').count(), 1);
+    }
+
+    #[test]
+    fn chosen_language() {
+        let names = super::syntax_names();
+        assert!(names.iter().any(|n| n == "Rust") && names.iter().any(|n| n == "tessh"));
+        assert!(names.windows(2).all(|w| w[0].to_lowercase() <= w[1].to_lowercase()));
+        assert_eq!(super::detected_name("fn a() {}", "notes.txt"), "Plain Text");
+        // A .txt chosen as Rust: coloured; an unknown name falls back.
+        let plain = super::Highlighter::with_language("", "notes.txt", false, None).html("fn a() {}");
+        let rust = super::Highlighter::with_language("", "notes.txt", false, Some("Rust")).html("fn a() {}");
+        assert!(rust.matches("<span").count() > plain.matches("<span").count(), "{rust}");
+        let odd = super::Highlighter::with_language("", "notes.txt", false, Some("No Such")).html("fn a() {}");
+        assert_eq!(odd, plain);
     }
 
     #[test]
