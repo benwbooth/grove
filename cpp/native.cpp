@@ -7,6 +7,9 @@
 #include "native_helpers.h"
 #include "global_menu.h"
 #include "mpv_gl.h"
+#include <QtCore/QtPlugin>
+// grove's own image plugin (include/vips_image.h): HEIC, AVIF, JPEG XL.
+Q_IMPORT_PLUGIN(VipsImagePlugin)
 #include <QtQml/qqml.h>
 #include "grove/src/bridge.cxxqt.h"
 

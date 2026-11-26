@@ -388,12 +388,14 @@ pub fn preview(path: &str, dark: bool) -> Value {
     }
     match previews::kind_of(&parents, &name) {
         Kind::Picture => {
+            // (HEIC, AVIF and JPEG XL Qt reads through grove's own libvips
+            // image plugin: cpp/vips_image.cpp.)
             if crate::bridge::ffi::grove_can_read_image(&crate::bridge::ffi::QString::from(path)) {
                 // Its pixel size (the header only), for "actual size" zoom.
                 let (w, h) = imagesize::size(path).map(|s| (s.width, s.height)).unwrap_or((0, 0));
                 return with(json!({"kind": "image", "src": path, "width": w, "height": h}));
             }
-            // HEIC/AVIF/RAW/PSD...: a full-size copy libvips makes (once,
+            // Camera RAW, PSD...: a full-size copy libvips makes (once,
             // kept in the cache), shown and zoomed like any picture.
             if let Some(copy) = grove_core::vips::viewable_copy(p) {
                 let c = copy.to_string_lossy().into_owned();

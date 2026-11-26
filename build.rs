@@ -12,6 +12,8 @@ fn main() {
     }
     println!("cargo::rerun-if-env-changed=QMAKE");
     println!("cargo::rerun-if-changed=include");
+    // (g_free, for cpp/vips_image.cpp: libvips hands back glib memory.)
+    println!("cargo::rustc-link-lib=glib-2.0");
     println!("cargo::rerun-if-changed=qml");
     let qmake = std::env::var("QMAKE").unwrap_or_else(|_| "qmake6".into());
     let query = |var: &str| {
@@ -82,6 +84,9 @@ fn main() {
         .cpp_file("cpp/global_menu.cpp")
         .cpp_file("include/mpv_gl.h")
         .cpp_file("cpp/mpv_gl.cpp")
+        // HEIC/AVIF/JPEG XL through libvips, as a built-in Qt image plugin.
+        .cpp_file("include/vips_image.h")
+        .cpp_file("cpp/vips_image.cpp")
         .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs", "src/treedoc.rs", "src/hexdoc.rs", "src/pvcanvas.rs", "src/mpv.rs"]);
     // Only adds include dirs and a define for our own code.
     let builder = unsafe {
