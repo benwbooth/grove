@@ -59,14 +59,19 @@
               # chmods the destination: that fails on a file left by another
               # nixbld user. The exports are regenerated every build anyway.
               rm -rf "$workDir/target/cxxqt"
-              # libsqlite3-sys copies its bindings the same way (fs::copy),
-              # libssh2-sys its headers. Their whole build-script runs go,
-              # fingerprints included: with only out/ removed cargo still
-              # thinks the script ran and the crate then fails to find
-              # out/bindgen.rs.
-              for d in "$workDir"/target/release/build/libsqlite3-sys-* "$workDir"/target/release/build/libssh2-sys-*; do
+              # Build scripts that copy files out of the read-only store
+              # (fs::copy keeps the mode): libsqlite3-sys its bindings,
+              # libssh2-sys and lzfse-sys their headers. A copy left by
+              # another nixbld user is read-only to this one and the script
+              # panics (lzfse.h, 2026-11-25). Any build-script run whose out/
+              # holds a file this user can't write goes, fingerprint
+              # included: with only out/ removed cargo still thinks the
+              # script ran and the crate then fails to find its outputs.
+              for d in "$workDir"/target/release/build/*; do
                 [ -d "$d/out" ] || continue
-                rm -rf "$d" "$workDir/target/release/.fingerprint/$(basename "$d")"
+                if [ -n "$(find "$d/out" -type f ! -writable -print -quit 2>/dev/null)" ]; then
+                  rm -rf "$d" "$workDir/target/release/.fingerprint/$(basename "$d")"
+                fi
               done
               CARGO_HOME="$NIX_BUILD_TOP/.cargo" CARGO_TARGET_DIR="$workDir/target" \
                 cargo build ${cargoArgs} --offline --locked -j "$NIX_BUILD_CORES"
