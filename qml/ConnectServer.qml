@@ -155,6 +155,6 @@ Sheet {
     buttons: [
         BusyDots { running: cs.busy; anchors.verticalCenter: parent ? parent.verticalCenter : undefined },
         PushButton { text: "Cancel"; onClicked: cs.close() },
-        PushButton { text: "Connect"; primary: true; enabled: !cs.busy && (cs.kind === "mtp" || cs.kind === "rclone" ? true : host.text !== ""); onClicked: cs.connect() }
+        PushButton { text: "Connect"; primary: enabled; enabled: !cs.busy && (cs.kind === "mtp" ? true : cs.kind === "rclone" ? (cs.found.remotes || []).length > 0 : host.text !== ""); onClicked: cs.connect() }
     ]
 }
