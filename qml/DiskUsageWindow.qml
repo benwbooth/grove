@@ -112,6 +112,7 @@ Window {
         trashAsk = ""
         Async.call(app.grove, k => app.grove.trashPaths(k, JSON.stringify([p])), r => {
             if (r.errors && r.errors.length) { errText.text = r.errors.join("\n"); return }
+            if (r.denied && r.denied.length) { errText.text = "“" + p.substring(p.lastIndexOf("/") + 1) + "” isn't yours to move to the Trash. Delete it from a Grove window to do it as administrator."; return }
             app.grove.duRemoved(du.scan, n)
             du.sel = du.app.grove.duParent(du.scan, n)
             app.refreshTrash()

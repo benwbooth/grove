@@ -421,16 +421,15 @@ fn fat_resize(c: &Connection, d: &Disk, p: &Part, size: u64, unlocked: bool) -> 
         grove_core::diskops::fat_resize(&d.loop_file, p.number, start, end)?;
         return reattach(c, d);
     }
-    let mut cmd = std::process::Command::new("pkexec");
-    cmd.arg(crate::roothelper::exe()).args(["--root-helper", "fat-resize", &d.device, &p.number.to_string(), &start.to_string(), &end.to_string(), if unlocked { "1" } else { "0" }]);
-    let o = cmd.output().map_err(|e| format!("Couldn't ask for permission (pkexec): {e}"))?;
-    match o.status.code() {
-        Some(0) => {
+    let (n, st, en) = (p.number.to_string(), start.to_string(), end.to_string());
+    match crate::roothelper::as_root(&["fat-resize", &d.device, &n, &st, &en, if unlocked { "1" } else { "0" }]) {
+        Ok(_) => {
             rescan(c, &d.id);
             Ok(())
         }
-        Some(126) | Some(127) => Err("Resizing FAT needs the administrator password; it was refused or cancelled.".into()),
-        _ => Err(String::from_utf8_lossy(&o.stderr).trim().to_string()),
+        Err(crate::roothelper::AdminError::Cancelled) => Err("Resizing FAT needs the administrator password; it was refused or cancelled.".into()),
+        Err(crate::roothelper::AdminError::Unavailable) => Err("Couldn't ask for permission: pkexec (polkit) isn't available.".into()),
+        Err(crate::roothelper::AdminError::Failed(m)) => Err(m),
     }
 }
 

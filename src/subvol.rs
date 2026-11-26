@@ -75,14 +75,10 @@ pub fn delete(path: &str) -> Value {
         Ok(()) => json!({"ok": true}),
         Err(btrfs::DeleteError::Other(e)) => json!({"error": e}),
         Err(btrfs::DeleteError::NeedsRoot) => {
-            let exe = crate::roothelper::exe();
-            match std::process::Command::new("pkexec").arg(&exe).arg("--root-helper").arg("subvol-delete").arg(path).output() {
-                Ok(o) if o.status.success() => json!({"ok": true, "elevated": true}),
-                Ok(o) if o.status.code() == Some(126) || o.status.code() == Some(127) => {
-                    json!({"error": "Not deleted: the administrator password wasn't given."})
-                }
-                Ok(o) => json!({"error": format!("Couldn't delete it: {}", String::from_utf8_lossy(&o.stderr).trim())}),
-                Err(_) => json!({"error": "Deleting this needs administrator rights, and pkexec (polkit) isn't available."}),
+            match crate::roothelper::as_root(&["subvol-delete", path]) {
+                Ok(_) => json!({"ok": true, "elevated": true}),
+                Err(crate::roothelper::AdminError::Cancelled) => json!({"error": "Not deleted: the administrator password wasn't given."}),
+                Err(e) => json!({"error": e.words("Deleting it")}),
             }
         }
     }

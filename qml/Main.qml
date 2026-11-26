@@ -204,7 +204,10 @@ Item {
             if (i < 0) app.jobs.append(row)
             else { row.started = app.jobs.get(i).started; app.jobs.set(i, row) }
             if (j.state === "done" || j.state === "cancelled" || j.state === "failed") {
-                if (j.errors && j.errors.length) app.notifyAll("error", j.errors.join("\n"))
+                // Refused for lack of rights: offer to redo it as administrator.
+                const aw = app.activeWindow || app.windows[0]
+                if (j.denied && aw && aw.offerAdmin) aw.offerAdmin({ op: "job", kind: j.kind, sources: j.sources, dest: j.dest, errors: [] }, r => { if (r.results && r.results.length) aw.selectAfterJob(j.dest || "", r.results) })
+                else if (j.errors && j.errors.length) app.notifyAll("error", j.errors.join("\n"))
                 if (j.results && j.results.length && app.activeWindow) app.activeWindow.selectAfterJob(j.dest || "", j.results)
                 cleanup.restart()
             }

@@ -610,11 +610,12 @@ FocusScope {
     // ---------- file actions ----------
     function newFolder() {
         if (special) return
-        Async.call(grove, k => grove.newFolder(k, pane.path, ""), r => {
-            if (r.error) { win.toast("error", r.error); return }
-            pane.pendingSelect = [r.path]
-            pane.renameWhenLoaded = r.path
-            selectWhenThere(r.path, true)
+        const made = p => { pane.pendingSelect = [p]; pane.renameWhenLoaded = p; selectWhenThere(p, true) }
+        const dir = pane.path
+        Async.call(grove, k => grove.newFolder(k, dir, ""), r => {
+            if (r.denied) win.offerAdmin({ op: "mkdir", dir: dir, name: "" }, a => { if (a.results && a.results.length) made(a.results[0]) })
+            else if (r.error) win.toast("error", r.error)
+            else made(r.path)
         })
     }
     // A btrfs subvolume, named and renamed like a new folder.
@@ -629,9 +630,11 @@ FocusScope {
     }
     function newFile(name) {
         if (special) return
-        Async.call(grove, k => grove.newFile(k, pane.path, name || ""), r => {
-            if (r.error) { win.toast("error", r.error); return }
-            selectWhenThere(r.path, true)
+        const dir = pane.path
+        Async.call(grove, k => grove.newFile(k, dir, name || ""), r => {
+            if (r.denied) win.offerAdmin({ op: "newfile", dir: dir, name: name || "" }, a => { if (a.results && a.results.length) selectWhenThere(a.results[0], true) })
+            else if (r.error) win.toast("error", r.error)
+            else selectWhenThere(r.path, true)
         })
     }
     property string renameWhenLoaded: ""
@@ -670,7 +673,8 @@ FocusScope {
         pane.forceActiveFocus()
         if (!it.path || newName === it.name || !newName) return
         Async.call(grove, k => grove.renamePath(k, it.path, newName), r => {
-            if (r.error) win.toast("error", r.error)
+            if (r.denied) win.offerAdmin({ op: "rename", path: it.path, name: newName }, a => { if (a.results && a.results.length) selectWhenThere(a.results[0], false) })
+            else if (r.error) win.toast("error", r.error)
             else selectWhenThere(r.path, false)
         })
     }
@@ -679,7 +683,8 @@ FocusScope {
         if (!sel.length) return
         if (inTrash) { win.confirmDelete(sel); return }
         const go = () => Async.call(grove, k => grove.trashPaths(k, JSON.stringify(sel)), r => {
-            if (r.errors && r.errors.length) win.toast("error", r.errors.join("\n"))
+            if (r.denied && r.denied.length) win.offerAdmin({ op: "delete", paths: r.denied, trash: true, errors: r.errors })
+            else if (r.errors && r.errors.length) win.toast("error", r.errors.join("\n"))
             app.refreshTrash()
         })
         if (app.settings.confirm_trash) win.confirm("Move " + (sel.length === 1 ? "this item" : sel.length + " items") + " to the Trash?", "You can put items back from the Trash later.", "Move to Trash", go)
@@ -832,7 +837,7 @@ FocusScope {
         if (!paths.length) return false
         if (dest.indexOf(":///") > 0 || dest.indexOf("trash:") === 0) {
             if (dest.indexOf("trash:") === 0) {
-                Async.call(grove, k => grove.trashPaths(k, JSON.stringify(paths)), r => { if (r.errors.length) win.toast("error", r.errors.join("\n")); app.refreshTrash() })
+                Async.call(grove, k => grove.trashPaths(k, JSON.stringify(paths)), r => { if (r.denied && r.denied.length) win.offerAdmin({ op: "delete", paths: r.denied, trash: true, errors: r.errors }); else if (r.errors.length) win.toast("error", r.errors.join("\n")); app.refreshTrash() })
                 return true
             }
             return false

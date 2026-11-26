@@ -167,6 +167,9 @@ pub mod ffi {
         fn cancel_job(self: &Grove, id: i32);
         #[qinvokable]
         fn trash_paths(self: &Grove, key: &QString, paths: &QString);
+        /// Redo a refused file operation as administrator (polkit asks).
+        #[qinvokable]
+        fn admin_files(self: &Grove, key: &QString, op: &QString);
         #[qinvokable]
         fn delete_paths(self: &Grove, key: &QString, paths: &QString);
         /// Put back items from the trash (their `key` JSON from the model).

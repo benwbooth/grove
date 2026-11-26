@@ -154,10 +154,61 @@ ApplicationWindow {
         const what = paths.length === 1 ? "“" + paths[0].substring(paths[0].lastIndexOf("/") + 1) + "”" : paths.length + " items"
         confirm("Delete " + what + " permanently?", "This can't be undone: the items won't go to the Trash.", "Delete", () =>
             Async.call(app.grove, k => app.grove.deletePaths(k, JSON.stringify(paths)), r => {
-                if (r.errors && r.errors.length) toast("error", r.errors.join("\n"))
+                if (r.denied && r.denied.length) offerAdmin({ op: "delete", paths: r.denied, errors: r.errors })
+                else if (r.errors && r.errors.length) toast("error", r.errors.join("\n"))
                 app.refreshTrash()
                 forEachPane(p => { if (p.inTrash) p.model.reload() })
             }), true)
+    }
+    // A file operation this user was refused (a system file, a folder
+    // that isn't theirs): say what grove would do as administrator, and do
+    // it only if they agree and polkit then accepts the password.
+    // o: {op: "delete"|"rename"|"mkdir"|"newfile"|"job", ..., trash: true
+    // when it was a Move to Trash, errors: other items' errors}.
+    readonly property bool testAdmin: (app.grove.env("GROVE_TEST") || "") !== ""
+    function offerAdmin(o, done) {
+        const base = p => p.substring(p.lastIndexOf("/") + 1) || p
+        const items = (list, one) => list.length === 1 ? "“" + base(list[0]) + "”" : list.length + " " + one
+        const pw = " You'll be asked for an administrator password first."
+        let title = "", msg = "", action = "", destructive = false
+        if (o.op === "delete") {
+            const what = items(o.paths, "items")
+            title = o.trash ? what + " can't be moved to the Trash" : "You don't have permission to delete " + what
+            msg = (o.trash ? (o.paths.length === 1 ? "It belongs to the system or another user" : "They belong to the system or another user") + ", and there's no Trash for you there. "
+                           : "") + "Grove can delete " + (o.paths.length === 1 ? "it" : "them") + " permanently with administrator rights. This can't be undone." + pw
+            action = "Delete as Administrator"; destructive = true
+        } else if (o.op === "rename") {
+            title = "You don't have permission to rename “" + base(o.path) + "”"
+            msg = "Grove can rename it to “" + o.name + "” with administrator rights." + pw
+            action = "Rename as Administrator"
+        } else if (o.op === "mkdir" || o.op === "newfile") {
+            const thing = o.op === "mkdir" ? "folder" : "file"
+            title = "You don't have permission to make a " + thing + " in “" + base(o.dir) + "”"
+            msg = "Grove can make a new " + thing + " there with administrator rights; it will belong to the administrator (root)." + pw
+            action = o.op === "mkdir" ? "New Folder as Administrator" : "New File as Administrator"
+        } else if (o.op === "job") {
+            const verb = { copy: "copy", move: "move", link: "make aliases of", duplicate: "duplicate" }[o.kind] || "copy"
+            const Verb = verb.charAt(0).toUpperCase() + verb.slice(1)
+            const what = items(o.sources, "items")
+            title = "You don't have permission to " + verb + " " + what + (o.kind === "duplicate" ? "" : " to “" + base(o.dest) + "”")
+            msg = "Grove can " + verb + " " + (o.sources.length === 1 ? "it" : "them") + " with administrator rights; anything new will belong to the administrator (root), and items already there are left as they are." + pw
+            action = (o.kind === "link" ? "Make Aliases" : Verb) + " as Administrator"
+        } else return
+        if (o.errors && o.errors.length) msg += "\n\nNot possible either way: " + o.errors.join(" ")
+        if (bw.testAdmin) console.warn("grove test admin offer", JSON.stringify({ title: title, action: action }))
+        confirm(title, msg, action, () => runAdmin(o, done), destructive)
+    }
+    function runAdmin(o, done) {
+        const req = Object.assign({}, o); delete req.errors; delete req.trash
+        Async.call(app.grove, k => app.grove.adminFiles(k, JSON.stringify(req)), r => {
+            if (bw.testAdmin) console.warn("grove test admin result", JSON.stringify(r))
+            if (r.cancelled) toast("info", "Nothing was changed: the administrator password wasn't given.")
+            else if (r.error) toast("error", r.error)
+            else if (r.errors && r.errors.length) toast("error", r.errors.join("\n"))
+            else if (o.op === "delete") toast("info", (o.paths.length === 1 ? "Deleted" : "Deleted " + o.paths.length + " items") + " as administrator")
+            app.refreshTrash()
+            if (done) done(r)
+        })
     }
     function emptyTrash() {
         const go = () => Async.call(app.grove, k => app.grove.emptyTrash(k), r => {
@@ -1522,6 +1573,11 @@ ApplicationWindow {
         else if (cmd === "frames") { frameGrab.left = Number(arg) || 30; frameGrab.n = 0; frameGrab.start() }
         else if (cmd === "dumppath") console.warn("grove test path", p.path, p.viewMode)
         else if (cmd === "select") p.model.selectPaths(JSON.stringify(arg.split(",")))
+        else if (cmd === "trash") p.trashSelected()
+        else if (cmd === "newfolder") p.newFolder()
+        else if (cmd === "renameto") p.commitRename(p.model.currentRow, arg)
+        else if (cmd === "copyto") app.grove.runJob("copy", JSON.stringify(arg.split(",").slice(1)), arg.split(",")[0])
+        else if (cmd === "accept") { if (confirmSheet.visible) { confirmSheet.close(); if (confirmSheet.fn) confirmSheet.fn() } else console.warn("grove test accept: no sheet") }
         else if (cmd === "previewdrag") p.previewDrag(Number(arg))
         else if (cmd === "extract") p.extract()
         else if (cmd === "viewscroll") { const v = p.viewLoaderItem(); if (v && v.restoreScroll) v.restoreScroll({ y: Number(arg), x: Number(arg) }) }

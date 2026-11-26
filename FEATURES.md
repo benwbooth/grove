@@ -77,6 +77,7 @@ grove aims to have everything Finder and Dolphin have. Status: ✅ done,
 | Copy path | ✅ | ✅ | ✅ |
 | Compress / extract, archives as folders | ✅ | ✅ | ✅ (bsdtar: zip, tar.*, 7z, rar, iso...) |
 | Open as administrator | – | ✅ | ✅ (pkexec) |
+| Redo a refused delete/rename/copy/move/new folder as administrator | ✅ (asks for password) | ✅ | ✅ (says what it will do, then pkexec) |
 | Mount ISO / disk images | ✅ | ✅ | ✅ (udisks loop-setup, read-only) |
 | Burn discs | ✅ | – | ✅ Burn to Disc… (selection, folder, toolbar): xorriso to CD/DVD/BD with a drive picker, disc name, eject, test burn, progress in the jobs list; or a disc image (.iso); no burner: says so and offers the image |
 | Compare files | – | ✅ | ✅ (diff view; opens meld/kompare/kdiff3 if installed) |

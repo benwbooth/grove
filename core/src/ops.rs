@@ -6,7 +6,7 @@
 //! can bring it back.
 
 use crate::trash::{self, TrashItem};
-use crate::util::plain_error;
+use crate::util::{self, plain_error};
 use serde::Serialize;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -146,6 +146,9 @@ pub struct Outcome {
     pub results: Vec<PathBuf>,
     pub errors: Vec<String>,
     pub cancelled: bool,
+    /// Some items were refused for lack of rights (administrator rights
+    /// may do them).
+    pub denied: bool,
 }
 
 struct Run<'a> {
@@ -158,6 +161,7 @@ struct Run<'a> {
     moved: Vec<(PathBuf, PathBuf)>,
     replaced: Vec<TrashItem>,
     errors: Vec<String>,
+    denied: bool,
     buf: Vec<u8>,
 }
 
@@ -232,6 +236,11 @@ fn same_device(a: &Path, b: &Path) -> bool {
 }
 
 impl<'a> Run<'a> {
+    fn fail(&mut self, e: &std::io::Error, p: &Path) {
+        self.denied |= util::is_denied(e);
+        self.errors.push(plain_error(e, p));
+    }
+
     fn report(&mut self, force: bool) {
         if force || self.last_report.elapsed() >= Duration::from_millis(100) {
             self.last_report = Instant::now();
@@ -276,7 +285,7 @@ impl<'a> Run<'a> {
             Err(_) => match remove_tree(dst) {
                 Ok(()) => true,
                 Err(e) => {
-                    self.errors.push(plain_error(&e, dst));
+                    self.fail(&e, dst);
                     false
                 }
             },
@@ -340,7 +349,7 @@ impl<'a> Run<'a> {
         let meta = match std::fs::symlink_metadata(src) {
             Ok(m) => m,
             Err(e) => {
-                self.errors.push(plain_error(&e, src));
+                self.fail(&e, src);
                 return;
             }
         };
@@ -349,7 +358,7 @@ impl<'a> Run<'a> {
         if ft.is_dir() {
             if !merge {
                 if let Err(e) = std::fs::create_dir(dst) {
-                    self.errors.push(plain_error(&e, dst));
+                    self.fail(&e, dst);
                     return;
                 }
                 if top {
@@ -360,7 +369,7 @@ impl<'a> Run<'a> {
             let rd = match std::fs::read_dir(src) {
                 Ok(r) => r,
                 Err(e) => {
-                    self.errors.push(plain_error(&e, src));
+                    self.fail(&e, src);
                     return;
                 }
             };
@@ -397,7 +406,7 @@ impl<'a> Run<'a> {
                         self.created.push(dst.to_path_buf());
                     }
                 }
-                Err(e) => self.errors.push(plain_error(&e, dst)),
+                Err(e) => self.fail(&e, dst),
             }
             self.prog.done_items += 1;
         } else {
@@ -410,7 +419,7 @@ impl<'a> Run<'a> {
                 Ok(false) => {}
                 Err(e) => {
                     let _ = std::fs::remove_file(dst);
-                    self.errors.push(plain_error(&e, src));
+                    self.fail(&e, src);
                 }
             }
             self.prog.done_items += 1;
@@ -429,7 +438,7 @@ impl<'a> Run<'a> {
             let rd = match std::fs::read_dir(src) {
                 Ok(r) => r,
                 Err(e) => {
-                    self.errors.push(plain_error(&e, src));
+                    self.fail(&e, src);
                     return;
                 }
             };
@@ -461,7 +470,7 @@ impl<'a> Run<'a> {
                 self.created.truncate(created_before);
                 if self.errors.len() == before && !self.ctl.is_cancelled() {
                     if let Err(e) = remove_tree(src) {
-                        self.errors.push(plain_error(&e, src));
+                        self.fail(&e, src);
                     }
                     self.moved.push((src.to_path_buf(), dst.to_path_buf()));
                 } else if dst.symlink_metadata().is_ok() && !src.exists() {
@@ -471,7 +480,7 @@ impl<'a> Run<'a> {
                     let _ = remove_tree(dst);
                 }
             }
-            Err(e) => self.errors.push(plain_error(&e, src)),
+            Err(e) => self.fail(&e, src),
         }
         self.report(false);
     }
@@ -489,6 +498,7 @@ pub fn run(spec: &Spec, ctl: &Control, host: &dyn Host) -> Outcome {
         moved: vec![],
         replaced: vec![],
         errors: vec![],
+        denied: false,
         buf: vec![0u8; 1 << 20],
     };
     // Totals first (a rename on one disk is counted as done at once).
@@ -542,7 +552,7 @@ pub fn run(spec: &Spec, ctl: &Control, host: &dyn Host) -> Outcome {
             Kind::Link => {
                 match std::os::unix::fs::symlink(src, &target) {
                     Ok(()) => r.created.push(target.clone()),
-                    Err(e) => r.errors.push(plain_error(&e, &target)),
+                    Err(e) => r.fail(&e, &target),
                 }
                 r.prog.done_items += 1;
             }
@@ -567,7 +577,7 @@ pub fn run(spec: &Spec, ctl: &Control, host: &dyn Host) -> Outcome {
         1 => seq.pop(),
         _ => Some(Action::Seq(seq)),
     };
-    Outcome { undo, results, errors: r.errors, cancelled: ctl.is_cancelled() }
+    Outcome { undo, results, errors: r.errors, cancelled: ctl.is_cancelled(), denied: r.denied }
 }
 
 /// Delete a file or a whole folder for good.

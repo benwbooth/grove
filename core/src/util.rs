@@ -211,6 +211,46 @@ pub fn now_secs() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
+/// EACCES/EPERM: refused for lack of rights (administrator rights may
+/// get past it).
+pub fn is_denied(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(libc::EACCES) | Some(libc::EPERM))
+}
+
+fn may_write_dir(dir: &Path) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else { return false };
+    unsafe { libc::access(c.as_ptr(), libc::W_OK | libc::X_OK) == 0 }
+}
+
+/// Making something in `dir` is refused to this user (its folder isn't
+/// writable by them; a read-only disk doesn't count: root can't either).
+pub fn create_denied(dir: &Path) -> bool {
+    if may_write_dir(dir) {
+        return false;
+    }
+    std::io::Error::last_os_error().raw_os_error() == Some(libc::EACCES)
+}
+
+/// Deleting, renaming or moving `path` away is refused to this user: its
+/// folder isn't writable by them, or the folder is sticky (like /tmp) and
+/// neither it nor the item is theirs.
+pub fn change_denied(path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let dir = match path.parent() {
+        Some(d) if !d.as_os_str().is_empty() => d,
+        _ => Path::new("/"),
+    };
+    if create_denied(dir) {
+        return true;
+    }
+    let me = unsafe { libc::getuid() };
+    match (std::fs::metadata(dir), std::fs::symlink_metadata(path)) {
+        (Ok(d), Ok(f)) => d.mode() & 0o1000 != 0 && me != 0 && d.uid() != me && f.uid() != me,
+        _ => false,
+    }
+}
+
 /// An I/O error in words a person can act on.
 pub fn plain_error(e: &std::io::Error, path: &Path) -> String {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.display().to_string());
@@ -263,6 +303,28 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn refused_changes_are_told_apart() {
+        use std::os::unix::fs::PermissionsExt;
+        if unsafe { libc::getuid() } == 0 {
+            return;
+        }
+        let d = std::env::temp_dir().join(format!("grove-denied-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("locked")).unwrap();
+        std::fs::write(d.join("locked/f"), "x").unwrap();
+        std::fs::write(d.join("mine"), "x").unwrap();
+        std::fs::set_permissions(d.join("locked"), std::fs::Permissions::from_mode(0o555)).unwrap();
+        assert!(change_denied(&d.join("locked/f")));
+        assert!(create_denied(&d.join("locked")));
+        assert!(!change_denied(&d.join("mine")));
+        assert!(!create_denied(&d));
+        let e = std::fs::remove_file(d.join("locked/f")).unwrap_err();
+        assert!(is_denied(&e));
+        std::fs::set_permissions(d.join("locked"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::remove_dir_all(&d).unwrap();
+    }
 
     #[test]
     fn natural_order() {

@@ -174,12 +174,10 @@ pub fn info(path: &str) -> Value {
 
 /// The same change as root: grove's own helper through pkexec (polkit asks).
 fn pkexec(args: &[&str]) -> Value {
-    let exe = crate::roothelper::exe();
-    match std::process::Command::new("pkexec").arg(&exe).arg("--root-helper").args(args).output() {
-        Ok(o) if o.status.success() => json!({"ok": true, "elevated": true}),
-        Ok(o) if o.status.code() == Some(126) || o.status.code() == Some(127) => json!({"error": "Cancelled: the administrator password wasn't given."}),
-        Ok(o) => json!({"error": format!("The change didn't work: {}", String::from_utf8_lossy(&o.stderr).trim())}),
-        Err(_) => json!({"error": "Changing this needs administrator rights, and pkexec (polkit) isn't available."}),
+    match crate::roothelper::as_root(args) {
+        Ok(_) => json!({"ok": true, "elevated": true}),
+        Err(crate::roothelper::AdminError::Cancelled) => json!({"error": "Cancelled: the administrator password wasn't given."}),
+        Err(e) => json!({"error": e.words("The change")}),
     }
 }
 

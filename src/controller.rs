@@ -488,7 +488,8 @@ impl ffi::Grove {
                 ffi::Grove::touched(&qt, dirs);
                 let results: Vec<String> = out.results.iter().map(|p| p.to_string_lossy().into_owned()).collect();
                 let done = json!({"id": id, "title": title, "state": if out.cancelled {"cancelled"} else if out.errors.is_empty() {"done"} else {"failed"},
-                    "errors": out.errors, "results": results, "dest": dest.to_string_lossy()});
+                    "errors": out.errors, "results": results, "dest": dest.to_string_lossy(),
+                    "denied": out.denied && !out.cancelled, "kind": kind_name(kind), "sources": sources.iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>()});
                 let s = done.to_string();
                 jobs().lock().remove(&id);
                 let _ = qt.queue(move |g| g.job_changed(id, qs(&s)));
@@ -531,9 +532,13 @@ impl ffi::Grove {
         self.answer_on("files", key, move || {
             let mut items = Vec::new();
             let mut errors = Vec::new();
+            let mut denied = Vec::new();
             for p in &paths {
                 match trash::trash(p) {
                     Ok(it) => items.push(it),
+                    // Not this user's to move (a system file at /): the
+                    // window offers to delete it as administrator.
+                    Err(_) if util::change_denied(p) => denied.push(p.to_string_lossy().into_owned()),
                     Err(e) => errors.push(e),
                 }
             }
@@ -542,7 +547,7 @@ impl ffi::Grove {
                 ffi::Grove::push_history(&qt, "Move to Trash", Action::Trashed { items });
             }
             ffi::Grove::touched(&qt, paths.iter().filter_map(|p| p.parent()).map(|p| p.to_string_lossy().into_owned()).collect());
-            json!({"trashed": n, "errors": errors})
+            json!({"trashed": n, "errors": errors, "denied": denied})
         });
     }
 
@@ -551,13 +556,16 @@ impl ffi::Grove {
         let qt = self.qt_thread();
         self.answer_on("files", key, move || {
             let mut errors = Vec::new();
+            let mut denied = Vec::new();
             for p in &paths {
-                if let Err(e) = ops::remove_tree(p) {
-                    errors.push(util::plain_error(&e, p));
+                match ops::remove_tree(p) {
+                    Ok(()) => {}
+                    Err(e) if util::is_denied(&e) || util::change_denied(p) => denied.push(p.to_string_lossy().into_owned()),
+                    Err(e) => errors.push(util::plain_error(&e, p)),
                 }
             }
             ffi::Grove::touched(&qt, paths.iter().filter_map(|p| p.parent()).map(|p| p.to_string_lossy().into_owned()).collect());
-            json!({"errors": errors})
+            json!({"errors": errors, "denied": denied})
         });
     }
 
@@ -604,7 +612,7 @@ impl ffi::Grove {
                 ffi::Grove::push_history(&qt, "Rename", a);
                 json!({"ok": true, "path": to})
             }
-            Err(e) => json!({"error": e}),
+            Err(e) => json!({"error": e, "denied": util::change_denied(&p)}),
         });
     }
 
@@ -617,7 +625,7 @@ impl ffi::Grove {
                 ffi::Grove::push_history(&qt, "New Folder", a);
                 json!({"path": p})
             }
-            Err(e) => json!({"error": e}),
+            Err(e) => json!({"error": e, "denied": util::create_denied(&d)}),
         });
     }
 
@@ -660,7 +668,30 @@ impl ffi::Grove {
                     ffi::Grove::push_history(&qt, "New File", a);
                     json!({"path": p})
                 }
-                Err(e) => json!({"error": e}),
+                Err(e) => json!({"error": e, "denied": util::create_denied(&d)}),
+            }
+        });
+    }
+
+    /// Redo a refused file operation as administrator, after the window
+    /// said what it will do: `{"op": "delete", "paths": [...]}`, `{"op":
+    /// "rename", "path", "name"}`, `{"op": "mkdir"|"newfile", "dir",
+    /// "name"}` or `{"op": "job", "kind", "sources", "dest"}`. polkit asks
+    /// for the password first; nothing happens if it isn't given
+    /// (`{"cancelled": true}`). Not undoable (undoing would need it again).
+    pub fn admin_files(&self, key: &QString, op: &QString) {
+        let op: Value = serde_json::from_str(&op.to_string()).unwrap_or(Value::Null);
+        let qt = self.qt_thread();
+        // Not on the files lane: the password prompt may wait a while.
+        self.answer(key, move || {
+            let Some((args, dirs)) = admin_args(&op) else { return json!({"error": "Grove didn't understand what to do as administrator."}) };
+            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            let r = crate::roothelper::as_root(&refs);
+            ffi::Grove::touched(&qt, dirs);
+            match r {
+                Ok(out) => serde_json::from_str(out.trim()).unwrap_or_else(|_| json!({"results": [], "errors": []})),
+                Err(crate::roothelper::AdminError::Cancelled) => json!({"cancelled": true}),
+                Err(e) => json!({"error": e.words("Doing this as administrator")}),
             }
         });
     }
@@ -1800,5 +1831,70 @@ pub fn push_history_any(label: &str, a: Action) {
         if let Some(qt) = m.lock().as_ref() {
             let _ = qt.queue(|g| g.refresh_history());
         }
+    }
+}
+
+fn kind_name(k: Kind) -> &'static str {
+    match k {
+        Kind::Copy => "copy",
+        Kind::Move => "move",
+        Kind::Link => "link",
+        Kind::Duplicate => "duplicate",
+    }
+}
+
+/// The root helper's arguments for an `admin_files` request, and the
+/// folders it changes (to refresh).
+fn admin_args(op: &Value) -> Option<(Vec<String>, Vec<String>)> {
+    let st = |k: &str| op[k].as_str().map(str::to_string);
+    let list = |k: &str| -> Vec<String> { op[k].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default() };
+    let parent = |p: &str| Path::new(p).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_else(|| "/".into());
+    match op["op"].as_str()? {
+        "delete" => {
+            let paths = list("paths");
+            if paths.is_empty() {
+                return None;
+            }
+            let dirs = paths.iter().map(|p| parent(p)).collect();
+            Some(([vec!["files".into(), "delete".into()], paths].concat(), dirs))
+        }
+        "rename" => {
+            let (p, n) = (st("path")?, st("name")?);
+            Some((vec!["files".into(), "rename".into(), p.clone(), n], vec![parent(&p)]))
+        }
+        o @ ("mkdir" | "newfile") => {
+            let d = st("dir")?;
+            Some((vec!["files".into(), o.into(), d.clone(), st("name").unwrap_or_default()], vec![d]))
+        }
+        "job" => {
+            let (kind, dest, sources) = (st("kind")?, st("dest")?, list("sources"));
+            if sources.is_empty() {
+                return None;
+            }
+            let mut dirs = vec![dest.clone()];
+            dirs.extend(sources.iter().map(|p| parent(p)));
+            Some(([vec!["files".into(), "job".into(), kind, dest], sources].concat(), dirs))
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod admin_tests {
+    use super::*;
+
+    #[test]
+    fn admin_requests_become_helper_arguments() {
+        let (a, d) = admin_args(&json!({"op": "delete", "paths": ["/OpenRGB.json"]})).unwrap();
+        assert_eq!(a, ["files", "delete", "/OpenRGB.json"]);
+        assert_eq!(d, ["/"]);
+        let (a, _) = admin_args(&json!({"op": "rename", "path": "/etc/a", "name": "b"})).unwrap();
+        assert_eq!(a, ["files", "rename", "/etc/a", "b"]);
+        let (a, d) = admin_args(&json!({"op": "job", "kind": "copy", "dest": "/opt", "sources": ["/home/u/x"]})).unwrap();
+        assert_eq!(a, ["files", "job", "copy", "/opt", "/home/u/x"]);
+        assert_eq!(d, ["/opt", "/home/u"]);
+        assert_eq!(admin_args(&json!({"op": "mkdir", "dir": "/opt"})).unwrap().0, ["files", "mkdir", "/opt", ""]);
+        assert!(admin_args(&json!({"op": "delete", "paths": []})).is_none());
+        assert!(admin_args(&json!({"op": "chmod"})).is_none());
     }
 }
