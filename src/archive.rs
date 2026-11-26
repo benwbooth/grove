@@ -44,6 +44,33 @@ fn decompress_to(archive: &str, out: &Path) -> Result<(), String> {
 /// relatives, tar with any compression, 7z, rar, cab, iso/udf, cpio, ar/deb,
 /// rpm, xar/pkg, lha, warc, comic book archives. Documents that happen to be
 /// zips (EPUB, ODF, OOXML) aren't on the list: they open in their apps.
+/// A path typed or pasted that goes through an archive
+/// ("/home/me/x.zip/docs/a.txt"): grove's address for it
+/// ("archive:///home/me/x.zip#docs/a.txt"). Anything else comes back as it was.
+pub fn address_for(typed: &str) -> String {
+    let t = typed.trim_end_matches('/');
+    if t.is_empty() || !t.starts_with('/') || std::path::Path::new(t).exists() {
+        return typed.to_string();
+    }
+    // The nearest part that exists: an archive file holding the rest.
+    let mut cut = t.len();
+    while let Some(i) = t[..cut].rfind('/') {
+        if i == 0 {
+            break;
+        }
+        let head = &t[..i];
+        if let Ok(m) = std::fs::metadata(head) {
+            let name = head.rsplit('/').next().unwrap_or(head);
+            if m.is_file() && is_archive("", name) {
+                return format!("archive://{head}#{}", &t[i + 1..]);
+            }
+            break;
+        }
+        cut = i;
+    }
+    typed.to_string()
+}
+
 pub fn is_archive(mime: &str, name: &str) -> bool {
     let n = name.to_lowercase();
     const MIMES: &[&str] = &[
@@ -369,6 +396,22 @@ pub fn extract_member(archive: &str, inner: &str) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn typed_paths_through_archives() {
+        let dir = std::env::temp_dir().join(format!("grove-addr-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let zip = dir.join("x.zip");
+        std::fs::write(&zip, b"PK").unwrap();
+        let z = zip.to_string_lossy();
+        assert_eq!(address_for(&format!("{z}/docs/a.txt")), format!("archive://{z}#docs/a.txt"));
+        assert_eq!(address_for(&format!("{z}/docs/")), format!("archive://{z}#docs"));
+        // Real folders and files, and paths through things that aren't archives, stay.
+        let d = dir.to_string_lossy();
+        assert_eq!(address_for(&d), d.to_string());
+        assert_eq!(address_for(&format!("{d}/nope/x")), format!("{d}/nope/x"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
     #[test]
     fn children_of() {

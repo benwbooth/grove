@@ -119,6 +119,11 @@ pub mod ffi {
         fn start(self: Pin<&mut Grove>);
         #[qinvokable]
         fn home(self: &Grove) -> QString;
+        /// A typed path that goes through an archive ("/x.zip/docs"):
+        /// grove's address for it (answers {path}).
+        #[qinvokable]
+        #[cxx_name = "addressFor"]
+        fn address_for(self: &Grove, key: &QString, typed: &QString);
         /// The system's name (the system disk in Computer).
         #[qinvokable]
         fn os_name(self: &Grove) -> QString;

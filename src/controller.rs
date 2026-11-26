@@ -1579,6 +1579,11 @@ impl ffi::Grove {
         });
     }
 
+    pub fn address_for(&self, key: &QString, typed: &QString) {
+        let t = typed.to_string();
+        self.answer(key, move || json!({"path": crate::archive::address_for(&t)}));
+    }
+
     pub fn usage_scan(&self, folder: &QString) {
         crate::usage::request(self.qt_thread(), folder.to_string());
     }

@@ -38,7 +38,9 @@ Item {
 
     function edit() {
         editing = true
-        field.text = pane.path.indexOf("/") === 0 ? pane.path : grove.home()
+        // (Inside an archive: the plain path through it, as Copy Path gives.)
+        const p = pane.plainPath(pane.path)
+        field.text = p.indexOf("/") === 0 ? p : grove.home()
         field.forceActiveFocus()
         field.selectAll()
     }
@@ -47,7 +49,8 @@ Item {
             let t = field.text.trim()
             if (t.indexOf("~") === 0) t = grove.home() + t.substring(1)
             if (t.indexOf("file://") === 0) t = decodeURIComponent(t.substring(7))
-            if (t) pane.navigate(t)
+            // A path through an archive ("/x.zip/docs") opens inside it.
+            if (t) Async.call(grove, k => grove.addressFor(k, t), r => pane.navigate(r && r.path ? r.path : t))
         }
         editing = false
         completions.close()

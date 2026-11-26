@@ -714,9 +714,18 @@ FocusScope {
     }
     function duplicate() { const sel = selectedPaths(); if (sel.length && !special) grove.runJob("duplicate", JSON.stringify(sel), path) }
     function makeAlias() { const sel = selectedPaths(); if (sel.length && !special) grove.runJob("link", JSON.stringify(sel.map(x => x)), path) }
+    // An address inside an archive as a plain path through it
+    // ("archive:///home/me/x.zip#docs/a.txt" → "/home/me/x.zip/docs/a.txt").
+    function plainPath(p) {
+        if (!p || p.indexOf("archive://") !== 0) return p
+        let s = p.substring("archive://".length)
+        const h = s.indexOf("#")
+        if (h >= 0) s = s.substring(0, h) + (s.length > h + 1 ? "/" + s.substring(h + 1) : "")
+        return s.replace(/\/+$/, "")
+    }
     function copyPath() {
-        const sel = selectedPaths()
-        const t = sel.length ? sel.join("\n") : path
+        const sel = selectedPaths().map(plainPath)
+        const t = sel.length ? sel.join("\n") : plainPath(path)
         grove.copyText(t)
         win.toast("info", "Copied the path" + (sel.length > 1 ? "s" : ""))
     }
