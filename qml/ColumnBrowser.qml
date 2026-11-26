@@ -391,7 +391,7 @@ Item {
                         id: colName
                         visible: !r.renaming
                         anchors.left: ic.right; anchors.leftMargin: 6
-                        anchors.right: sizeLbl.left; anchors.rightMargin: 4
+                        anchors.right: colBranch.visible ? colBranch.left : sizeLbl.left; anchors.rightMargin: 4
                         anchors.verticalCenter: parent.verticalCenter
                         text: r.name
                         elide: Text.ElideMiddle
@@ -404,6 +404,16 @@ Item {
                         anchors.right: parent.right; anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
                         sourceComponent: RenameField { pane: root.pane; row: r.index; original: r.name; isDir: r.isDir }
+                    }
+                    BranchTag {
+                        id: colBranch
+                        z: 5
+                        visible: !r.renaming && branch !== ""
+                        anchors.right: sizeLbl.left; anchors.rightMargin: 4
+                        anchors.verticalCenter: parent.verticalCenter
+                        maxWidth: 110
+                        status: r.git; path: r.path; pane: root.pane
+                        onAccent: r.selected && column.isLast && root.pane.active
                     }
                     // An archive's size, on its button with the arrow.
                     GLabel {

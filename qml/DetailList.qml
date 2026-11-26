@@ -287,6 +287,9 @@ Item {
             readonly property color dimColor: rowItem.selected && root.pane.active ? Qt.rgba(1, 1, 1, 0.8) : Theme.fgSecondary
             Row {
                 x: 10
+                // (Above the row's ItemMouse: the branch tag takes its own clicks;
+                // labels and icons take none, so the row's still clicks through.)
+                z: 1
                 height: parent.height
                 opacity: rowItem.cut || rowItem.hidden ? 0.55 : 1
                 Item {
@@ -370,13 +373,21 @@ Item {
                         id: nameLabel
                         anchors.left: ic.right
                         anchors.leftMargin: 6
-                        anchors.right: parent.right
-                        anchors.rightMargin: 6
+                        width: Math.min(implicitWidth, parent.width - x - 6 - (rowBranch.visible ? rowBranch.width + 6 : 0))
                         anchors.verticalCenter: parent.verticalCenter
                         visible: !rowItem.renaming
                         text: rowItem.name + (rowItem.isLink ? "  ↗" : "")
                         elide: Text.ElideMiddle
                         color: rowItem.textColor
+                    }
+                    BranchTag {
+                        id: rowBranch
+                        z: 5
+                        visible: !rowItem.renaming && branch !== ""
+                        anchors.left: nameLabel.right; anchors.leftMargin: 6
+                        anchors.verticalCenter: parent.verticalCenter
+                        status: rowItem.git; path: rowItem.path; pane: root.pane
+                        onAccent: rowItem.selected && root.pane.active
                     }
                     Loader {
                         active: rowItem.renaming

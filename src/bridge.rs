@@ -32,6 +32,7 @@ pub mod ffi {
         fn grove_test_key(key: i32, modifiers: i32, text: &QString);
         fn grove_test_wheel(x: f64, y: f64, angle_y: i32, pixel_y: i32);
         fn grove_test_wheel_x(x: f64, y: f64, angle_x: i32);
+        fn grove_test_click(x: f64, y: f64);
         fn grove_test_touchpad(x: f64, y: f64, ax: i32, ay: i32, px: i32, py: i32, phase: i32);
         fn grove_set_icon_theme(dark: bool, mac: bool);
         fn grove_grab_windows(path: &QString);
@@ -611,6 +612,9 @@ pub mod ffi {
         fn test_wheel(self: &Grove, x: f64, y: f64, angle_y: i32, pixel_y: i32);
         #[qinvokable]
         fn test_wheel_x(self: &Grove, x: f64, y: f64, angle_x: i32);
+        /// Tests: a real left click at window position (x, y).
+        #[qinvokable]
+        fn test_click(self: &Grove, x: f64, y: f64);
         #[qinvokable]
         fn test_touchpad(self: &Grove, x: f64, y: f64, ax: i32, ay: i32, px: i32, py: i32, phase: i32);
         #[qinvokable]

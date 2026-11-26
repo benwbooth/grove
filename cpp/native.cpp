@@ -1321,6 +1321,19 @@ void grove_test_wheel(double x, double y, int32_t angleY, int32_t pixelY)
     QGuiApplication::sendEvent(w, &ev);
 }
 
+// Test hook: a real left click at window position (x, y).
+void grove_test_click(double x, double y)
+{
+    QWindow* w = QGuiApplication::focusWindow();
+    if (!w && !QGuiApplication::topLevelWindows().isEmpty()) w = QGuiApplication::topLevelWindows().first();
+    if (!w) return;
+    const QPointF pos(x, y);
+    QMouseEvent press(QEvent::MouseButtonPress, pos, w->mapToGlobal(pos), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease, pos, w->mapToGlobal(pos), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QGuiApplication::sendEvent(w, &press);
+    QGuiApplication::sendEvent(w, &release);
+}
+
 void grove_test_wheel_x(double x, double y, int32_t angleX)
 {
     QWindow* w = QGuiApplication::focusWindow();

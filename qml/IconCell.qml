@@ -118,6 +118,8 @@ Item {
 
     Rectangle {
         id: labelBg
+        // (Above the item's mouse area, so the branch tag in it takes clicks.)
+        z: 4
         visible: !cell.renaming
         x: cell.atRight ? iconBg.x + iconBg.width + 4 : Math.round((cell.width - width) / 2)
         y: cell.atRight ? Math.round((cell.height - height) / 2) : iconBg.y + iconBg.height + 3
@@ -146,6 +148,13 @@ Item {
                     color: cell.selected ? Theme.accentText : cell.grid.textColor
                     opacity: cell.cut || cell.hidden ? 0.6 : 1
                 }
+            }
+            BranchTag {
+                anchors.horizontalCenter: cell.atRight ? undefined : parent.horizontalCenter
+                status: cell.git; path: cell.path; pane: cell.pane
+                onAccent: cell.selected
+                px: Math.max(9, cell.grid.textPx - 2)
+                maxWidth: cell.width - 12
             }
             GLabel {
                 visible: (cell.grid.itemInfo || (cell.grid.pane && cell.grid.pane.usageOn)) && cell.info !== ""

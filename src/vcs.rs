@@ -34,6 +34,26 @@ pub fn repo_kind(dir: &Path) -> Option<&'static str> {
     None
 }
 
+/// The branch a git repository's folder is on, from its HEAD file (cheap:
+/// no libgit2): "main", or the short commit when detached. Worktrees and
+/// submodules (a `.git` file pointing elsewhere) are followed.
+pub fn git_branch(dir: &Path) -> Option<String> {
+    let dotgit = dir.join(".git");
+    let gitdir = if dotgit.is_file() {
+        let t = std::fs::read_to_string(&dotgit).ok()?;
+        let p = PathBuf::from(t.trim().strip_prefix("gitdir:")?.trim());
+        if p.is_absolute() { p } else { dir.join(p) }
+    } else {
+        dotgit
+    };
+    let head = std::fs::read_to_string(gitdir.join("HEAD")).ok()?;
+    let head = head.trim();
+    match head.strip_prefix("ref:") {
+        Some(r) => Some(r.trim().trim_start_matches("refs/heads/").to_string()),
+        None => Some(head.chars().take(7).collect()),
+    }
+}
+
 /// The repository holding `dir` (it or a parent): (top, kind).
 fn find_repo(dir: &Path) -> Option<(PathBuf, &'static str)> {
     let mut d = Some(dir);
@@ -310,7 +330,10 @@ pub fn status(dir: &str) -> Value {
             let p = e.path();
             if p.is_dir() {
                 if let Some(k) = repo_kind(&p) {
-                    out.insert(orig.join(e.file_name()).to_string_lossy().into_owned(), format!("@/{k}"));
+                    // git (and jj's git) folders: "@/git/BRANCH" (the views show it by the name).
+                    let branch = if k == "git" || k == "jj" { git_branch(&p) } else { None };
+                    let v = match branch { Some(b) if !b.is_empty() => format!("@/{k}/{b}"), _ => format!("@/{k}") };
+                    out.insert(orig.join(e.file_name()).to_string_lossy().into_owned(), v);
                 }
             }
         }
@@ -326,6 +349,21 @@ pub fn status(dir: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn reads_branches() {
+        let d = std::env::temp_dir().join(format!("grove-vcs-branch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("a/.git")).unwrap();
+        std::fs::write(d.join("a/.git/HEAD"), "ref: refs/heads/feature/x\n").unwrap();
+        std::fs::create_dir_all(d.join("wt")).unwrap();
+        std::fs::write(d.join("wt/.git"), "gitdir: ../a/.git\n").unwrap();
+        assert_eq!(git_branch(&d.join("a")).as_deref(), Some("feature/x"));
+        assert_eq!(git_branch(&d.join("wt")).as_deref(), Some("feature/x"));
+        std::fs::write(d.join("a/.git/HEAD"), "0123456789abcdef\n").unwrap();
+        assert_eq!(git_branch(&d.join("a")).as_deref(), Some("0123456"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn folds_strongest() {
         let mut m = HashMap::new();
