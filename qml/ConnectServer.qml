@@ -78,6 +78,8 @@ Sheet {
                 anchors.fill: parent
                 visible: cs.kind === "rclone"
                 model: cs.found.remotes || []
+                // Nothing to pick: no list (it would open empty).
+                enabled: count > 0
                 font.family: Theme.family
                 font.pixelSize: Theme.body
                 displayText: count ? currentText : "No rclone drives set up yet"
