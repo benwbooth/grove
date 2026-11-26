@@ -307,7 +307,7 @@ ApplicationWindow {
     // With hearth's accounts service, cloud drives and Google sign-in are
     // set up in hearth's Settings > Accounts; grove's own sheets are the
     // fallback when it isn't there (or can't open Settings).
-    function addCloudDrive() { connectSheet.close(); if (app.accountsService) openAccounts("add", () => cloudSheet.start()); else cloudSheet.start() }
+    function addCloudDrive() { connectSheet.close(); if (app.accountsService) openAccounts("clouddrives:add", () => cloudSheet.start()); else cloudSheet.start() }
     // Sign in with Google (Google Docs/Sheets/Slides previews), with its setup.
     function googleSignIn() { if (app.accountsService) openAccounts("setup:google", () => googleSheet.start()); else googleSheet.start() }
     function googleSheetStart() { googleSheet.start() }

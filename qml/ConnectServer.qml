@@ -44,7 +44,7 @@ Sheet {
             { icon: "network-server", tip: "SFTP: a computer you can reach with SSH", value: "sftp" },
             { icon: "folder-remote|network-workgroup", tip: "Windows / Samba share (SMB)", value: "smb" },
             { icon: "folder-cloud|network-workgroup", tip: "WebDAV (Nextcloud, ownCloud, …)", value: "webdav" },
-            { icon: "folder-cloud|cloudstatus", tip: "A cloud drive set up with `rclone config` (Google Drive, Dropbox, OneDrive…)", value: "rclone" },
+            { icon: "folder-cloud|cloudstatus", tip: "A cloud drive: Google Drive, Dropbox, OneDrive, S3… (set up once in Settings › Accounts › Cloud Drives)", value: "rclone" },
             { icon: "phone|smartphone", tip: "A phone connected with USB (choose “File transfer” on the phone)", value: "mtp" }
         ]
         current: cs.kind
@@ -59,7 +59,11 @@ Sheet {
             sftp: "SFTP: files on another computer over SSH. If your SSH key works, leave the password empty.",
             smb: "A shared folder on a Windows PC or a NAS. The share name goes in Folder (for example “Public” or “Public/Photos”).",
             webdav: "A WebDAV address, such as https://cloud.example.com/remote.php/dav/files/you/",
-            rclone: "Cloud drives: Google Drive, OneDrive, Dropbox, iCloud, S3 and 70 more, through rclone. Add one with the button below; pick it here to open it.",
+            rclone: (cs.found.remotes || []).length
+                    ? "Cloud drives: Google Drive, OneDrive, Dropbox, iCloud, S3 and 70 more, through rclone. Pick one to open it, or add another with the button below."
+                    : cs.app.accountsService
+                      ? "No cloud drive set up yet. To add one (once, for all your apps): click Add a Cloud Drive below. Settings opens at Accounts › Cloud Drives: pick the service (Google Drive, Dropbox, OneDrive, S3…) and sign in. Then open Connect to Server again and pick it here."
+                      : "No cloud drive set up yet. Click Add a Cloud Drive below: pick the service (Google Drive, Dropbox, OneDrive, S3…) and sign in, step by step. Then pick it here.",
             mtp: "Plug in the phone with USB, unlock it, and choose “File transfer” on its notification."
         })[cs.kind]
     }
@@ -102,8 +106,9 @@ Sheet {
         spacing: 6
         visible: cs.kind === "rclone"
         PushButton {
-            text: cs.app.accountsService ? "Open Settings › Accounts…" : "Add Cloud Drive…"
-            tip: cs.app.accountsService ? "Cloud drives and accounts are set up in hearth's Settings › Accounts, once for all your apps" : "Set up a new drive step by step: pick the service, sign in, done"
+            primary: (cs.found.remotes || []).length === 0
+            text: "Add a Cloud Drive…"
+            tip: cs.app.accountsService ? "Opens Settings › Accounts › Cloud Drives (set up once for all your apps): pick the service and sign in" : "Set up a new drive step by step: pick the service, sign in, done"
             onClicked: cs.win.addCloudDrive()
         }
         Repeater {
