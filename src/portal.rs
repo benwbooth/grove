@@ -29,8 +29,30 @@ pub fn answer(id: &str, ok: bool, uris_json: &str, choices_json: &str) {
     }
 }
 
-struct Chooser {
-    qt: CxxQtThread<ffi::Grove>,
+// The chooser has no Qt handle of its own: the D-Bus name is claimed first
+// thing in main (claim_early), before Qt starts, and Qt's thread arrives here
+// once the interface has loaded (serve). Requests in between wait for it.
+struct Chooser;
+
+static QT: OnceLock<CxxQtThread<ffi::Grove>> = OnceLock::new();
+static QT_WAITERS: Mutex<Vec<oneshot::Sender<()>>> = parking_lot::const_mutex(Vec::new());
+
+async fn qt_ready() -> &'static CxxQtThread<ffi::Grove> {
+    loop {
+        if let Some(qt) = QT.get() {
+            return qt;
+        }
+        let (tx, rx) = oneshot::channel();
+        {
+            let mut w = QT_WAITERS.lock();
+            // Set between the check and taking the lock: don't wait.
+            if QT.get().is_some() {
+                continue;
+            }
+            w.push(tx);
+        }
+        let _ = rx.await;
+    }
 }
 
 fn opt_str(o: &HashMap<String, OwnedValue>, k: &str) -> String {
@@ -125,7 +147,7 @@ impl Chooser {
             "currentFilter": current_filter(&options),
         })
         .to_string();
-        let _ = self.qt.queue(move |g| g.chooser_request(QString::from(req.as_str())));
+        let _ = qt_ready().await.queue(move |g| g.chooser_request(QString::from(req.as_str())));
         let (code, uris, choices) = rx.await.unwrap_or((2, vec![], vec![]));
         let mut out: HashMap<String, OwnedValue> = HashMap::new();
         if code == 0 {
@@ -161,17 +183,34 @@ impl Chooser {
 
 static CONN: OnceLock<zbus::blocking::Connection> = OnceLock::new();
 
-pub fn serve(qt: CxxQtThread<ffi::Grove>) {
-    std::thread::spawn(move || {
-        let r = zbus::blocking::connection::Builder::session()
-            .and_then(|b| b.serve_at("/org/freedesktop/portal/desktop", Chooser { qt }))
-            .and_then(|b| b.name("org.freedesktop.impl.portal.desktop.grove"))
-            .and_then(|b| b.build());
-        match r {
-            Ok(c) => {
-                let _ = CONN.set(c);
-            }
-            Err(e) => eprintln!("grove --portal: can't serve the file chooser: {e}"),
+/// Claims org.freedesktop.impl.portal.desktop.grove right away, before Qt
+/// starts (main, in portal mode). xdg-desktop-portal starts `grove --portal`
+/// and waits for this name; claimed only after Qt and the QML had loaded,
+/// anything Qt asked the portal while starting (its theme, its file dialog
+/// helper) waited on the portal waiting on grove, until D-Bus's 25 s
+/// timeout: a grey desktop for 25 s at login and apps (the Claude app) that
+/// missed dark mode (2026-11-25, twice).
+pub fn claim_early() {
+    if CONN.get().is_some() {
+        return;
+    }
+    let r = zbus::blocking::connection::Builder::session()
+        .and_then(|b| b.serve_at("/org/freedesktop/portal/desktop", Chooser))
+        .and_then(|b| b.name("org.freedesktop.impl.portal.desktop.grove"))
+        .and_then(|b| b.build());
+    match r {
+        Ok(c) => {
+            let _ = CONN.set(c);
         }
-    });
+        Err(e) => eprintln!("grove --portal: can't serve the file chooser: {e}"),
+    }
+}
+
+/// Qt is up: requests that arrived meanwhile (and every later one) go to it.
+pub fn serve(qt: CxxQtThread<ffi::Grove>) {
+    let _ = QT.set(qt);
+    for tx in QT_WAITERS.lock().drain(..) {
+        let _ = tx.send(());
+    }
+    claim_early();
 }

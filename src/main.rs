@@ -141,6 +141,10 @@ fn main() {
         i += 1;
     }
     let portal = std::env::var_os("GROVE_PORTAL").is_some();
+    // The portal's D-Bus name first, before anything Qt (portal.rs claim_early).
+    if portal {
+        crate::portal::claim_early();
+    }
     let service = std::env::var_os("GROVE_SERVICE").is_some();
     // Already running? Hand over and exit.
     if !portal && !service {
