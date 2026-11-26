@@ -206,6 +206,10 @@ pub mod qobject {
         /// A listing finished (to restore scroll/selection).
         #[qsignal]
         fn loaded(self: Pin<&mut FolderModel>);
+        /// The folder changed on disk after loading (items came, went or
+        /// changed), so badges read from outside the listing may be stale.
+        #[qsignal]
+        fn merged(self: Pin<&mut FolderModel>);
     }
 }
 
@@ -744,6 +748,7 @@ impl qobject::FolderModel {
         all.extend(fresh);
         self.as_mut().rust_mut().all = all;
         self.as_mut().resort();
+        self.as_mut().merged();
     }
 
     fn load_path(mut self: Pin<&mut Self>, path: &QString) {

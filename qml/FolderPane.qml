@@ -247,11 +247,27 @@ FocusScope {
                 pane.pendingMenu = ""
                 if (row >= 0) pane.showItemMenu(row, 0, 0)
             }
-            if (app && app.settings.show_git_status && !pane.special && !pane.searching) {
-                Async.call(grove, k => grove.gitStatus(k, pane.path), r => { pane.gitMap = r || {}; pane.inGit = !!r && (r.__vcs === "git" || r.__vcs === "jj"); fm.setGitStatus(JSON.stringify(r || {})) })
-            }
+            pane.vcsBadges()
             pane.cloudBadges()
         }
+        // New or changed items need their badges read again (a cloned repo).
+        onMerged: vcsTimer.restart()
+    }
+    Timer { id: vcsTimer; interval: 1000; onTriggered: pane.vcsBadges() }
+
+    // Version control badges. Replies run on their own threads and can come
+    // back out of order (a big repo's status outlasts a quick folder's), so
+    // only the newest request for the folder still shown counts.
+    property int vcsSeq: 0
+    function vcsBadges() {
+        if (!(app && app.settings.show_git_status && !pane.special && !pane.searching)) return
+        const asked = pane.path, seq = ++pane.vcsSeq
+        Async.call(grove, k => grove.gitStatus(k, asked), r => {
+            if (seq !== pane.vcsSeq || asked !== pane.path) return
+            pane.gitMap = r || {}
+            pane.inGit = !!r && (r.__vcs === "git" || r.__vcs === "jj")
+            fm.setGitStatus(JSON.stringify(r || {}))
+        })
     }
 
     function titleFor(p) {
