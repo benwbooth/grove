@@ -356,11 +356,13 @@ Window {
             Item {
                 anchors.fill: parent
                 visible: ql.pv.kind === "media"
+                MediaDevices { id: qlOutputs }
                 MediaPlayer {
                     id: player
                     source: ql.pv.kind === "media" ? "file://" + encodeURI(ql.item.path).replace(/#/g, "%23") : ""
                     videoOutput: video
-                    audioOutput: AudioOutput {}
+                    // (Follows the default output as it changes: headphones.)
+                    audioOutput: AudioOutput { device: qlOutputs.defaultAudioOutput }
                     onSourceChanged: if (source != "" && ql.pendingPos < 0) play()
                     onMediaStatusChanged: if (ql.pendingPos >= 0 && (mediaStatus === MediaPlayer.LoadedMedia || mediaStatus === MediaPlayer.BufferedMedia)) { position = ql.pendingPos; ql.pendingPos = -1 }
                 }

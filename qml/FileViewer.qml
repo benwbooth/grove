@@ -271,11 +271,15 @@ Item {
     }
 
     // Music and video: play on request (browsing doesn't start sound).
+    MediaDevices { id: outputs }
     MediaPlayer {
         id: player
         source: (fv.pv.kind === "media" && fv.active) || fsWin.visible ? "file://" + encodeURI(fv.path).replace(/#/g, "%23") : ""
         videoOutput: video
-        audioOutput: AudioOutput {}
+        // The sound goes where the desktop's default output is now (it
+        // followed whatever was the default when the preview was made, so
+        // after switching to headphones it played to the old output).
+        audioOutput: AudioOutput { device: outputs.defaultAudioOutput }
         // A video shows its first frame.
         onSourceChanged: if (source != "" && fv.pv.video) { play(); pause() }
         // Back where it was (the session), paused.
