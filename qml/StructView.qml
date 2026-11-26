@@ -52,6 +52,15 @@ Item {
         const r = tdoc.nextHit(list.currentIndex, dir)
         if (r >= 0) { list.currentIndex = r; list.positionViewAtIndex(r, ListView.Center) }
     }
+    // A long value whole (its first 200 000 characters: Copy Value copies all of it).
+    function showWhole(row) {
+        if (row < 0) return
+        wholeSheet.row = row
+        wholeSheet.title = tdoc.pathOf(row)
+        wholeText.text = tdoc.fullValue(row, 200000)
+        wholeSheet.more = tdoc.valueLonger(row, 200000)
+        wholeSheet.open()
+    }
     function copy(what) { if (list.currentIndex >= 0) tdoc.copy(list.currentIndex, what) }
     property string copiedText: ""
     Connections {
@@ -74,6 +83,7 @@ Item {
         else if (a.startsWith("tree:select:")) go(parseInt(a.substring(12)))
         else if (a === "tree:next") goHit(1)
         else if (a.startsWith("tree:copy:")) copy(a.substring(10))
+        else if (a.startsWith("tree:whole:")) showWhole(parseInt(a.substring(11)))
         else if (a === "tree:menu") { rowMenu.row = list.currentIndex; rowMenu.popup(sv, sv.width / 3, 80) }
         let rows = []
         for (let i = 0; i < Math.min(list.count, 12); i++) rows.push("  ".repeat(rowData(i, "depth")) + rowData(i, "key") + " = " + (rowData(i, "value") || rowData(i, "summary")) + " (" + rowData(i, "kind") + ")" + (rowData(i, "hit") ? " *" : ""))
@@ -82,6 +92,7 @@ Item {
 
     readonly property real rowH: Math.round(Theme.body * zoom * 1.62)
     readonly property real indent: Math.round(16 * zoom)
+    readonly property int maxIndent: 40
     // Value colours, by type (dark and light).
     readonly property color cString: Theme.dark ? "#a5d6a7" : "#1a7f37"
     readonly property color cNumber: Theme.dark ? "#79c0ff" : "#0550ae"
@@ -95,7 +106,7 @@ Item {
         return vk === "string" ? cString : vk === "number" ? cNumber : vk === "boolean" ? cBool : vk === "date" ? cDate : vk === "alias" ? cAlias : Theme.fgSecondary
     }
     function keyColor(kk) {
-        return kk === "index" || kk === "special" ? Theme.fgSecondary : kk === "attr" ? cAttr : kk === "element" ? cElement : cKey
+        return kk === "index" || kk === "special" || kk === "page" ? Theme.fgSecondary : kk === "attr" ? cAttr : kk === "element" ? cElement : cKey
     }
 
     // Search, matches, open/close everything.
@@ -249,7 +260,8 @@ Item {
             readonly property color ink: row.current && list.activeFocus ? Theme.accentText : Theme.fg
             Item {
                 id: tri
-                x: 8 + row.depth * sv.indent
+                // Very deep nesting stops indenting (the key says how deep).
+                x: 8 + Math.min(row.depth, sv.maxIndent) * sv.indent
                 width: Math.round(14 * sv.zoom)
                 height: sv.rowH
                 Text {
@@ -276,11 +288,11 @@ Item {
                 spacing: 0
                 Text {
                     id: keyText
-                    text: row.keyKind === "attr" ? "@" + row.key : row.key
+                    text: (row.depth > sv.maxIndent ? "⋯" + row.depth + " " : "") + (row.keyKind === "attr" ? "@" + row.key : row.key)
                     color: row.current && list.activeFocus ? Theme.accentText : sv.keyColor(row.keyKind)
                     font.family: Theme.mono
                     font.pixelSize: Theme.body * 0.92 * sv.zoom
-                    font.italic: row.keyKind === "special"
+                    font.italic: row.keyKind === "special" || row.keyKind === "page"
                     renderType: Text.NativeRendering
                 }
                 Text {
@@ -293,7 +305,7 @@ Item {
                 Text {
                     id: valText
                     // Wrapped: the whole value (with its line breaks), as wide as the row allows.
-                    readonly property string whole: sv.wrap && row.vkind !== "container" && row.value.length > 20 ? tdoc.fullValue(row.index) : ""
+                    readonly property string whole: sv.wrap && row.vkind !== "container" && row.value.length > 20 ? tdoc.fullValue(row.index, 4000) : ""
                     text: row.vkind === "container" ? (row.expanded ? "" : row.summary) : whole !== "" ? (row.value.charAt(0) === '"' ? '"' + whole + '"' : whole) : row.value
                     width: sv.wrap ? Math.max(60, Math.min(implicitWidth, list.width - content.x - keyText.width - sepText.width - typeText.width - 28)) : implicitWidth
                     wrapMode: sv.wrap ? Text.WrapAtWordBoundaryOrAnywhere : Text.NoWrap
@@ -308,7 +320,7 @@ Item {
                 id: typeText
                 y: Math.round((sv.rowH - height) / 2)
                 x: sv.wrap ? list.width - width - 12 : Math.max(content.x + content.width + 16, list.width + list.contentX - width - 12)
-                text: row.kind + (row.vkind === "container" && row.expanded ? " · " + row.summary.replace(/[^0-9]/g, "") : "")
+                text: row.kind + (row.vkind === "container" && row.expanded && row.keyKind !== "page" ? " · " + row.summary.replace(/[^0-9]/g, "") : "")
                 color: row.current && list.activeFocus ? Theme.accentText : Theme.fgTertiary
                 font.family: Theme.family
                 font.pixelSize: Theme.small * sv.zoom
@@ -329,7 +341,7 @@ Item {
                 visible: mouse.containsMouse && !rowMenu.visible
                 text: {
                     if (!visible) return ""
-                    const full = row.vkind === "container" ? "" : tdoc.fullValue(row.index)
+                    const full = row.vkind === "container" ? "" : tdoc.fullValue(row.index, 1000)
                     return tdoc.pathOf(row.index) + "  (" + row.kind + ")" + (full !== "" && (full.length > 60 || full.indexOf("\n") >= 0) ? "\n\n" + full : "") + "\n\nRight-click to copy its value or path"
                 }
             }
@@ -343,6 +355,7 @@ Item {
         GMenuItem { text: "Copy Value"; iconName: "edit-copy"; shortcutText: "Ctrl+C"; tip: rowMenu.container ? (tdoc.format === "json" || tdoc.format === "xml" ? "Copy this part of the file, as it's written" : "Copy everything inside, as JSON") : "Copy the value as text"; onTriggered: tdoc.copy(rowMenu.row, "value") }
         GMenuItem { text: "Copy Path"; iconName: "edit-copy-path|edit-copy"; shortcutText: "Ctrl+Shift+C"; tip: tdoc.format === "xml" ? "Copy where it is, as an XPath (/config/server[2]/@host)" : "Copy where it is (servers[2].host)"; onTriggered: tdoc.copy(rowMenu.row, "path") }
         GMenuItem { text: "Copy Key"; tip: "Copy its name or index"; onTriggered: tdoc.copy(rowMenu.row, "key") }
+        GMenuItem { text: "Show Whole Value…"; enabled: rowMenu.row >= 0 && tdoc.valueLonger(rowMenu.row, 300); tip: "Read all of a long value (the row shows its start)"; onTriggered: sv.showWhole(rowMenu.row) }
         GMenuSeparator {}
         GMenuItem { enabled: rowMenu.container; text: "Expand Everything Inside"; shortcutText: "Alt+Right"; tip: "Open this and every level inside it (as many as fit)"; onTriggered: tdoc.setOpen(rowMenu.row, true, true) }
         GMenuItem { enabled: rowMenu.container; text: "Collapse Everything Inside"; shortcutText: "Alt+Left"; tip: "Close this and everything inside it"; onTriggered: tdoc.setOpen(rowMenu.row, false, true) }
@@ -359,11 +372,64 @@ Item {
         onRunningChanged: if (running) sv.readingLong = false
         onTriggered: sv.readingLong = true
     }
-    GLabel {
+    Column {
         anchors.centerIn: list
+        spacing: 8
         visible: (tdoc.loading && sv.readingLong) || (!tdoc.loading && tdoc.error === "" && list.count === 0 && tdoc.path !== "")
-        text: tdoc.loading ? "Reading…" : "Empty"
-        color: Theme.fgSecondary
+        GLabel {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: tdoc.loading ? "Reading…" + (tdoc.progress > 0 ? " " + Math.round(tdoc.progress * 100) + "%" : "") : "Empty"
+            color: Theme.fgSecondary
+        }
+        Rectangle {
+            visible: tdoc.loading && tdoc.progress > 0
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 160; height: 4; radius: 2
+            color: Theme.field
+            Rectangle { width: parent.width * tdoc.progress; height: parent.height; radius: 2; color: Theme.accent }
+        }
+    }
+
+    Sheet {
+        id: wholeSheet
+        property int row: -1
+        property bool more: false
+        parent: Overlay.overlay
+        width: Math.min(parent ? parent.width - 40 : 700, Math.round(720 * Theme.pt))
+        message: more ? "The first 200,000 characters; Copy Value copies all of it." : ""
+        Rectangle {
+            width: parent.width
+            height: Math.min(Math.round(420 * Theme.pt), Math.max(80, wholeText.contentHeight + 16))
+            radius: 6
+            color: Theme.field
+            Flickable {
+                id: wholeFlick
+                anchors.fill: parent
+                anchors.margins: 8
+                clip: true
+                contentHeight: wholeText.contentHeight
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: GScrollBar {}
+                TextEdit {
+                    id: wholeText
+                    width: wholeFlick.width
+                    readOnly: true
+                    selectByMouse: true
+                    wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
+                    textFormat: TextEdit.PlainText
+                    font.family: Theme.mono
+                    font.pixelSize: Theme.body * 0.92
+                    renderType: Text.NativeRendering
+                    color: Theme.fg
+                    selectionColor: Theme.accent
+                    selectedTextColor: Theme.accentText
+                }
+            }
+        }
+        buttons: [
+            PushButton { text: "Copy Value"; tip: "Put the whole value on the clipboard"; onClicked: tdoc.copy(wholeSheet.row, "value") },
+            PushButton { text: "Done"; primary: true; tip: "Close (Esc)"; onClicked: wholeSheet.close() }
+        ]
     }
     GLabel {
         anchors.bottom: parent.bottom

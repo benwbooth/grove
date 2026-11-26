@@ -180,7 +180,27 @@ fn err_at(src: &str, offset: usize, message: impl Into<String>) -> ParseError {
 }
 
 fn too_many() -> String {
-    format!("It has more than {} million values, too many to show as a tree", MAX_NODES / 1_000_000)
+    if BUDGET_HIT.with(|h| h.get()) {
+        let gb = BUDGET.with(|b| b.get()) as f64 / (1u64 << 30) as f64;
+        return format!("It's too big to show as a tree here (it would take more than {gb:.1} GB of memory); the Source view shows all of it");
+    }
+    format!("It has more than {} million values, too many to show as a tree; the Source view shows all of it", MAX_NODES / 1_000_000)
+}
+
+thread_local! {
+    /// The most memory one tree may take (set by parse_with from the RAM there is).
+    static BUDGET: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) };
+    static BUDGET_HIT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Memory a tree may use: half of what's available now, between 512 MB and 6 GB.
+pub fn memory_budget() -> usize {
+    let avail = std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|m| m.lines().find(|l| l.starts_with("MemAvailable:")).and_then(|l| l.split_whitespace().nth(1)?.parse::<usize>().ok()))
+        .map(|kb| kb * 1024)
+        .unwrap_or(4 << 30);
+    (avail / 2).clamp(512 << 20, 6 << 30)
 }
 
 /// Builds the arena: children linked first/next, counted.
@@ -223,7 +243,18 @@ impl B {
         (o, s.len() as u32)
     }
     fn full(&self) -> bool {
-        self.nodes.len() >= MAX_NODES
+        if self.nodes.len() >= MAX_NODES {
+            return true;
+        }
+        // Every 64k values: still within the memory budget?
+        if self.nodes.len() & 0xFFFF == 0 && !self.nodes.is_empty() {
+            let used = self.nodes.capacity() * std::mem::size_of::<Node>() + self.last.capacity() * 4 + self.pool.capacity() + SRC_LEN.with(|l| l.get());
+            if used > BUDGET.with(|b| b.get()) {
+                BUDGET_HIT.with(|h| h.set(true));
+                return true;
+            }
+        }
+        false
     }
     /// The finished tree; a synthetic root with one child is dropped.
     fn finish(mut self, format: Format, src: String, root: u32) -> Tree {
@@ -240,8 +271,42 @@ impl B {
     }
 }
 
+thread_local! {
+    static SRC_LEN: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Parse `bytes` as `format`. `cancel` stops a long parse early.
 pub fn parse(bytes: Vec<u8>, format: Format, cancel: &AtomicBool) -> Result<Tree, ParseError> {
+    parse_with(bytes, format, cancel, &std::sync::atomic::AtomicU32::new(0), usize::MAX)
+}
+
+/// `progress` gets how far it is, in thousandths (JSON and XML); a tree
+/// bigger than `budget` bytes stops with a message.
+pub fn parse_with(bytes: Vec<u8>, format: Format, cancel: &AtomicBool, progress: &std::sync::atomic::AtomicU32, budget: usize) -> Result<Tree, ParseError> {
+    BUDGET.with(|b| b.set(budget));
+    BUDGET_HIT.with(|h| h.set(false));
+    SRC_LEN.with(|l| l.set(bytes.len()));
+    PROGRESS.with(|p| p.set(progress as *const _));
+    let r = parse_inner(bytes, format, cancel);
+    PROGRESS.with(|p| p.set(std::ptr::null()));
+    r
+}
+
+thread_local! {
+    static PROGRESS: std::cell::Cell<*const std::sync::atomic::AtomicU32> = const { std::cell::Cell::new(std::ptr::null()) };
+}
+
+fn report(done: usize, total: usize) {
+    PROGRESS.with(|p| {
+        let p = p.get();
+        if !p.is_null() && total > 0 {
+            // SAFETY: set by parse_with for the length of the parse.
+            unsafe { (*p).store((done as u64 * 1000 / total as u64) as u32, Ordering::Relaxed) };
+        }
+    });
+}
+
+fn parse_inner(bytes: Vec<u8>, format: Format, cancel: &AtomicBool) -> Result<Tree, ParseError> {
     let mut src = match String::from_utf8(bytes) {
         Ok(s) => s,
         Err(e) => {
@@ -340,8 +405,11 @@ fn parse_json(src: String, cancel: &AtomicBool) -> Result<Tree, ParseError> {
 
     loop {
         steps += 1;
-        if steps & 0xFFFF == 0 && cancel.load(Ordering::Relaxed) {
-            return Err(ParseError { message: "Cancelled".into(), line: 0, col: 0 });
+        if steps & 0xFFFF == 0 {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(ParseError { message: "Cancelled".into(), line: 0, col: 0 });
+            }
+            report(pos, n);
         }
         if b.full() {
             return Err(ParseError { message: too_many(), line: 0, col: 0 });
@@ -859,8 +927,11 @@ fn parse_xml(src: String, cancel: &AtomicBool) -> Result<Tree, ParseError> {
     }
     loop {
         steps += 1;
-        if steps & 0xFFFF == 0 && cancel.load(Ordering::Relaxed) {
-            return Err(ParseError { message: "Cancelled".into(), line: 0, col: 0 });
+        if steps & 0xFFFF == 0 {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(ParseError { message: "Cancelled".into(), line: 0, col: 0 });
+            }
+            report(r.buffer_position() as usize, src.len());
         }
         if b.full() {
             return Err(ParseError { message: too_many(), line: 0, col: 0 });
@@ -1026,6 +1097,12 @@ impl Tree {
     pub fn expandable(&self, n: u32) -> bool {
         self.nodes[n as usize].count > 0
     }
+    pub fn first_child(&self, n: u32) -> u32 {
+        self.nodes[n as usize].first
+    }
+    pub fn next_sibling(&self, n: u32) -> u32 {
+        self.nodes[n as usize].next
+    }
     pub fn children(&self, n: u32) -> Children<'_> {
         Children { t: self, next: self.nodes[n as usize].first }
     }
@@ -1073,6 +1150,50 @@ impl Tree {
             Cow::Borrowed(raw)
         }
     }
+    /// The start of a leaf's value as text: at most `max` characters (a
+    /// 50 MB string isn't unescaped whole to show a row), and whether there's more.
+    pub fn value_head(&self, n: u32, max: usize) -> (Cow<'_, str>, bool) {
+        let x = &self.nodes[n as usize];
+        if x.flags & V_ALIAS != 0 || (x.kind.is_container() && x.count > 0) {
+            return (self.value(n), false);
+        }
+        let raw = self.span(x.flags & V_SRC != 0, x.val);
+        // Bytes enough for `max` characters (escapes take up to 12).
+        let lim = max.saturating_mul(12).saturating_add(16);
+        if raw.len() <= lim {
+            let v = self.value(n);
+            return match v.char_indices().nth(max) {
+                Some((i, _)) => (Cow::Owned(v[..i].to_string()), true),
+                None => (v, false),
+            };
+        }
+        let mut cut = lim;
+        while !raw.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        let head = &raw[..cut];
+        let text: String = if x.flags & V_RAW != 0 {
+            // Unescape the start only; drop a half escape at the cut.
+            let mut h = head.to_string();
+            if let Some(i) = h.rfind('\\') {
+                if h.len() - i < 12 {
+                    h.truncate(i);
+                }
+            }
+            h.push(h.chars().next().unwrap_or('"'));
+            json_unescape(&h).into_owned()
+        } else {
+            head.to_string()
+        };
+        let t: String = text.chars().take(max).collect();
+        (Cow::Owned(t), true)
+    }
+
+    /// Every `size`-th child of `n` (where each page of children starts).
+    pub fn page_starts(&self, n: u32, size: u32) -> Vec<u32> {
+        self.children(n).enumerate().filter(|(i, _)| *i as u32 % size == 0).map(|(_, c)| c).collect()
+    }
+
     /// The value as it is searched (no unescaping: a borrowed slice).
     fn search_text(&self, n: u32) -> (&str, &str) {
         let x = &self.nodes[n as usize];
@@ -1103,7 +1224,7 @@ impl Tree {
             (Kind::Str, _) => "string",
             (Kind::Num, _) => {
                 let v = self.span(x.flags & V_SRC != 0, x.val);
-                if v.bytes().all(|c| c.is_ascii_digit() || c == b'-' || c == b'+' || c == b'_') || v.starts_with("0x") {
+                if v.bytes().take(64).all(|c| c.is_ascii_digit() || c == b'-' || c == b'+' || c == b'_') || v.starts_with("0x") {
                     "integer"
                 } else {
                     "number"
@@ -1218,6 +1339,10 @@ impl Tree {
 
     fn to_json(&self, n: u32, depth: usize, out: &mut String) {
         let x = &self.nodes[n as usize];
+        if depth > 20_000 {
+            out.push_str("null");
+            return;
+        }
         let pad = |out: &mut String, d: usize| {
             out.push('\n');
             for _ in 0..d {
@@ -1463,6 +1588,44 @@ mod tests {
         assert_eq!(format_for("grove.desktop"), Some(Format::Ini));
         assert_eq!(format_for("x.rs"), None);
         assert_eq!(format_for(".json"), None);
+    }
+
+    #[test]
+    fn monsters() {
+        // 10 000 levels deep: parsed, pathed and copied without recursion trouble.
+        let deep = "[".repeat(10_000) + &"]".repeat(10_000);
+        let t = p(&deep, Format::Json);
+        let mut n = t.root();
+        let mut d = 0;
+        while t.count(n) > 0 {
+            n = t.children(n).next().unwrap();
+            d += 1;
+        }
+        assert_eq!(d, 9_999);
+        assert!(t.path(n).starts_with("[0][0]"));
+        let t2 = p(&("<a>".repeat(5_000) + &"</a>".repeat(5_000)), Format::Xml);
+        assert_eq!(t2.len(), 5_000);
+        // One 5 MB string: its head comes back without unescaping it all.
+        let long = format!("{{\"s\": \"{}\\n{}\"}}", "x".repeat(3_000_000), "y".repeat(2_000_000));
+        let t = p(&long, Format::Json);
+        let s = find(&t, "s");
+        let (h, more) = t.value_head(s, 300);
+        assert_eq!((h.chars().count(), more), (300, true));
+        let (h, more) = t.value_head(s, 10);
+        assert_eq!((h.as_ref(), more), ("xxxxxxxxxx", true));
+        let short = p(r#"{"a": "h\u00e9llo"}"#, Format::Json);
+        assert_eq!(short.value_head(find(&short, "a"), 300), (Cow::Borrowed("héllo"), false));
+        // A budget too small for the tree: a plain message, not a crash.
+        let mut many = String::from("[");
+        for i in 0..300_000 {
+            many.push_str(if i > 0 { ",1" } else { "1" });
+        }
+        many.push(']');
+        let e = parse_with(many.into_bytes(), Format::Json, &AtomicBool::new(false), &std::sync::atomic::AtomicU32::new(0), 4 << 20).err().unwrap();
+        assert!(e.message.contains("too big"), "{e}");
+        // Page starts of a big array.
+        let t = p(&format!("[{}]", vec!["0"; 2500].join(",")), Format::Json);
+        assert_eq!(t.page_starts(t.root(), 1000).len(), 3);
     }
 
     #[test]

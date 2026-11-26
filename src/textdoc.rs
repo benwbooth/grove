@@ -186,7 +186,43 @@ const CACHE_BLOCKS: usize = 160;
 /// A block ends at a line end once this big, or anywhere (at a character
 /// boundary) once HARD_BLOCK_BYTES (one enormous line).
 const SOFT_BLOCK_BYTES: u64 = 1 << 20;
-const HARD_BLOCK_BYTES: u64 = 4 << 20;
+const HARD_BLOCK_BYTES: u64 = 16 << 10;
+/// Lines longer than this are shown folded into pieces this long (a 50 MB
+/// line laid out whole would hold the UI thread for seconds).
+const FOLD_AT: usize = 4096;
+/// Lines longer than this aren't syntax-coloured (syntect is slow on them).
+const COLOUR_MAX_LINE: usize = 2000;
+
+/// `s` with every line longer than FOLD_AT characters broken into pieces.
+fn fold_long(s: &str) -> std::borrow::Cow<'_, str> {
+    if !s.split('\n').any(|l| l.len() > FOLD_AT) {
+        return std::borrow::Cow::Borrowed(s);
+    }
+    let mut out = String::with_capacity(s.len() + s.len() / FOLD_AT + 1);
+    for (i, line) in s.split('\n').enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        if line.len() <= FOLD_AT {
+            out.push_str(line);
+            continue;
+        }
+        let mut n = 0;
+        for c in line.chars() {
+            if n == FOLD_AT {
+                out.push('\n');
+                n = 0;
+            }
+            out.push(c);
+            n += 1;
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
+fn has_long_line(s: &str) -> bool {
+    s.split('\n').any(|l| l.len() > COLOUR_MAX_LINE)
+}
 
 fn qs(s: &str) -> QString {
     QString::from(s)
@@ -421,7 +457,7 @@ fn whole_file(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, mo
                     "code" => {
                         let name = std::path::Path::new(&p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                         let text = if text.contains('\t') { text.replace('\t', "    ") } else { text };
-                        let cols = text.lines().map(|l| l.chars().count()).max().unwrap_or(0);
+                        let cols = text.lines().map(|l| l.chars().count()).max().unwrap_or(0).min(FOLD_AT);
                         // No language from the name: guessed from the content (rules, then Magika).
                         let (name, chosen) = pick_language(&qt, gen, &p, &text, &name);
                         let mut hl = crate::preview::Highlighter::with_language(&text, &name, dark, chosen.as_deref());
@@ -431,16 +467,17 @@ fn whole_file(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, mo
                         let mut n = 0;
                         let mut done_lines = 0;
                         let mut flush = |chunk: &mut String, done_lines: usize, batch: &mut Vec<Block>| {
-                            let rich = done_lines <= HIGHLIGHT_LINES;
+                            let rich = done_lines <= HIGHLIGHT_LINES && !has_long_line(chunk);
                             let body = std::mem::take(chunk);
                             let body = body.strip_suffix('\n').unwrap_or(&body).to_string();
                             batch.push(if rich { Block { text: qs(&hl.html(&body)), rich: true } } else { Block { text: qs(&body), rich: false } });
                         };
-                        for line in text.split_inclusive('\n') {
+                        let folded = fold_long(&text);
+                        for line in folded.split_inclusive('\n') {
                             chunk.push_str(line);
                             n += 1;
                             done_lines += 1;
-                            if n == BLOCK_LINES {
+                            if n == BLOCK_LINES || chunk.len() as u64 >= HARD_BLOCK_BYTES {
                                 n = 0;
                                 flush(&mut chunk, done_lines, &mut batch);
                                 if first || batch.len() >= 25 {
@@ -463,10 +500,11 @@ fn whole_file(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, mo
                         let mut chunk = String::new();
                         let mut n = 0;
                         let mut first = true;
-                        for line in text.split_inclusive('\n') {
+                        let folded = fold_long(&text);
+                        for line in folded.split_inclusive('\n') {
                             chunk.push_str(line);
                             n += 1;
-                            if n == BLOCK_LINES {
+                            if n == BLOCK_LINES || chunk.len() as u64 >= HARD_BLOCK_BYTES {
                                 n = 0;
                                 let body = std::mem::take(&mut chunk);
                                 batch.push(Block { text: qs(body.strip_suffix('\n').unwrap_or(&body)), rich: false });
@@ -505,7 +543,7 @@ impl qobject::TextDoc {
             }
         }
         self.as_mut().set_lines(lines.min(i32::MAX as usize) as i32);
-        self.as_mut().set_max_cols(cols.min(i32::MAX as usize) as i32);
+        self.as_mut().set_max_cols(cols.min(FOLD_AT) as i32);
         if let Some(e) = err {
             self.as_mut().set_error(qs(&e));
         }
@@ -775,7 +813,7 @@ impl qobject::TextDoc {
             st.end = b.end;
         }
         self.as_mut().set_lines(b.total_lines.min(i32::MAX as usize) as i32);
-        self.as_mut().set_max_cols(b.cols.min(i32::MAX as usize) as i32);
+        self.as_mut().set_max_cols(b.cols.min(FOLD_AT) as i32);
         if let Some(e) = b.err {
             self.as_mut().set_error(qs(&e));
         }
@@ -872,7 +910,7 @@ fn index_stream(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, 
                             buf.clear();
                         }
                         let text = block_text(&buf, code, enc);
-                        let b = ReadyBlock(Block { text: qs(&text), rich: false });
+                        let b = ReadyBlock(Block { text: qs(&fold_long(&text)), rich: false });
                         let _ = qt.queue(move |m| m.stream_block(gen, row, b));
                     }
                 }
@@ -908,7 +946,12 @@ fn index_stream(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, 
                     if f.seek(SeekFrom::Start(start)).and_then(|_| f.read_exact(&mut buf)).is_err() {
                         return;
                     }
-                    let html = hl.html(&block_text(&buf, true, enc));
+                    let text = block_text(&buf, true, enc);
+                    // A giant line stays plain (the reader's block shows it).
+                    if has_long_line(&text) {
+                        continue;
+                    }
+                    let html = hl.html(&text);
                     let b = ReadyBlock(Block { text: qs(&html), rich: true });
                     let _ = qt.queue(move |m| m.stream_rich(gen, row, b));
                 }
@@ -979,18 +1022,28 @@ fn index_stream(qt: cxx_qt::CxxQtThread<qobject::TextDoc>, gen: u64, p: String, 
                 }
                 None => i = n,
             }
-            // One enormous line: cut it (at a character boundary).
-            let here = pos + i as u64;
-            if here - block_start >= HARD_BLOCK_BYTES {
-                let mut cut = i;
+            // One enormous line: cut it into HARD_BLOCK_BYTES pieces (at
+            // character boundaries).
+            // (Only the line being read counts: blocks of whole lines end at
+            // line ends, by SOFT_BLOCK_BYTES / BLOCK_LINES.)
+            while pos + i as u64 - line_start.max(block_start) >= HARD_BLOCK_BYTES {
+                // Whole lines before the long one: a block of their own first.
+                if block_start < line_start {
+                    finish(line_start, block_lines, &mut batch, &mut block_start);
+                    block_lines = 0;
+                    continue;
+                }
+                let want = (block_start + HARD_BLOCK_BYTES).max(pos);
+                let mut cut = (want - pos) as usize;
                 while cut > 0 && cut < n && (chunk[cut] & 0xC0) == 0x80 {
                     cut -= 1;
                 }
                 let cut_abs = pos + cut as u64;
-                if cut_abs > block_start {
-                    finish(cut_abs, block_lines + 1, &mut batch, &mut block_start);
-                    block_lines = 0;
+                if cut_abs <= block_start {
+                    break;
                 }
+                finish(cut_abs, block_lines + 1, &mut batch, &mut block_start);
+                block_lines = 0;
             }
         }
         pos += n as u64;

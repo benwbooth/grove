@@ -55,6 +55,18 @@ Item {
         if (ws.length) grove.saveSession(JSON.stringify({ windows: ws }))
     }
     Timer { id: sessionTimer; interval: 2000; onTriggered: app.saveSession() }
+    // GROVE_PERF=1: say whenever the UI thread was held up (this ticks every 16 ms when it isn't).
+    Timer {
+        property double last: 0
+        running: grove.env("GROVE_PERF") !== ""
+        interval: 16
+        repeat: true
+        onTriggered: {
+            const now = Date.now()
+            if (last > 0 && now - last > 100) console.warn("grove perf: UI thread stalled " + (now - last) + " ms")
+            last = now
+        }
+    }
     // Saved as things change too (scroll, playback): a crash or logout keeps it.
     Timer { interval: 15000; repeat: true; running: app.windows.length > 0 && app.sessionOn; onTriggered: app.saveSession() }
     Connections { target: Qt.application; function onAboutToQuit() { app.saveSession() } }
