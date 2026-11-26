@@ -373,7 +373,7 @@ Item {
                         id: nameLabel
                         anchors.left: ic.right
                         anchors.leftMargin: 6
-                        width: Math.min(implicitWidth, parent.width - x - 6 - (rowBranch.visible ? rowBranch.width + 6 : 0))
+                        width: Math.min(implicitWidth, parent.width - x - 6)
                         anchors.verticalCenter: parent.verticalCenter
                         visible: !rowItem.renaming
                         text: rowItem.name + (rowItem.isLink ? "  ↗" : "")
@@ -383,7 +383,8 @@ Item {
                     BranchTag {
                         id: rowBranch
                         z: 5
-                        visible: !rowItem.renaming && branch !== ""
+                        visible: !rowItem.renaming && fits
+                        room: parent.width - nameLabel.x - nameLabel.width - 12
                         anchors.left: nameLabel.right; anchors.leftMargin: 6
                         anchors.verticalCenter: parent.verticalCenter
                         status: rowItem.git; path: rowItem.path; pane: root.pane

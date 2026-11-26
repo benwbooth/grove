@@ -391,7 +391,8 @@ Item {
                         id: colName
                         visible: !r.renaming
                         anchors.left: ic.right; anchors.leftMargin: 6
-                        anchors.right: colBranch.visible ? colBranch.left : sizeLbl.left; anchors.rightMargin: 4
+                        // The name first; the branch tag gets what's left.
+                        width: Math.max(0, Math.min(implicitWidth, sizeLbl.x - 4 - x))
                         anchors.verticalCenter: parent.verticalCenter
                         text: r.name
                         elide: Text.ElideMiddle
@@ -408,7 +409,8 @@ Item {
                     BranchTag {
                         id: colBranch
                         z: 5
-                        visible: !r.renaming && branch !== ""
+                        visible: !r.renaming && fits
+                        room: sizeLbl.x - 4 - colName.x - colName.width - 6
                         anchors.right: sizeLbl.left; anchors.rightMargin: 4
                         anchors.verticalCenter: parent.verticalCenter
                         maxWidth: 110

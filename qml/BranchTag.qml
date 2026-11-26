@@ -12,9 +12,14 @@ Rectangle {
     property real px: Theme.small
     // "@/git/feature/x" → "feature/x".
     readonly property string branch: status.indexOf("@/") === 0 ? status.split("/").slice(2).join("/") : ""
-    visible: branch !== ""
-    width: visible ? Math.min(row.implicitWidth + 10, maxWidth) : 0
+    // The space left beside the name: the name always comes first, so the
+    // tag shortens to fit and hides when even a short tag won't.
+    property real room: 1e9
     property real maxWidth: 160
+    readonly property real natural: arrow.implicitWidth + 3 + label.implicitWidth + 10
+    readonly property bool fits: branch !== "" && room >= Math.min(natural, 52)
+    visible: fits
+    width: visible ? Math.min(natural, maxWidth, room) : 0
     height: Math.round(px + 6)
     radius: height / 2
     color: onAccent ? Qt.rgba(1, 1, 1, tm.containsMouse ? 0.32 : 0.22)
@@ -25,13 +30,14 @@ Rectangle {
         x: 5
         anchors.verticalCenter: parent.verticalCenter
         spacing: 3
-        GLabel { text: "⎇"; font.pixelSize: bt.px; color: bt.onAccent ? Theme.accentText : Theme.fg; anchors.verticalCenter: parent.verticalCenter }
+        GLabel { id: arrow; text: "⎇"; font.pixelSize: bt.px; color: bt.onAccent ? Theme.accentText : Theme.fg; anchors.verticalCenter: parent.verticalCenter }
         GLabel {
+            id: label
             text: bt.branch
             font.pixelSize: bt.px
             color: bt.onAccent ? Theme.accentText : Theme.fg
             elide: Text.ElideMiddle
-            width: Math.min(implicitWidth, bt.maxWidth - 24)
+            width: Math.max(0, Math.min(implicitWidth, bt.width - 10 - arrow.implicitWidth - 3))
             anchors.verticalCenter: parent.verticalCenter
         }
     }
