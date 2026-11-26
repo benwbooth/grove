@@ -17,7 +17,7 @@ Item {
     property bool slim: false
     // Viewing choices, remembered: soft wrap for text and code, and
     // Markdown as its coloured source instead of the rendered page.
-    Settings { id: prefs; category: "viewer"; property bool wrapText: false; property bool markdownSource: false; property bool htmlSource: false; property bool treeSource: false; property bool wrapMarkdown: true; property real textZoom: 1 }
+    Settings { id: prefs; category: "viewer"; property bool wrapText: false; property bool markdownSource: false; property bool htmlSource: false; property bool treeSource: false; property bool wrapTree: false; property bool wrapMarkdown: true; property real textZoom: 1 }
     // Markdown and web pages: rendered, or their coloured source (each remembered).
     readonly property bool renderable: mode === "markdown" || mode === "html"
     readonly property bool showSource: mode === "html" ? prefs.htmlSource : prefs.markdownSource
@@ -40,7 +40,7 @@ Item {
     readonly property real paperW: Math.max(240, Math.min(list.width - 32, 816 * prefs.textZoom))
     readonly property real paperX: Math.max(16, (list.width - paperW) / 2)
     readonly property real paperPad: Math.min(72, paperW * 0.09)
-    readonly property bool wrap: paper || (rendered ? prefs.wrapMarkdown : prefs.wrapText)
+    readonly property bool wrap: paper || (treeShown ? prefs.wrapTree : rendered ? prefs.wrapMarkdown : prefs.wrapText)
     readonly property alias lines: doc.lines
     readonly property alias loading: doc.loading
     readonly property real charWidth: fm.averageCharacterWidth
@@ -122,6 +122,7 @@ Item {
         format: dv.treeFormat
         slim: dv.slim
         zoom: prefs.textZoom
+        wrap: prefs.wrapTree
     }
 
     // The tree didn't parse: why, where, and a way there.
@@ -279,15 +280,15 @@ Item {
                 onClicked: prefs.textZoom = Math.max(0.6, Math.round((prefs.textZoom - 0.1) * 10) / 10) }
             GButton { iconName: "zoom-in"; iconSize: dv.slim ? 14 : 16; enabled: prefs.textZoom < 2.5; tip: "Larger text"; anchors.verticalCenter: parent.verticalCenter
                 onClicked: prefs.textZoom = Math.min(2.5, Math.round((prefs.textZoom + 0.1) * 10) / 10) }
-            Rectangle { visible: !dv.paper && !dv.treeShown; width: 1; height: dv.slim ? 14 : 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
+            Rectangle { visible: !dv.paper; width: 1; height: dv.slim ? 14 : 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
             GButton {
                 id: wrapBtn
-                visible: !dv.paper && !dv.treeShown
+                visible: !dv.paper
                 checked: dv.wrap
                 WrapGlyph { anchors.centerIn: parent; size: dv.slim ? 14 : 16; color: wrapBtn.enabled ? wrapBtn.tint : Theme.fgDisabled }
                 anchors.verticalCenter: parent.verticalCenter
                 tip: dv.wrap ? "Wrap long lines: on (click to keep each line whole and scroll sideways)" : "Wrap long lines: off (scroll sideways or Shift+wheel; click to wrap)"
-                onClicked: { if (dv.rendered) prefs.wrapMarkdown = !prefs.wrapMarkdown; else prefs.wrapText = !prefs.wrapText }
+                onClicked: { if (dv.treeShown) prefs.wrapTree = !prefs.wrapTree; else if (dv.rendered) prefs.wrapMarkdown = !prefs.wrapMarkdown; else prefs.wrapText = !prefs.wrapText }
             }
         }
     }

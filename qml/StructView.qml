@@ -14,6 +14,8 @@ Item {
     property bool active: false
     property bool slim: false
     property real zoom: 1
+    // Long values wrap onto more lines (whole, with their line breaks) instead of scrolling sideways.
+    property bool wrap: false
     readonly property alias doc: tdoc
     readonly property alias currentRow: list.currentIndex
 
@@ -169,7 +171,7 @@ Item {
         }
     }
 
-    PanWheel { anchors.fill: list; flickable: list }
+    PanWheel { anchors.fill: list; flickable: list; sideways: !sv.wrap }
 
     ListView {
         id: list
@@ -185,7 +187,7 @@ Item {
         flickableDirection: Flickable.HorizontalAndVerticalFlick
         // As wide as the widest row laid out so far (long values scroll sideways).
         property real widest: 0
-        contentWidth: Math.max(width, widest)
+        contentWidth: sv.wrap ? width : Math.max(width, widest)
         cacheBuffer: 400
         header: Item { height: 4; width: 1 }
         footer: Item { height: 12; width: 1 }
@@ -237,7 +239,7 @@ Item {
             required property bool hit
             readonly property bool current: index === list.currentIndex
             width: list.contentWidth
-            height: sv.rowH
+            height: Math.max(sv.rowH, content.y * 2 + content.height)
             Rectangle {
                 anchors.fill: parent
                 color: row.current ? (list.activeFocus ? Theme.accent : Theme.selectedInactive)
@@ -249,7 +251,7 @@ Item {
                 id: tri
                 x: 8 + row.depth * sv.indent
                 width: Math.round(14 * sv.zoom)
-                height: parent.height
+                height: sv.rowH
                 Text {
                     visible: row.expandable
                     anchors.centerIn: parent
@@ -270,7 +272,7 @@ Item {
             Row {
                 id: content
                 x: tri.x + tri.width + 4
-                anchors.verticalCenter: parent.verticalCenter
+                y: Math.round((sv.rowH - keyText.height) / 2)
                 spacing: 0
                 Text {
                     id: keyText
@@ -282,6 +284,7 @@ Item {
                     renderType: Text.NativeRendering
                 }
                 Text {
+                    id: sepText
                     text: row.value !== "" || row.summary !== "" ? (row.keyKind === "element" ? "  " : ": ") : ""
                     color: row.current && list.activeFocus ? Theme.accentText : Theme.fgTertiary
                     font: keyText.font
@@ -289,7 +292,11 @@ Item {
                 }
                 Text {
                     id: valText
-                    text: row.vkind === "container" ? (row.expanded ? "" : row.summary) : row.value
+                    // Wrapped: the whole value (with its line breaks), as wide as the row allows.
+                    readonly property string whole: sv.wrap && row.vkind !== "container" && row.value.length > 20 ? tdoc.fullValue(row.index) : ""
+                    text: row.vkind === "container" ? (row.expanded ? "" : row.summary) : whole !== "" ? (row.value.charAt(0) === '"' ? '"' + whole + '"' : whole) : row.value
+                    width: sv.wrap ? Math.max(60, Math.min(implicitWidth, list.width - content.x - keyText.width - sepText.width - typeText.width - 28)) : implicitWidth
+                    wrapMode: sv.wrap ? Text.WrapAtWordBoundaryOrAnywhere : Text.NoWrap
                     color: row.current && list.activeFocus ? Theme.accentText : sv.valueColor(row.vkind)
                     font.family: Theme.mono
                     font.pixelSize: Theme.body * 0.92 * sv.zoom
@@ -299,8 +306,8 @@ Item {
             }
             Text {
                 id: typeText
-                anchors.verticalCenter: parent.verticalCenter
-                x: Math.max(content.x + content.width + 16, list.width + list.contentX - width - 12)
+                y: Math.round((sv.rowH - height) / 2)
+                x: sv.wrap ? list.width - width - 12 : Math.max(content.x + content.width + 16, list.width + list.contentX - width - 12)
                 text: row.kind + (row.vkind === "container" && row.expanded ? " · " + row.summary.replace(/[^0-9]/g, "") : "")
                 color: row.current && list.activeFocus ? Theme.accentText : Theme.fgTertiary
                 font.family: Theme.family
