@@ -1118,6 +1118,7 @@ FocusScope {
     // (Timing: a right-click that takes long says where, in the journal.)
     property var menuTimes: null
     function showItemMenu(row, x, y) {
+        menuPending = true
         const t = [Date.now()]
         if (!fm.isSelected(row)) fm.select(row, "set")
         t.push(Date.now())
@@ -1131,6 +1132,7 @@ FocusScope {
         Async.call(grove, k => grove.serviceMenus(k, JSON.stringify(itemMenu.sel)), r => itemMenu.services = r || [])
         t.push(Date.now())
         itemMenu.popup()
+        menuPending = false
         t.push(Date.now())
         menuTimes = t
     }
@@ -1152,6 +1154,9 @@ FocusScope {
     }
 
     ItemMenu { id: itemMenu; pane: itemMenu.parent }
+    // (Column view keeps still while it's open.)
+    property bool menuPending: false
+    readonly property bool itemMenuOpen: itemMenu.visible || menuPending
     property alias itemMenu: itemMenu
 
     GMenu {

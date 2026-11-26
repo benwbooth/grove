@@ -132,16 +132,23 @@ Item {
     // which tore the preview down and built it again: a flash, and a
     // playing track stopped). The same file keeps the same object.
     function updateCurrent() {
+        // Right-click (Finder): nothing moves while its menu is open, and the
+        // preview catches up in place when it closes (see onItemMenuOpenChanged).
+        if (pane.itemMenuOpen) return
         autoGlide()
         Qt.callLater(settleCurrent)
     }
-    function settleCurrent() {
+    Connections {
+        target: root.pane
+        function onItemMenuOpenChanged() { if (!root.pane.itemMenuOpen) root.settleCurrent(true) }
+    }
+    function settleCurrent(stay) {
         const r = fm.currentRow
         const it = r >= 0 && fm.selectionCount === 1 ? pane.itemAt(r) : null
         if (it && current && it.path === current.path && it.mtime === current.mtime && it.size === current.size) return
         if (!it && !current) return
         current = it
-        Qt.callLater(() => strip.glideToEnd())
+        if (!stay) Qt.callLater(() => strip.glideToEnd())
     }
 
     // Tests (GROVE_TEST dumpcols): each column's folder, scroll and model.
