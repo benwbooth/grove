@@ -17,6 +17,14 @@ ApplicationWindow {
     property var currentTab: null
     property bool modalOpen: false
     property bool answered: false
+    // The app's extra controls (portal "choices": a checkbox, or a
+    // drop-down when it has options), by id; answered with the file.
+    property var choiceValues: ({})
+    function setChoice(id, v) { const c = Object.assign({}, choiceValues); c[id] = v; choiceValues = c }
+    function answerExtra() {
+        const f = (request.filters || [])[filterBox.currentIndex]
+        return JSON.stringify({ choices: choiceValues, filter: f ? f.name : "" })
+    }
     // Used inside grove (a picture for View Options, a disc image...):
     // called with the chosen paths instead of answering the portal.
     property var onChosen: null
@@ -90,7 +98,7 @@ ApplicationWindow {
         }
         answered = true
         if (onChosen) onChosen(uris.map(u => decodeURIComponent(u.substring(7))))
-        else app.grove.chooserDone(request.id, true, JSON.stringify(uris), "{}")
+        else app.grove.chooserDone(request.id, true, JSON.stringify(uris), answerExtra())
         close()
     }
     function chooserOpen(path, isDir) {
@@ -161,6 +169,44 @@ ApplicationWindow {
                     GLabel { text: "Save as:"; anchors.verticalCenter: parent.verticalCenter }
                     GField { id: nameField; width: 320; Keys.onReturnPressed: fc.accept() }
                 }
+                Flow {
+                    visible: (fc.request.choices || []).length > 0
+                    width: parent.width - 20
+                    spacing: 14
+                    Repeater {
+                        model: fc.request.choices || []
+                        Item {
+                            id: choice
+                            required property var modelData
+                            readonly property bool isCheck: !(modelData.options || []).length
+                            width: isCheck ? check.implicitWidth : comboRow.implicitWidth
+                            height: Theme.controlHeight + 4
+                            GCheck {
+                                id: check
+                                visible: choice.isCheck
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: choice.modelData.label
+                                checked: fc.choiceValues[choice.modelData.id] === "true"
+                                onToggled: fc.setChoice(choice.modelData.id, checked ? "true" : "false")
+                            }
+                            Row {
+                                id: comboRow
+                                visible: !choice.isCheck
+                                spacing: 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                GLabel { visible: text !== ""; text: choice.modelData.label + ":"; anchors.verticalCenter: parent.verticalCenter }
+                                GCombo {
+                                    width: 200
+                                    font.family: Theme.family
+                                    font.pixelSize: Theme.body
+                                    model: (choice.modelData.options || []).map(o => o.label)
+                                    currentIndex: Math.max(0, (choice.modelData.options || []).findIndex(o => o.id === fc.choiceValues[choice.modelData.id]))
+                                    onActivated: (i) => fc.setChoice(choice.modelData.id, choice.modelData.options[i].id)
+                                }
+                            }
+                        }
+                    }
+                }
                 Item {
                     width: parent.width - 20
                     height: Theme.controlHeight + 4
@@ -208,6 +254,10 @@ ApplicationWindow {
             nameField.text = f.substring(f.lastIndexOf("/") + 1)
         }
         if (request.currentName) nameField.text = request.currentName
+        const cv = {}
+        for (const c of request.choices || [])
+            cv[c.id] = c.default || ((c.options || []).length ? c.options[0].id : "false")
+        choiceValues = cv
         chooserPane.navigate(start || app.grove.home())
         const fi = (request.filters || []).findIndex(f => f.name === request.currentFilter)
         if (fi >= 0) filterBox.currentIndex = fi

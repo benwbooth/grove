@@ -13,19 +13,29 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use zbus::zvariant::{ObjectPath, OwnedValue, Value};
 
-type Answer = (u32, Vec<String>, Vec<(String, String)>);
+/// (response, uris, choices, the file type filter it ended on)
+type Answer = (u32, Vec<String>, Vec<(String, String)>, String);
 
 fn waiting() -> &'static Mutex<HashMap<String, oneshot::Sender<Answer>>> {
     static W: OnceLock<Mutex<HashMap<String, oneshot::Sender<Answer>>>> = OnceLock::new();
     W.get_or_init(Default::default)
 }
 
-/// The chooser window finished (from QML).
-pub fn answer(id: &str, ok: bool, uris_json: &str, choices_json: &str) {
+/// The chooser window finished (from QML). `extra_json`: {"choices": {id:
+/// value}, "filter": name} (or, as before, just the choices map).
+pub fn answer(id: &str, ok: bool, uris_json: &str, extra_json: &str) {
     let uris: Vec<String> = serde_json::from_str(uris_json).unwrap_or_default();
-    let choices: Vec<(String, String)> = serde_json::from_str::<HashMap<String, String>>(choices_json).unwrap_or_default().into_iter().collect();
+    let extra: serde_json::Value = serde_json::from_str(extra_json).unwrap_or_default();
+    let (choices, filter) = match extra.get("choices") {
+        Some(c) => (c.clone(), extra.get("filter").and_then(|f| f.as_str()).unwrap_or("").to_string()),
+        None => (extra.clone(), String::new()),
+    };
+    let choices: Vec<(String, String)> = choices
+        .as_object()
+        .map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string()))).collect())
+        .unwrap_or_default();
     if let Some(tx) = waiting().lock().remove(id) {
-        let _ = tx.send((if ok { 0 } else { 1 }, uris, choices));
+        let _ = tx.send((if ok { 0 } else { 1 }, uris, choices, filter));
     }
 }
 
@@ -123,6 +133,38 @@ fn filters(o: &HashMap<String, OwnedValue>) -> Vec<serde_json::Value> {
         .collect()
 }
 
+/// The app's extra controls, a(ssa(ss)s): (id, label, options (id, label),
+/// default). No options: a checkbox ("true"/"false"); options: a drop-down.
+fn parse_choices(o: &HashMap<String, OwnedValue>) -> Vec<serde_json::Value> {
+    let Some(v) = o.get("choices") else { return vec![] };
+    let v: &Value = v;
+    let v = match v {
+        Value::Value(inner) => inner.as_ref(),
+        x => x,
+    };
+    let Value::Array(arr) = v else { return vec![] };
+    let s = |x: Option<&Value>| match x {
+        Some(Value::Str(s)) => s.to_string(),
+        _ => String::new(),
+    };
+    let mut out = vec![];
+    for item in arr.iter() {
+        let Value::Structure(st) = item else { continue };
+        let f = st.fields();
+        let mut opts = vec![];
+        if let Some(Value::Array(oa)) = f.get(2) {
+            for o in oa.iter() {
+                if let Value::Structure(os) = o {
+                    let of = os.fields();
+                    opts.push(json!({"id": s(of.first()), "label": without_mnemonic(&s(of.get(1)))}));
+                }
+            }
+        }
+        out.push(json!({"id": s(f.first()), "label": without_mnemonic(&s(f.get(1))), "options": opts, "default": s(f.get(3))}));
+    }
+    out
+}
+
 fn current_filter(o: &HashMap<String, OwnedValue>) -> String {
     let Some(v) = o.get("current_filter") else { return String::new() };
     let v: &Value = v;
@@ -145,10 +187,11 @@ impl Chooser {
             "currentFile": opt_bytes(&options, "current_file"),
             "filters": filters(&options),
             "currentFilter": current_filter(&options),
+            "choices": parse_choices(&options),
         })
         .to_string();
         let _ = qt_ready().await.queue(move |g| g.chooser_request(QString::from(req.as_str())));
-        let (code, uris, choices) = rx.await.unwrap_or((2, vec![], vec![]));
+        let (code, uris, choices, filter) = rx.await.unwrap_or((2, vec![], vec![], String::new()));
         let mut out: HashMap<String, OwnedValue> = HashMap::new();
         if code == 0 {
             if let Ok(v) = Value::from(uris).try_into() {
@@ -157,6 +200,14 @@ impl Chooser {
             if !choices.is_empty() {
                 if let Ok(v) = Value::from(choices).try_into() {
                     out.insert("choices".into(), v);
+                }
+            }
+            // The file type it ended on, as the app gave it: apps such as
+            // LibreOffice save in the format of the chosen filter.
+            let all: Vec<Filter> = options.get("filters").map(|v| parse_filters(v)).unwrap_or_default();
+            if let Some((name, pats)) = all.into_iter().find(|f| !filter.is_empty() && f.0 == filter) {
+                if let Ok(v) = Value::from((name, pats)).try_into() {
+                    out.insert("current_filter".into(), v);
                 }
             }
         }
