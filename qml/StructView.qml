@@ -348,7 +348,12 @@ Item {
 
     // "Reading…" only once it's been reading a while (quick files would flicker it).
     property bool readingLong: false
-    Timer { interval: 500; running: tdoc.loading; onRunningChanged: { if (running) sv.readingLong = false } onTriggered: sv.readingLong = true }
+    Timer {
+        interval: 500
+        running: tdoc.loading
+        onRunningChanged: if (running) sv.readingLong = false
+        onTriggered: sv.readingLong = true
+    }
     GLabel {
         anchors.centerIn: list
         visible: (tdoc.loading && sv.readingLong) || (!tdoc.loading && tdoc.error === "" && list.count === 0 && tdoc.path !== "")
