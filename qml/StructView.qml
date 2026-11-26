@@ -18,8 +18,13 @@ Item {
     readonly property alias currentRow: list.currentIndex
 
     TreeDoc { id: tdoc }
+    // Expand All / Collapse All: one toggle; which it does next follows the last of them.
+    property bool allOpen: false
+    function expandAll() { tdoc.expandAll(); allOpen = true }
+    function collapseAll() { tdoc.collapseAll(); allOpen = false; go(0) }
     function reload() {
         search.text = ""
+        allOpen = false
         tdoc.load(active ? path : "", active ? format : "")
     }
     onPathChanged: Qt.callLater(reload)
@@ -60,8 +65,8 @@ Item {
     // "tree:search:TEXT", "tree:open:ROW", "tree:select:ROW", "tree:next",
     // "tree:copy:path", "tree:dump".
     function testAction(a) {
-        if (a === "tree:expandall") tdoc.expandAll()
-        else if (a === "tree:collapseall") tdoc.collapseAll()
+        if (a === "tree:expandall") expandAll()
+        else if (a === "tree:collapseall") collapseAll()
         else if (a.startsWith("tree:search:")) search.text = a.substring(12)
         else if (a.startsWith("tree:open:")) tdoc.setOpen(parseInt(a.substring(10)), true, false)
         else if (a.startsWith("tree:select:")) go(parseInt(a.substring(12)))
@@ -156,17 +161,10 @@ Item {
             Rectangle { visible: search.text.trim() !== ""; width: 1; height: sv.slim ? 14 : 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
             GButton {
                 anchors.verticalCenter: parent.verticalCenter
-                iconName: "expand-all|view-list-tree"; iconSize: sv.slim ? 14 : 16
+                iconName: sv.allOpen ? "collapse-all|view-list-details" : "expand-all|view-list-tree"; iconSize: sv.slim ? 14 : 16
                 enabled: list.count > 0
-                tip: "Expand all: open every level that fits (Ctrl+Shift+Right)"
-                onClicked: tdoc.expandAll()
-            }
-            GButton {
-                anchors.verticalCenter: parent.verticalCenter
-                iconName: "collapse-all|view-list-details"; iconSize: sv.slim ? 14 : 16
-                enabled: list.count > 0
-                tip: "Collapse all: close everything down to the top level (Ctrl+Shift+Left)"
-                onClicked: tdoc.collapseAll()
+                tip: sv.allOpen ? "Collapse all: close everything down to the top level (Ctrl+Shift+Left; click again to expand all)" : "Expand all: open every level that fits (Ctrl+Shift+Right; click again to collapse all)"
+                onClicked: sv.allOpen ? sv.collapseAll() : sv.expandAll()
             }
         }
     }
@@ -202,8 +200,8 @@ Item {
             const page = Math.max(1, Math.floor(list.height / sv.rowH) - 1)
             if (e.key === Qt.Key_F && ctrl) sv.focusSearch()
             else if (e.key === Qt.Key_C && ctrl) sv.copy(shift ? "path" : "value")
-            else if (e.key === Qt.Key_Right && ctrl && shift) tdoc.expandAll()
-            else if (e.key === Qt.Key_Left && ctrl && shift) { tdoc.collapseAll(); sv.go(0) }
+            else if (e.key === Qt.Key_Right && ctrl && shift) sv.expandAll()
+            else if (e.key === Qt.Key_Left && ctrl && shift) sv.collapseAll()
             else if (e.key === Qt.Key_Down) sv.go(r + 1)
             else if (e.key === Qt.Key_Up) sv.go(r < 0 ? 0 : r - 1)
             else if (e.key === Qt.Key_PageDown) sv.go(r + page)
@@ -342,8 +340,8 @@ Item {
         GMenuItem { enabled: rowMenu.container; text: "Expand Everything Inside"; shortcutText: "Alt+Right"; tip: "Open this and every level inside it (as many as fit)"; onTriggered: tdoc.setOpen(rowMenu.row, true, true) }
         GMenuItem { enabled: rowMenu.container; text: "Collapse Everything Inside"; shortcutText: "Alt+Left"; tip: "Close this and everything inside it"; onTriggered: tdoc.setOpen(rowMenu.row, false, true) }
         GMenuSeparator {}
-        GMenuItem { text: "Expand All"; shortcutText: "Ctrl+Shift+Right"; tip: "Open every level of the file that fits"; onTriggered: tdoc.expandAll() }
-        GMenuItem { text: "Collapse All"; shortcutText: "Ctrl+Shift+Left"; tip: "Close everything down to the top level"; onTriggered: tdoc.collapseAll() }
+        GMenuItem { text: "Expand All"; shortcutText: "Ctrl+Shift+Right"; tip: "Open every level of the file that fits"; onTriggered: sv.expandAll() }
+        GMenuItem { text: "Collapse All"; shortcutText: "Ctrl+Shift+Left"; tip: "Close everything down to the top level"; onTriggered: sv.collapseAll() }
     }
 
     // "Reading…" only once it's been reading a while (quick files would flicker it).
