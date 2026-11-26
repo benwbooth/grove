@@ -292,9 +292,12 @@ Item {
         }
     }
 
+    // "Reading…" only once it's been reading a while (quick files would flicker it).
+    property bool readingLong: false
+    Timer { interval: 500; running: doc.loading; onRunningChanged: { if (running) dv.readingLong = false } onTriggered: dv.readingLong = true }
     GLabel {
         anchors.centerIn: parent
-        visible: !dv.treeShown && (doc.error !== "" || (doc.loading && list.count === 0))
+        visible: !dv.treeShown && (doc.error !== "" || (doc.loading && dv.readingLong && list.count === 0))
         text: doc.error !== "" ? doc.error : "Reading…"
         color: Theme.fgSecondary
     }

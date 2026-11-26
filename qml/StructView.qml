@@ -346,9 +346,12 @@ Item {
         GMenuItem { text: "Collapse All"; shortcutText: "Ctrl+Shift+Left"; tip: "Close everything down to the top level"; onTriggered: tdoc.collapseAll() }
     }
 
+    // "Reading…" only once it's been reading a while (quick files would flicker it).
+    property bool readingLong: false
+    Timer { interval: 500; running: tdoc.loading; onRunningChanged: { if (running) sv.readingLong = false } onTriggered: sv.readingLong = true }
     GLabel {
         anchors.centerIn: list
-        visible: tdoc.loading || (!tdoc.loading && tdoc.error === "" && list.count === 0 && tdoc.path !== "")
+        visible: (tdoc.loading && sv.readingLong) || (!tdoc.loading && tdoc.error === "" && list.count === 0 && tdoc.path !== "")
         text: tdoc.loading ? "Reading…" : "Empty"
         color: Theme.fgSecondary
     }
