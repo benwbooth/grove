@@ -873,7 +873,7 @@ ApplicationWindow {
     Component { id: tcViewOpts; GButton { iconName: "configure|preferences-system"; checked: viewOptions.opened; tip: Help.tip("View Options for this folder", "View Options (spacing, text size, labels, background)"); onClicked: bw.toggleViewOptions() } }
     Component { id: tcConnect; GButton { iconName: "network-connect|network-server"; tip: Help.tip("Connect to a server", "Connect to Server…"); onClicked: bw.connectServer() } }
     Component { id: tcEject; GButton { iconName: "media-eject"; tip: Help.tip("Eject the disk you're in", "Eject"); onClicked: bw.ejectCurrent() } }
-    Component { id: tcBurn; GButton { iconName: "media-optical-burn|media-optical"; tip: Help.tip("Burn the selection (or this folder) to a disc", "Burn to Disc…"); onClicked: bw.burnSelection() } }
+    Component { id: tcBurn; GButton { visible: bw.app.hasBurner; iconName: "media-optical-burn|media-optical"; tip: Help.tip("Burn the selection (or this folder) to a disc", "Burn to Disc…"); onClicked: bw.burnSelection() } }
 
     GMenu {
         id: toolbarMenu
@@ -987,7 +987,7 @@ ApplicationWindow {
                 { id: "compress", icon: "archive-insert", text: sel > 1 ? "Compress " + sel + " Items" : t ? "Compress “" + t.name + "”" : "Compress", enabled: sel > 0 && !special },
                 { id: "extract", icon: "archive-extract", text: "Extract Here", enabled: !!t && p.archiveLike(t) && !special },
                 { id: "extractto", icon: "folder-open", text: "Extract To…", enabled: !!t && p.archiveLike(t) && !special },
-                { id: "burn", icon: "tools-media-optical-burn", text: "Burn to Disc…", enabled: ok && (sel > 0 || !special) },
+                ...(app.hasBurner ? [{ id: "burn", icon: "tools-media-optical-burn", text: "Burn to Disc…", enabled: ok && (sel > 0 || !special) }] : []),
                 { id: "share", icon: "document-share", text: "Share with Nearby Device…", enabled: sel > 0 && !special && !(t && t.isDir) },
                 { separator: true },
                 { id: "snapshot", icon: "camera-photo", text: subvolTarget ? "Take Snapshot of “" + subvolTarget.substring(subvolTarget.lastIndexOf("/") + 1) + "”…" : "Take Snapshot…", shortcut: k("snapshot"), enabled: subvolTarget !== "" },

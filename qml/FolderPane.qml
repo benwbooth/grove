@@ -1178,7 +1178,7 @@ FocusScope {
         GMenuItem { text: "Open in Terminal"; iconName: "utilities-terminal"; shortcutText: Help.shown("Ctrl+Alt+T"); enabled: !pane.special; onTriggered: pane.grove.openTerminal(pane.path) }
         GMenuItem { text: "Copy Path"; iconName: "edit-copy-path"; shortcutText: Help.shown("Ctrl+Alt+C"); onTriggered: pane.copyPath() }
         GMenuItem { text: "Add to Favourites"; iconName: "bookmark-new"; enabled: !pane.special; onTriggered: pane.grove.addFavourite(pane.path, -1) }
-        GMenuItem { text: "Burn “" + pane.title + "” to Disc…"; iconName: "media-optical-burn|media-optical"; enabled: !pane.special; tip: "Put this folder's contents on a CD, DVD or Blu-ray (or a disc image file)"; onTriggered: pane.win.burn([pane.path]) }
+        GMenuItem { text: "Burn “" + (pane.title.length <= 32 ? pane.title : pane.title.substring(0, 20) + "…" + pane.title.substring(pane.title.length - 10)) + "” to Disc…"; iconName: "media-optical-burn|media-optical"; enabled: !pane.special; visible: !!pane.app && pane.app.hasBurner; height: visible ? implicitHeight : 0; tip: "Put this folder's contents on a CD, DVD or Blu-ray (or a disc image file)"; onTriggered: pane.win.burn([pane.path]) }
         GMenuItem { text: "Browse Previous Versions…"; iconName: "document-open-recent"; enabled: !pane.special; tip: "Earlier copies of this folder from the hourly snapshots"; onTriggered: pane.win.showVersions(pane.path) }
         GMenu {
             id: gitBgMenu

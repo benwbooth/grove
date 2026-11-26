@@ -16,6 +16,11 @@ Item {
     property bool portalMode: grove.env("GROVE_PORTAL") === "1"
     property string screenshot: grove.env("GROVE_SCREENSHOT")
     property int trashCount: 0
+    // A drive that writes discs (sysfs, off the UI thread): Burn to Disc
+    // shows only when there is one. Checked again when drives come and go.
+    property bool hasBurner: false
+    function checkBurner() { Async.call(grove, k => grove.opticalDrives(k), r => app.hasBurner = (r || []).some(d => d.canWrite)) }
+    Connections { target: app.grove; function onPlacesRevisionChanged() { app.checkBurner() } }
     // Goes up on each Google sign-in: previews of Google documents that
     // couldn't be fetched try again.
     property int googleSignIns: 0
@@ -253,6 +258,7 @@ Item {
     onSettingsChanged: if (appliedIconTheme !== "") applyIconTheme()
 
     Component.onCompleted: {
+        checkBurner()
         Theme.mode = settings.theme || "auto"
         Help.custom = settings.shortcuts && typeof settings.shortcuts === "object" ? settings.shortcuts : {}
         try { Theme.hearth = JSON.parse(grove.env("GROVE_HEARTH") || "{}") || {} } catch (e) {}

@@ -10,6 +10,8 @@ GMenu {
     property var apps: []
     property var services: []
     readonly property bool one: sel.length === 1
+    // A long name in a menu item: its start and end, "…" between.
+    function shortName(n) { n = n || ""; return n.length <= 32 ? n : n.substring(0, 20) + "…" + n.substring(n.length - 10) }
     readonly property bool trash: pane.inTrash
     readonly property bool isImage: (target.mime || "").indexOf("image/") === 0
     readonly property bool isArchive: pane.archiveLike(target)
@@ -114,7 +116,7 @@ GMenu {
     GMenuItem { text: "Take Snapshot…"; iconName: "camera-photo"; visible: m.one && !!m.target.subvol; height: visible ? implicitHeight : 0; tip: "An instant copy of this btrfs " + (m.target.subvol || "").toLowerCase() + " as it is now (read-only by default)"; onTriggered: m.pane.win.snapshotSubvolume(m.target.path) }
     GMenuItem { text: "Restore from This Snapshot…"; iconName: "document-revert"; visible: m.one && (m.target.subvol || "").indexOf("Snapshot") >= 0 && m.target.subvol !== "Snapper Snapshot"; height: visible ? implicitHeight : 0; tip: "Put the subvolume this snapshot was taken of back the way it was then (what's in it now is kept aside)"; onTriggered: m.pane.win.restoreSubvolume(m.target.path) }
     GMenuItem { text: "Browse Previous Versions…"; iconName: "document-open-recent"; enabled: m.one && !m.pane.special; tip: "Earlier copies from the hourly snapshots; show or restore them"; onTriggered: m.pane.win.showVersions(m.target.path) }
-    GMenuItem { text: m.one ? "Burn “" + m.target.name + "” to Disc…" : "Burn " + m.sel.length + " Items to Disc…"; iconName: "media-optical-burn|media-optical"; enabled: !m.pane.special; tip: "Put these on a CD, DVD or Blu-ray (or a disc image file)"; onTriggered: m.pane.win.burn(m.sel) }
+    GMenuItem { text: m.one ? "Burn “" + m.shortName(m.target.name) + "” to Disc…" : "Burn " + m.sel.length + " Items to Disc…"; iconName: "media-optical-burn|media-optical"; enabled: !m.pane.special; visible: !!m.pane.app && m.pane.app.hasBurner; height: visible ? implicitHeight : 0; tip: "Put these on a CD, DVD or Blu-ray (or a disc image file)"; onTriggered: m.pane.win.burn(m.sel) }
     GMenuItem { text: "Share with Nearby Device…"; iconName: "document-share|send-to|network-wireless"; enabled: !m.pane.special && !m.target.isDir; tip: "Send to a phone or computer running LocalSend (like AirDrop)"; onTriggered: m.pane.win.share(m.sel) }
     GMenuSeparator {}
     GMenuItem { text: "Copy"; iconName: "edit-copy"; shortcutText: Help.shown("Ctrl+C"); onTriggered: m.pane.copy(false) }
