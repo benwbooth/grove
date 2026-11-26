@@ -241,6 +241,20 @@ ApplicationWindow {
         }
         Toast { id: toastBox; anchors.horizontalCenter: parent.horizontalCenter; anchors.bottom: parent.bottom; anchors.bottomMargin: 70 }
     }
+    // Tests: GROVE_CHOOSER_TEST='{"choices": {id: value}, "filter": index,
+    // "name": "x.odt"}' fills those in and presses Open/Save after a moment.
+    Timer {
+        readonly property string spec: fc.app ? fc.app.grove.env("GROVE_CHOOSER_TEST") : ""
+        running: spec !== "" && !fc.onChosen
+        interval: 1500
+        onTriggered: {
+            const t = JSON.parse(spec)
+            if (t.filter !== undefined) filterBox.currentIndex = t.filter
+            if (t.name) nameField.text = t.name
+            for (const k in (t.choices || {})) fc.setChoice(k, t.choices[k])
+            fc.accept()
+        }
+    }
     Timer {
         running: fc.app.screenshot !== "" && !fc.onChosen
         interval: 2500
