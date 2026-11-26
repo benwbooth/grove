@@ -22,6 +22,7 @@ QtObject {
         { id: "computer", group: "Navigate", action: "Computer", defaults: ["Ctrl+Shift+C"], fixed: "", note: "Finder: ⇧⌘C" },
         { id: "trash", group: "Navigate", action: "Trash", defaults: ["Ctrl+Shift+T"], fixed: "", note: "" },
         { id: "archiveselect", group: "Navigate", action: "Select an archive without opening it (column view: shows its info)", defaults: [], fixed: "Alt+click", note: "Archives open like folders" },
+        { id: "gitchanges", group: "Navigate", action: "Git Changes: the repository's branch, staged and changed files, diffs, commit", defaults: ["Ctrl+Alt+Shift+G"], fixed: "", note: "Also the branch chip at the end of the path bar" },
         { id: "snapshots", group: "Navigate", action: "Snapshots: this folder as it was in each btrfs snapshot (read-only)", defaults: ["Ctrl+Alt+Y"], fixed: "", note: "Like Time Machine; snapper's hourly snapshots" },
         { id: "diskutility", group: "Navigate", action: "Grove Disk Utility (partitions, formatting)", defaults: ["Ctrl+Alt+D"], fixed: "", note: "Like GParted; also Go › Disk Utility…" },
         { id: "diskusage", group: "Navigate", action: "Disk Usage (what takes the room)", defaults: ["Ctrl+Shift+U"], fixed: "", note: "Like KDirStat / Filelight" },

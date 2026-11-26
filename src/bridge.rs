@@ -299,6 +299,19 @@ pub mod ffi {
         fn snapshots(self: &Grove, key: &QString, path: &QString);
         #[qinvokable]
         fn git_action(self: &Grove, key: &QString, dir: &QString, action: &QString, paths: &QString, arg: &QString);
+        /// The Git Changes window (gitrepo.rs): branch, branches, files by state.
+        #[qinvokable]
+        fn git_overview(self: &Grove, key: &QString, dir: &QString, ignored: bool);
+        /// The path bar's branch chip: {root, branch, detached, changes} or {}.
+        #[qinvokable]
+        fn git_summary(self: &Grove, key: &QString, dir: &QString);
+        /// stage / unstage / discard (rels: repo-relative paths, JSON), switch,
+        /// newbranch, commit, lastmessage, fetch, pull, push.
+        #[qinvokable]
+        fn git_change(self: &Grove, key: &QString, dir: &QString, action: &QString, rels: &QString, arg: &QString);
+        /// One file's diff as a .diff file: {path} | {empty} | {error}.
+        #[qinvokable]
+        fn git_file_diff(self: &Grove, key: &QString, dir: &QString, rel: &QString, which: &QString);
         #[qinvokable]
         fn compare_files(self: &Grove, key: &QString, a: &QString, b: &QString, dark: bool);
         #[qinvokable]

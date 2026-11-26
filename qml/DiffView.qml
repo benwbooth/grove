@@ -121,7 +121,7 @@ Item {
                         id: nameT
                         anchors.left: fIcon.right; anchors.leftMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Math.min(implicitWidth, parent.width - 40 - subT.implicitWidth - 16)
+                        width: Math.min(implicitWidth, Math.max(120, parent.width * 0.62 - 40))
                         elide: Text.ElideMiddle
                         text: row.kind === "file" ? row.lhtml : ""
                         font.family: Theme.mono

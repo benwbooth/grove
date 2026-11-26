@@ -209,7 +209,7 @@ GMenu {
         enabled: m.pane.inGit
         GMenuItem { text: "Add to Git"; iconName: "vcs-add|list-add"; onTriggered: m.pane.win.gitAction("add", m.pane.path, m.sel, "") }
         GMenuItem { text: "Commit Selected…"; iconName: "vcs-commit|document-save"; onTriggered: m.pane.win.askCommit(m.pane.path, m.sel) }
-        GMenuItem { text: "Show Changes"; iconName: "vcs-diff|document-preview"; onTriggered: m.pane.win.gitAction("diff", m.pane.path, m.sel, "") }
+        GMenuItem { text: "Git Changes…"; iconName: "vcs-diff|document-preview"; tip: "Branch, staged and changed files with their diffs; stage, commit, switch branches"; onTriggered: m.pane.win.showGitChanges(m.pane.path) }
         GMenuItem { text: "Show History"; iconName: "vcs-log|view-history"; onTriggered: m.pane.win.gitAction("log", m.pane.path, m.sel, "") }
         GMenuSeparator {}
         GMenuItem { text: "Pull"; iconName: "vcs-pull|go-down"; onTriggered: m.pane.win.gitAction("pull", m.pane.path, [], "") }

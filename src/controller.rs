@@ -1498,6 +1498,27 @@ impl ffi::Grove {
         self.answer(key, move || crate::gitstatus::action(&d, &a, &ps, &arg, dark));
     }
 
+    pub fn git_overview(&self, key: &QString, dir: &QString, ignored: bool) {
+        let d = dir.to_string();
+        self.answer(key, move || crate::gitrepo::overview(&d, ignored));
+    }
+
+    pub fn git_summary(&self, key: &QString, dir: &QString) {
+        let d = dir.to_string();
+        self.answer(key, move || crate::gitrepo::summary(&d));
+    }
+
+    pub fn git_change(&self, key: &QString, dir: &QString, action: &QString, rels: &QString, arg: &QString) {
+        let (d, a, arg) = (dir.to_string(), action.to_string(), arg.to_string());
+        let rels: Vec<String> = serde_json::from_str(&rels.to_string()).unwrap_or_default();
+        self.answer(key, move || crate::gitrepo::change(&d, &a, &rels, &arg));
+    }
+
+    pub fn git_file_diff(&self, key: &QString, dir: &QString, rel: &QString, which: &QString) {
+        let (d, r, w) = (dir.to_string(), rel.to_string(), which.to_string());
+        self.answer(key, move || crate::gitrepo::diff_file(&d, &r, &w));
+    }
+
     pub fn compare_files(&self, key: &QString, a: &QString, b: &QString, dark: bool) {
         let (a, b) = (a.to_string(), b.to_string());
         self.answer(key, move || {

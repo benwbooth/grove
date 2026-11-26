@@ -65,13 +65,57 @@ Item {
         border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.7)
     }
 
+    // In a git repository: its branch and how many files changed, at the
+    // right end; click for the Git Changes window.
+    property var git: ({})
+    function refreshGit() {
+        if (!pane || !grove || !pane.inGit) { git = {}; return }
+        const p = pane.path
+        Async.call(grove, k => grove.gitSummary(k, p), r => { if (pane && pane.path === p) pb.git = r || {} })
+    }
+    Connections {
+        target: pb.pane
+        ignoreUnknownSignals: true
+        function onGitMapChanged() { pb.refreshGit() }
+        function onInGitChanged() { pb.refreshGit() }
+    }
+    onPaneChanged: refreshGit()
+    Rectangle {
+        id: gitChip
+        visible: !pb.editing && !!pb.git.branch && !!pb.pane && pb.pane.inGit
+        anchors.right: parent.right
+        anchors.rightMargin: 4
+        anchors.verticalCenter: parent.verticalCenter
+        height: parent.height - 8
+        width: visible ? chipRow.implicitWidth + 16 : 0
+        radius: height / 2
+        color: chipMouse.containsMouse ? Qt.rgba(0.18, 0.63, 0.26, 0.30) : Qt.rgba(0.18, 0.63, 0.26, 0.18)
+        Row {
+            id: chipRow
+            anchors.centerIn: parent
+            spacing: 5
+            GLabel { text: "⎇"; color: Theme.fg; anchors.verticalCenter: parent.verticalCenter }
+            GLabel { text: pb.git.branch || ""; font.pixelSize: Theme.small; color: Theme.fg; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideMiddle; width: Math.min(implicitWidth, 160) }
+            Rectangle {
+                visible: (pb.git.changes || 0) > 0
+                anchors.verticalCenter: parent.verticalCenter
+                height: 16; radius: 8
+                width: Math.max(16, nChanges.implicitWidth + 8)
+                color: "#ff9f0a"
+                GLabel { id: nChanges; anchors.centerIn: parent; text: pb.git.changes || ""; color: "white"; font.pixelSize: 10; font.bold: true }
+            }
+        }
+        MouseArea { id: chipMouse; anchors.fill: parent; hoverEnabled: true; onClicked: pb.pane.win.showGitChanges(pb.pane.path) }
+        GTip { visible: chipMouse.containsMouse; text: "On branch " + (pb.git.branch || "") + ((pb.git.changes || 0) > 0 ? ", " + pb.git.changes + " changed " + (pb.git.changes === 1 ? "item" : "items") : ", nothing changed") + ". Click for Git Changes: stage, commit, switch branches (" + Help.shown("Ctrl+Alt+Shift+G") + ")" }
+    }
+
     // Segments.
     ListView {
         id: crumbs
         visible: !pb.editing
         anchors.fill: parent
         anchors.leftMargin: 6
-        anchors.rightMargin: 6
+        anchors.rightMargin: 6 + (gitChip.visible ? gitChip.width + 4 : 0)
         orientation: ListView.Horizontal
         interactive: false
         clip: true

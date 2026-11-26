@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 /// Credentials for fetch and push: ssh-agent, then the usual key files,
 /// then git's credential helpers (https), then nothing.
-fn callbacks<'a>(config: git2::Config, tried: &'a std::cell::Cell<u32>) -> git2::RemoteCallbacks<'a> {
+pub(crate) fn callbacks<'a>(config: git2::Config, tried: &'a std::cell::Cell<u32>) -> git2::RemoteCallbacks<'a> {
     let mut cb = git2::RemoteCallbacks::new();
     cb.credentials(move |url, user, allowed| {
         let n = tried.get();
@@ -46,7 +46,7 @@ fn workdir_rel(repo: &git2::Repository, dir: &str, p: &Path) -> String {
     abs.strip_prefix(&top).map(|r| r.to_string_lossy().into_owned()).unwrap_or_else(|_| abs.to_string_lossy().into_owned())
 }
 
-fn add_paths(repo: &git2::Repository, rels: &[String]) -> Result<(), git2::Error> {
+pub(crate) fn add_paths(repo: &git2::Repository, rels: &[String]) -> Result<(), git2::Error> {
     let mut idx = repo.index()?;
     let specs: Vec<&str> = if rels.is_empty() { vec!["."] } else { rels.iter().map(String::as_str).collect() };
     idx.add_all(specs.iter(), git2::IndexAddOption::DEFAULT, None)?;

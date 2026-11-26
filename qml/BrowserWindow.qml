@@ -394,6 +394,20 @@ ApplicationWindow {
 
     Component { id: infoComp; InfoWindow {} }
     Component { id: duComp; DiskUsageWindow {} }
+    Component { id: gitComp; GitWindow {} }
+    property var gitWins: []
+    // Git Changes for the repository `path` is in (one window per repository).
+    function showGitChanges(path) {
+        const p = path || (activePane ? activePane.path : "")
+        if (!p || p.indexOf("/") !== 0) return
+        Async.call(app.grove, k => app.grove.gitSummary(k, p), r => {
+            if (!r || !r.root) { toast("info", "This folder isn't in a git repository."); return }
+            gitWins = gitWins.filter(w => w && w.visible)
+            let w = gitWins.find(x => x.root === r.root || x.dir === r.root)
+            if (!w) { w = gitComp.createObject(null, { app: app, win: bw, dir: r.root }); gitWins = gitWins.concat([w]) }
+            w.show(); w.raise(); w.requestActivate()
+        })
+    }
     // Disk Usage for a folder (default: the selected folder, else this one).
     function showDiskUsage(path) {
         let p = path
@@ -1131,6 +1145,7 @@ ApplicationWindow {
                 { id: "terminal", icon: "utilities-terminal", text: "Open in Terminal", shortcut: k("terminal"), enabled: ok },
                 { id: "diskusage", icon: "filelight", text: "Disk Usage…", shortcut: k("diskusage") },
                 { id: "snapshots", icon: "document-open-recent", text: "Snapshots…", shortcut: k("snapshots") },
+                { id: "gitchanges", icon: "vcs-diff|git|document-preview", text: "Git Changes…", shortcut: k("gitchanges"), enabled: !!activePane && activePane.inGit },
                 { id: "diskutility", icon: "drive-harddisk|partitionmanager", text: "Disk Utility…", shortcut: k("diskutility") }
             ] },
             { title: "Window", icon: "window-duplicate", items: [
@@ -1204,6 +1219,7 @@ ApplicationWindow {
         case "cloud": addCloudDrive(); break
         case "diskusage": showDiskUsage(); break
         case "snapshots": showSnapshots(activePane.path); break
+        case "gitchanges": showGitChanges(activePane.path); break
         case "diskutility": app.openDiskUtility(""); break
         case "undo": app.grove.undo(); break
         case "redo": app.grove.redo(); break
@@ -1431,6 +1447,7 @@ ApplicationWindow {
     Key { act: "trash"; onActivated: bw.go("trash:///") }
     Key { act: "connect"; onActivated: bw.connectServer() }
     Key { act: "diskusage"; onActivated: bw.showDiskUsage() }
+    Key { act: "gitchanges"; onActivated: bw.showGitChanges(bw.activePane.path) }
     Key { act: "diskutility"; onActivated: bw.app.openDiskUtility("") }
     Key { act: "reload"; onActivated: bw.activePane.reload() }
     Key { act: "viewicons"; onActivated: bw.activePane.setView("icons") }
@@ -1605,6 +1622,8 @@ ApplicationWindow {
         else if (cmd === "split") currentTab.toggleSplit()
         else if (cmd === "tab") newTab(arg, [])
         else if (cmd === "ql") quickLook(p)
+        else if (cmd === "git") showGitChanges(arg || p.path)
+        else if (cmd === "gitwin") { const w = gitWins.find(x => x && x.visible); if (w) w.testAction(arg); else console.warn("grove test gitwin: no window") }
         // A viewer's test hook (DocView, DataTable): "qlview=end", "qlview=sort:1:1"...
         else if (cmd === "qlview") {
             const find = (it) => { if (!it || !it.visible) return null; if (typeof it.testAction === "function") return it; for (let i = 0; i < it.children.length; i++) { const f = find(it.children[i]); if (f) return f } return null }

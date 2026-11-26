@@ -27,6 +27,7 @@ mod filetype_table;
 mod hexdoc;
 mod langguess;
 mod gitstatus;
+mod gitrepo;
 mod info;
 mod localsend;
 mod media;
