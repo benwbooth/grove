@@ -36,6 +36,23 @@ struct Chooser {
 fn opt_str(o: &HashMap<String, OwnedValue>, k: &str) -> String {
     o.get(k).and_then(|v| v.try_clone().ok()).and_then(|v| String::try_from(v).ok()).unwrap_or_default()
 }
+/// A label without its mnemonic marker: apps send GTK's "_Open" ("_" before
+/// the access key, "__" for a real underscore), which showed as "_Open".
+fn without_mnemonic(label: &str) -> String {
+    let mut out = String::with_capacity(label.len());
+    let mut it = label.chars().peekable();
+    while let Some(c) = it.next() {
+        if c == '_' {
+            if it.peek() == Some(&'_') {
+                it.next();
+                out.push('_');
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
 fn opt_bool(o: &HashMap<String, OwnedValue>, k: &str) -> bool {
     o.get(k).and_then(|v| v.try_clone().ok()).and_then(|v| bool::try_from(v).ok()).unwrap_or(false)
 }
@@ -98,7 +115,7 @@ impl Chooser {
         waiting().lock().insert(id.clone(), tx);
         let req = json!({
             "id": id, "mode": mode, "app": app_id, "title": title,
-            "acceptLabel": opt_str(&options, "accept_label"),
+            "acceptLabel": without_mnemonic(&opt_str(&options, "accept_label")),
             "multiple": opt_bool(&options, "multiple"),
             "directory": opt_bool(&options, "directory"),
             "currentName": opt_str(&options, "current_name"),
