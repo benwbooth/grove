@@ -79,7 +79,8 @@ pub fn devices() -> Vec<Value> {
         let mounts: Vec<Vec<u8>> = fs.get("MountPoints").and_then(|v| v.try_clone().ok()).and_then(|v| Vec::<Vec<u8>>::try_from(v).ok()).unwrap_or_default();
         let mount = mounts.first().map(|m| String::from_utf8_lossy(m).trim_end_matches('\0').to_string()).unwrap_or_default();
         let name = if !label.is_empty() { label } else { format!("{} Volume", grove_core::util::human_size(size)) };
-        out.push(json!({"name": name, "device": device, "mount": mount, "size": size, "removable": removable,
+        let fs_type = str_of(block.get("IdType"));
+        out.push(json!({"name": name, "device": device, "mount": mount, "size": size, "removable": removable, "fs": fs_type,
             "icon": if optical {"drive-optical"} else if removable {"drive-removable-media-usb|drive-removable-media"} else {"drive-harddisk"}}));
     }
     out
@@ -96,6 +97,8 @@ pub fn places(favs: &[String]) -> Value {
         let (total, free) = grove_core::mounts::space(&m.mount_point).unwrap_or((0, 0));
         let dev = devs.iter().find(|d| d["mount"] == m.mount_point.as_str());
         let name = dev.and_then(|d| d["name"].as_str().map(String::from)).unwrap_or_else(|| name_of(&m.mount_point));
+        // Show All Subvolumes' mount of a disk's top (subvolid=5).
+        let name = crate::subvoltop::name_of_mount(&m.mount_point).unwrap_or(name);
         let icon = match kind {
             "sftp" | "smb" | "nfs" => "folder-network|network-server",
             "cloud" => "folder-cloud|network-server",
@@ -124,7 +127,7 @@ pub fn places(favs: &[String]) -> Value {
     // Disks not mounted yet: click to mount.
     for d in &devs {
         if d["mount"].as_str().map(|s| s.is_empty()).unwrap_or(true) {
-            locations.push(json!({"name": d["name"], "path": "", "device": d["device"], "icon": d["icon"], "kind": "unmounted", "ejectable": false}));
+            locations.push(json!({"name": d["name"], "path": "", "device": d["device"], "icon": d["icon"], "kind": "unmounted", "ejectable": false, "fs": d["fs"]}));
         }
     }
     let tags: Vec<Value> = grove_core::tags::known().into_iter().map(|t| json!({"name": t, "color": grove_core::tags::color_of(&t).unwrap_or("")})).collect();
@@ -155,8 +158,33 @@ fn find_fs_object(device: &str) -> Option<(String, String)> {
     None
 }
 
+/// The filesystem udisks found on `device` ("btrfs"...), system disks too.
+pub fn fs_type_of(device: &str) -> String {
+    let Some(objs) = udisks_objects() else { return String::new() };
+    for (_, ifaces) in &objs {
+        let Some(block) = ifaces.get("org.freedesktop.UDisks2.Block") else { continue };
+        if bytes_str(block.get("Device")) == device || bytes_str(block.get("PreferredDevice")) == device {
+            return str_of(block.get("IdType"));
+        }
+    }
+    String::new()
+}
+
 fn opts() -> HashMap<String, zbus::zvariant::Value<'static>> {
     HashMap::new()
+}
+
+/// Mounts `device` through udisks with mount options (e.g. "ro,subvolid=5"):
+/// the mount point, or udisks' error.
+pub fn mount_with_options(device: &str, options: &str) -> Result<String, String> {
+    let (obj, _) = find_fs_object(device).ok_or("That disk isn't available any more.")?;
+    let c = zbus::blocking::Connection::system().map_err(|_| "Can't reach the disk service (udisks).".to_string())?;
+    let mut o = opts();
+    o.insert("options".into(), zbus::zvariant::Value::from(options.to_string()));
+    let r = c
+        .call_method(Some("org.freedesktop.UDisks2"), obj.as_str(), Some("org.freedesktop.UDisks2.Filesystem"), "Mount", &(o,))
+        .map_err(|e| plain_dbus(&e))?;
+    Ok(r.body().deserialize::<String>().unwrap_or_default())
 }
 
 pub fn mount(device: &str) -> Value {
@@ -207,6 +235,10 @@ fn plain_dbus(e: &zbus::Error) -> String {
 }
 
 pub fn eject(mount_point: &str) -> Value {
+    // Show All Subvolumes' own mount (held by grove's root helper).
+    if let Some(v) = crate::subvoltop::eject(mount_point) {
+        return v;
+    }
     let m = grove_core::mounts::mounts().into_iter().find(|m| m.mount_point == mount_point);
     let Some(m) = m else { return json!({"ok": true}) };
     if m.fs_type.starts_with("fuse") {

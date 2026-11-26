@@ -649,6 +649,17 @@ impl ffi::Grove {
         self.answer_on("files", key, move || crate::subvol::restore(&s, &t, &a));
     }
 
+    pub fn subvol_top_info(&self, key: &QString, spec: &QString) {
+        let s = spec.to_string();
+        self.answer(key, move || crate::subvoltop::describe(&s));
+    }
+
+    pub fn open_subvol_top(&self, key: &QString, spec: &QString, writable: bool) {
+        let s = spec.to_string();
+        // polkit's password prompt may wait a while: not on the files lane.
+        self.answer(key, move || crate::subvoltop::open(&s, writable));
+    }
+
     pub fn delete_subvolume(&self, key: &QString, path: &QString) {
         let p = path.to_string();
         // Not on the files lane: polkit's password prompt may wait a while.

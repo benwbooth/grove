@@ -9,6 +9,9 @@ pub struct Mount {
     pub mount_point: String,
     pub fs_type: String,
     pub options: String,
+    /// The folder of the filesystem mounted here ("/" for its top; a
+    /// btrfs subvolume's path, e.g. "/@home").
+    pub root: String,
 }
 
 fn unescape_octal(s: &str) -> String {
@@ -41,6 +44,7 @@ pub fn parse_mountinfo(text: &str) -> Vec<Mount> {
         v.push(Mount {
             mount_point: unescape_octal(pre[4]),
             options: pre[5].to_string(),
+            root: unescape_octal(pre[3]),
             fs_type: post[0].to_string(),
             device: unescape_octal(post[1]),
         });
@@ -120,6 +124,7 @@ mod tests {
         assert_eq!(m[0].mount_point, "/mnt/my disk");
         assert_eq!(m[0].fs_type, "ext3");
         assert_eq!(m[1].device, "/dev/sdb1");
+        assert_eq!(m[0].root, "/mnt1");
         assert_eq!(kind(&m[1]), "disk");
     }
 }

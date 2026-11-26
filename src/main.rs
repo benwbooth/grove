@@ -44,6 +44,7 @@ mod google;
 mod remote;
 mod vcs;
 mod roothelper;
+mod subvoltop;
 mod subvol;
 mod table;
 mod textdoc;
@@ -192,6 +193,8 @@ fn main() {
     ffi::grove_create_app();
     let import = option_env!("GROVE_QT_QML").filter(|p| std::path::Path::new(p).exists()).unwrap_or("");
     let code = ffi::grove_run(&QString::from("qrc:/qt/qml/Grove/qml/Main.qml"), &QString::from(import));
+    // Show All Subvolumes: nothing stays mounted after grove.
+    subvoltop::close_all();
     std::process::exit(code);
 }
 

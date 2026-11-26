@@ -19,7 +19,7 @@ ApplicationWindow {
     property int sidebarWidth: app.settings.sidebar_width > 0 ? app.settings.sidebar_width : Math.round(200 * Theme.pt)
     property var currentTab: tabRepeater.count > 0 ? tabRepeater.itemAt(tabBar.currentIndex) : null
     property var activePane: currentTab ? currentTab.activePane : null
-    property bool modalOpen: burnSheet.opened || formatSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || subvolSheet.opened || snapshotsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened || aboutSheet.opened
+    property bool modalOpen: burnSheet.opened || formatSheet.opened || toolbarSheet.opened || goSheet.opened || shareSheet.opened || commitSheet.opened || versionsSheet.opened || subvolSheet.opened || subvolTopSheet.opened || snapshotsSheet.opened || conflict.opened || confirmSheet.opened || renameSheet.opened || connectSheet.opened || cloudSheet.opened || saveSheet.opened || openWithSheet.opened || aboutSheet.opened
 
     width: 1180
     height: 720
@@ -988,6 +988,9 @@ ApplicationWindow {
     function snapshotSubvolume(path) { if (path) subvolSheet.snapshot(path) }
     function deleteSubvolume(path) { if (path) subvolSheet.remove(path) }
     function restoreSubvolume(path) { if (path) subvolSheet.restore(path) }
+    // Show All Subvolumes: the top of the btrfs disk a folder (or
+    // "mount:/dev/X") is on, where @, @home and the snapshots live.
+    function showAllSubvolumes(spec) { if (spec) subvolTopSheet.ask(spec) }
     Timer {
         id: appsTimer
         interval: 150
@@ -1057,6 +1060,7 @@ ApplicationWindow {
                 { separator: true },
                 { id: "snapshot", icon: "camera-photo", text: subvolTarget ? "Take Snapshot of “" + subvolTarget.substring(subvolTarget.lastIndexOf("/") + 1) + "”…" : "Take Snapshot…", shortcut: k("snapshot"), enabled: subvolTarget !== "" },
                 { id: "restoresubvol", icon: "document-revert", text: "Restore from Snapshot…", enabled: subvolTarget !== "" && ((t && t.subvol) ? t.subvol.indexOf("Snapshot") >= 0 && t.subvol !== "Snapper Snapshot" : (!!hereSubvol.info && hereSubvol.info.snapshot && !hereSubvol.snapper)) },
+                { id: "alltop", icon: "drive-harddisk", text: "Show All Subvolumes of This Disk…", shortcut: k("alltop"), enabled: !special && !!hereSubvol.btrfs },
                 { id: "deletesubvol", icon: "edit-delete", text: "Delete Subvolume…", enabled: subvolTarget !== "" && !(t && t.subvol === "Snapper Snapshot") && !(menuSel === 0 && hereSubvol.snapper) },
                 { separator: true },
                 { id: "putback", icon: "edit-undo", text: "Put Back", enabled: trash && sel > 0 },
@@ -1232,6 +1236,7 @@ ApplicationWindow {
             case "snapshot": snapshotSubvolume(subvolTarget); break
             case "deletesubvol": deleteSubvolume(subvolTarget); break
             case "restoresubvol": restoreSubvolume(subvolTarget); break
+            case "alltop": showAllSubvolumes(herePath); break
             case "open": p.openSelected(false); break
             case "opentab": p.openSelected(true); break
             case "quicklook": p.quickLook(); break
@@ -1343,6 +1348,7 @@ ApplicationWindow {
     BatchRename { id: renameSheet; app: bw.app; win: bw }
     VersionsSheet { id: versionsSheet; app: bw.app; win: bw }
     SubvolumeSheet { id: subvolSheet; app: bw.app; win: bw }
+    SubvolTopSheet { id: subvolTopSheet; app: bw.app; win: bw }
     SnapshotsSheet { id: snapshotsSheet; app: bw.app; win: bw }
     ShareSheet { id: shareSheet; app: bw.app; win: bw }
     Sheet {
@@ -1483,6 +1489,7 @@ ApplicationWindow {
     Key { act: "newfolder"; onActivated: bw.activePane.newFolder() }
     Key { act: "newsubvol"; onActivated: bw.activePane.newSubvolume() }
     Key { act: "snapshot"; onActivated: bw.snapshotSubvolume(bw.subvolTarget) }
+    Key { act: "alltop"; onActivated: if (bw.hereSubvol.btrfs) bw.showAllSubvolumes(bw.herePath) }
     Key { act: "newfile"; onActivated: bw.activePane.newFile("") }
     Key { act: "movetotrash"; onActivated: bw.activePane.trashSelected() }
     Key { act: "delete"; onActivated: bw.activePane.deleteSelected() }
@@ -1574,6 +1581,11 @@ ApplicationWindow {
         else if (cmd === "delgo") subvolSheet.go()
         else if (cmd === "restoresubvol") bw.restoreSubvolume(arg || bw.subvolTarget)
         else if (cmd === "restorego") subvolSheet.go()
+        // Show All Subvolumes: alltop=SPEC (sheet; a folder or mount:/dev/X), alltopgo, alltopdump=SPEC, ejectpath=MOUNTPOINT
+        else if (cmd === "alltop") bw.showAllSubvolumes(arg || p.path)
+        else if (cmd === "alltopgo") subvolTopSheet.go()
+        else if (cmd === "ejectpath") bw.eject(arg, arg.substring(arg.lastIndexOf("/") + 1))
+        else if (cmd === "alltopdump") Async.call(app.grove, k => app.grove.subvolTopInfo(k, arg || p.path), r => console.warn("grove test alltop", JSON.stringify(r)))
         else if (cmd === "subvoldump") Async.call(app.grove, k => app.grove.subvolInfo(k, arg || p.path), r => console.warn("grove test subvol", JSON.stringify(r)))
         else if (cmd === "cloud") bw.addCloudDrive()
         else if (cmd === "cloudpick") { const f = cloudSheet.providers.find(x => x.name === arg); if (f) cloudSheet.pick(f) }

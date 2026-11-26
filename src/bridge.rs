@@ -200,6 +200,13 @@ pub mod ffi {
         fn restore_subvolume(self: &Grove, key: &QString, snap: &QString, target: &QString, aside: &QString);
         #[qinvokable]
         fn delete_subvolume(self: &Grove, key: &QString, path: &QString);
+        /// Show All Subvolumes: the btrfs disk a folder (or "mount:/dev/X")
+        /// is on ({device, name, mounted, existing, needsRoot} or {error}).
+        #[qinvokable]
+        fn subvol_top_info(self: &Grove, key: &QString, spec: &QString);
+        /// Mounts that disk's top (subvolid=5) and answers {path} or {error}.
+        #[qinvokable]
+        fn open_subvol_top(self: &Grove, key: &QString, spec: &QString, writable: bool);
         #[qinvokable]
         fn new_file(self: &Grove, key: &QString, dir: &QString, name: &QString);
         #[qinvokable]

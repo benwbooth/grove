@@ -82,6 +82,7 @@ QtObject {
         { id: "newfolder", group: "Edit", action: "New folder", defaults: ["Ctrl+Shift+N", "F10"], fixed: "", note: "Finder: ⇧⌘N  ·  Dolphin: F10" },
         { id: "newfile", group: "Edit", action: "New file", defaults: ["Ctrl+Alt+N"], fixed: "", note: "" },
         { id: "newsubvol", group: "Edit", action: "New btrfs subvolume (a folder that can be snapshotted on its own)", defaults: ["Ctrl+Alt+Shift+N"], fixed: "", note: "Only on btrfs disks" },
+        { id: "alltop", group: "Navigate", action: "Show all of a btrfs disk's subvolumes (@, @home, snapshots…): opens its top, read-only", defaults: ["Ctrl+Alt+Shift+T"], fixed: "", note: "Asks for the password when the disk is in use; Eject closes it" },
         { id: "snapshot", group: "Edit", action: "Take a snapshot of the selected subvolume (or the one shown)", defaults: ["Ctrl+Alt+Shift+S"], fixed: "", note: "Read-only and named with the date by default" },
         { id: "movetotrash", group: "Edit", action: "Move to Trash", defaults: ["Delete", "Ctrl+Backspace"], fixed: "", note: "Dolphin: Del  ·  Finder: ⌘⌫" },
         { id: "delete", group: "Edit", action: "Delete permanently", defaults: ["Shift+Delete"], fixed: "", note: "Dolphin: Shift+Del (asks first)" },

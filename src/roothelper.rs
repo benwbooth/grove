@@ -5,8 +5,10 @@
 //! subvolume when the disk doesn't let users do that, and file operations
 //! the user was refused and then asked to redo as administrator (delete,
 //! rename, new folder/file, copy/move/alias into a place that isn't
-//! theirs). Nothing else runs as root. `as_root` is the one way grove asks
-//! polkit (pkexec) to run this helper.
+//! theirs), and holding a btrfs disk's top (subvolid=5) mounted for Show
+//! All Subvolumes. Nothing else runs as root. `as_root` is how grove asks
+//! polkit (pkexec) to run this helper once; Show All Subvolumes keeps its
+//! helper running (subvoltop.rs, same `helper_argv`).
 
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -85,6 +87,106 @@ fn fat_resize(dev: &str, num: &str, start: &str, end: &str, unlocked: bool) -> s
     grove_core::diskops::fat_resize(dev, num, start, end).map_err(|e| std::io::Error::other(e))
 }
 
+/// Show All Subvolumes: where the top of a btrfs disk may be mounted. Only
+/// an empty folder of the user's own, directly in /run/user/UID/grove/.
+pub fn top_mount_point_ok(mp: &Path, uid: u32) -> Result<std::path::PathBuf, String> {
+    use std::os::unix::fs::MetadataExt;
+    let real = std::fs::canonicalize(mp).map_err(|e| format!("{}: {e}", mp.display()))?;
+    let base = std::path::PathBuf::from(format!("/run/user/{uid}/grove"));
+    if real.parent() != Some(base.as_path()) {
+        return Err(format!("{} isn't in {}", real.display(), base.display()));
+    }
+    let meta = std::fs::symlink_metadata(&real).map_err(|e| e.to_string())?;
+    if !meta.is_dir() || meta.uid() != uid {
+        return Err("not a folder of yours".into());
+    }
+    if std::fs::read_dir(&real).map_err(|e| e.to_string())?.next().is_some() {
+        return Err("the folder isn't empty".into());
+    }
+    Ok(real)
+}
+
+/// Where Show All Subvolumes' mount is, for the signal handler.
+static TOP_MP: std::sync::OnceLock<std::ffi::CString> = std::sync::OnceLock::new();
+
+extern "C" fn top_on_signal(_: libc::c_int) {
+    if let Some(mp) = TOP_MP.get() {
+        unsafe {
+            libc::umount2(mp.as_ptr(), libc::MNT_DETACH);
+            libc::rmdir(mp.as_ptr());
+            libc::_exit(0);
+        }
+    }
+    unsafe { libc::_exit(1) };
+}
+
+/// `btrfs-top DEVICE MOUNTPOINT ro|rw`: mounts the top of a btrfs disk
+/// (subvolid=5, nosuid, nodev, read-only unless rw) on MOUNTPOINT and stays
+/// running while grove does: "unmount" on stdin unmounts it (answering "ok"
+/// or "busy"); grove quitting (stdin closed) or a signal detaches it. So
+/// the password is asked once, and nothing is left mounted behind.
+fn btrfs_top(dev: &str, mp: &str, mode: &str) -> std::io::Result<()> {
+    use std::io::{BufRead, Write};
+    use std::os::unix::fs::FileTypeExt;
+    let bad = |m: String| std::io::Error::new(std::io::ErrorKind::InvalidInput, m);
+    let uid: u32 = std::env::var("PKEXEC_UID").ok().and_then(|u| u.parse().ok()).unwrap_or_else(|| unsafe { libc::getuid() });
+    let real = top_mount_point_ok(Path::new(mp), uid).map_err(bad)?;
+    let dev = std::fs::canonicalize(dev)?;
+    if !std::fs::metadata(&dev)?.file_type().is_block_device() {
+        return Err(bad(format!("{} isn't a disk", dev.display())));
+    }
+    let c = |s: &str| std::ffi::CString::new(s).map_err(|_| bad("bad name".into()));
+    let cmp = c(&real.to_string_lossy())?;
+    // Mounted on the very folder checked (through its fd), not whatever the
+    // path may point to by then.
+    let fd = unsafe { libc::open(cmp.as_ptr(), libc::O_PATH | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC) };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let fd_path = format!("/proc/self/fd/{fd}");
+    if std::fs::read_link(&fd_path).ok().as_deref() != Some(real.as_path()) || top_mount_point_ok(Path::new(&fd_path), uid).map_err(bad)? != real {
+        return Err(bad("the folder changed".into()));
+    }
+    let (cdev, target, fstype, data) = (c(&dev.to_string_lossy())?, c(&fd_path)?, c("btrfs")?, c("subvolid=5")?);
+    let mut flags = libc::MS_NOSUID | libc::MS_NODEV;
+    if mode != "rw" {
+        flags |= libc::MS_RDONLY;
+    }
+    let r = unsafe { libc::mount(cdev.as_ptr(), target.as_ptr(), fstype.as_ptr(), flags, data.as_ptr() as *const libc::c_void) };
+    let err = std::io::Error::last_os_error();
+    unsafe { libc::close(fd) };
+    if r != 0 {
+        return Err(err);
+    }
+    let _ = TOP_MP.set(cmp.clone());
+    unsafe {
+        libc::signal(libc::SIGTERM, top_on_signal as *const () as libc::sighandler_t);
+        libc::signal(libc::SIGHUP, top_on_signal as *const () as libc::sighandler_t);
+        libc::signal(libc::SIGINT, top_on_signal as *const () as libc::sighandler_t);
+    }
+    let mut out = std::io::stdout();
+    let _ = writeln!(out, "mounted");
+    let _ = out.flush();
+    let stdin = std::io::stdin();
+    for line in stdin.lock().lines() {
+        let Ok(line) = line else { break };
+        if line.trim() == "unmount" {
+            if unsafe { libc::umount2(cmp.as_ptr(), 0) } == 0 {
+                let _ = std::fs::remove_dir(&real);
+                let _ = writeln!(out, "ok");
+                let _ = out.flush();
+                return Ok(());
+            }
+            let _ = writeln!(out, "busy {}", std::io::Error::last_os_error());
+            let _ = out.flush();
+        }
+    }
+    // grove went away: let go of it as soon as nothing uses it.
+    unsafe { libc::umount2(cmp.as_ptr(), libc::MNT_DETACH) };
+    let _ = std::fs::remove_dir(&real);
+    Ok(())
+}
+
 /// `grove --root-helper chmod MODE R PATH` / `chown OWNER GROUP R PATH`
 /// (R is 1 for recursive). Returns the exit code.
 pub fn run(args: &[String]) -> i32 {
@@ -109,7 +211,8 @@ pub fn run(args: &[String]) -> i32 {
             }
             Err(m) => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, m)),
         },
-        _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "usage: --root-helper chmod MODE 0|1 PATH | chown OWNER GROUP 0|1 PATH | subvol-delete PATH | fat-resize DISK N START END 0|1 | files OP ARGS...")),
+        [op, dev, mp, mode] if op == "btrfs-top" => btrfs_top(dev, mp, mode),
+        _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "usage: --root-helper chmod MODE 0|1 PATH | chown OWNER GROUP 0|1 PATH | subvol-delete PATH | fat-resize DISK N START END 0|1 | files OP ARGS... | btrfs-top DISK MOUNTPOINT ro|rw")),
     };
     match r {
         Ok(()) => 0,
@@ -297,6 +400,7 @@ pub fn as_root(args: &[&str]) -> Result<String, AdminError> {
     read_exit(o.status.code(), &o.stdout, &o.stderr)
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -357,6 +461,32 @@ mod tests {
         assert_eq!(r["errors"].as_array().unwrap().len(), 1);
         assert!(files(&a(&["delete", "relative"])).is_err());
         assert!(files(&a(&["mkdir", &ds, "../x"])).is_err());
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn top_mount_point_only_in_runtime_grove() {
+        let uid = unsafe { libc::getuid() };
+        // Anything outside /run/user/UID/grove/ is refused.
+        assert!(top_mount_point_ok(Path::new("/tmp"), uid).is_err());
+        assert!(top_mount_point_ok(Path::new("/"), uid).is_err());
+        let base = std::path::PathBuf::from(format!("/run/user/{uid}/grove"));
+        if !base.is_dir() {
+            return;
+        }
+        let d = base.join(format!("grove-test-top-{}", std::process::id()));
+        std::fs::create_dir(&d).unwrap();
+        assert_eq!(top_mount_point_ok(&d, uid).unwrap(), d);
+        // Someone else's uid, a non-empty folder, a deeper folder: refused.
+        assert!(top_mount_point_ok(&d, uid + 1).is_err());
+        std::fs::create_dir(d.join("x")).unwrap();
+        assert!(top_mount_point_ok(&d, uid).is_err());
+        assert!(top_mount_point_ok(&d.join("x"), uid).is_err());
+        // A symlink in grove/ pointing elsewhere: judged by where it points.
+        let l = base.join(format!("grove-test-link-{}", std::process::id()));
+        std::os::unix::fs::symlink("/tmp", &l).unwrap();
+        assert!(top_mount_point_ok(&l, uid).is_err());
+        std::fs::remove_file(&l).unwrap();
         std::fs::remove_dir_all(&d).unwrap();
     }
 }

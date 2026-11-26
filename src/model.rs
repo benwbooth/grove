@@ -1461,8 +1461,10 @@ pub fn wild_match(p: &str, s: &str) -> bool {
 fn computer_list() -> Vec<RawItem> {
     let places = crate::places::places(&[]);
     let mut out = vec![];
-    let disk = |path: &str, name: &str, icon: &str, total: u64, free: u64| -> Option<RawItem> {
+    let disk = |path: &str, name: &str, icon: &str, total: u64, free: u64, fs: &str| -> Option<RawItem> {
         let mut e = Entry::from_path(Path::new(path)).ok()?;
+        // Its filesystem (the item menu's Show All Subvolumes for btrfs).
+        e.key = format!("fs:{fs}");
         e.name = name.to_string();
         e.hidden = false;
         e.note = if total > 0 { format!("{} free of {}", grove_core::util::human_size(free), grove_core::util::human_size(total)) } else { String::new() };
@@ -1474,7 +1476,8 @@ fn computer_list() -> Vec<RawItem> {
     // The system disk ("Macintosh HD"): named after the system.
     let os = crate::controller::os_name().to_string();
     let (total, free) = grove_core::mounts::space("/").unwrap_or((0, 0));
-    out.extend(disk("/", &os, "drive-harddisk-system|drive-harddisk", total, free));
+    let root_fs = grove_core::mounts::mounts().into_iter().rev().find(|m| m.mount_point == "/").map(|m| m.fs_type).unwrap_or_default();
+    out.extend(disk("/", &os, "drive-harddisk-system|drive-harddisk", total, free, &root_fs));
     for group in ["locations", "network"] {
         for d in places[group].as_array().into_iter().flatten() {
             let path = d["path"].as_str().unwrap_or("");
@@ -1488,13 +1491,14 @@ fn computer_list() -> Vec<RawItem> {
                     let Ok(mut e) = Entry::from_path(Path::new("/")) else { continue };
                     e.name = name.to_string();
                     e.path = format!("mount:{dev}");
+                    e.key = format!("fs:{}", d["fs"].as_str().unwrap_or(""));
                     e.note = "Not opened yet: open it to mount it".into();
                     e.size = 0;
                     let mut r = raw_from_entry(e);
                     r.icon = icon.to_string();
                     out.push(r);
                 }
-                _ if !path.is_empty() => out.extend(disk(path, name, icon, d["total"].as_u64().unwrap_or(0), d["free"].as_u64().unwrap_or(0))),
+                _ if !path.is_empty() => out.extend(disk(path, name, icon, d["total"].as_u64().unwrap_or(0), d["free"].as_u64().unwrap_or(0), d["fs"].as_str().unwrap_or(""))),
                 _ => {}
             }
         }

@@ -105,6 +105,8 @@ Item {
         // A local disk (mounted or not): its device, for Format… and Disk Utility.
         property string device: ""
         readonly property bool isDisk: device.indexOf("/dev/") === 0
+        // Its filesystem ("btrfs": Show All Subvolumes).
+        property string fs: ""
         // Identifies it for hiding (a path, or "tag:Red", "smart:Name"...).
         property string key: path
         property bool shown: true
@@ -303,6 +305,7 @@ Item {
                         total: modelData.total || 0; free: modelData.free || 0
                         ejectable: !!modelData.ejectable
                         device: modelData.device || ""
+                        fs: modelData.fs || ""
                         dim: modelData.kind === "unmounted" || modelData.kind === "mtp"
                         dropTarget: modelData.kind !== "unmounted" && modelData.kind !== "mtp"
                         tip: modelData.kind === "unmounted" ? "Click to open this disk"
@@ -438,6 +441,9 @@ Item {
         GMenuItem { text: "Open in Disk Utility"; iconName: "drive-harddisk|partitionmanager"; visible: !!placeMenu.target && placeMenu.target.isDisk; height: visible ? implicitHeight : 0
             tip: "See and change this disk's partitions in Grove Disk Utility"
             onTriggered: sb.app.openDiskUtility("") }
+        GMenuItem { text: "Show All Subvolumes…"; iconName: "drive-harddisk"; visible: !!placeMenu.target && placeMenu.target.fs === "btrfs"; height: visible ? implicitHeight : 0
+            tip: "Open the top of this btrfs disk, where subvolumes like @, @home and the snapshots live (read-only)"
+            onTriggered: sb.win.showAllSubvolumes(placeMenu.target.path || ("mount:" + placeMenu.target.device)) }
         HideItem {}
         GMenuSeparator {}
         GMenuItem { text: "Show Hidden Entries"; iconName: "view-visible|view-reveal"; checkable: true; checked: sb.showHiddenPlaces; enabled: sb.hiddenPlaces.length > 0; onTriggered: sb.showHiddenPlaces = !sb.showHiddenPlaces }
@@ -447,6 +453,9 @@ Item {
         GMenuItem { text: "Eject"; iconName: "media-eject"; shortcutText: "Ctrl+E"; tip: "Close the drive so it's safe to unplug"; onTriggered: placeMenu.target.ejected() }
         GMenuItem { text: "Format…"; iconName: "drive-removable-media|media-flash"; tip: "Erase this drive and give it a new name and format (exFAT, FAT32, NTFS, ext4, Btrfs)"; onTriggered: sb.win.formatDrive(placeMenu.target.device) }
         GMenuItem { text: "Open in Disk Utility"; iconName: "drive-harddisk|partitionmanager"; tip: "See and change this disk's partitions in Grove Disk Utility"; onTriggered: sb.app.openDiskUtility("") }
+        GMenuItem { text: "Show All Subvolumes…"; iconName: "drive-harddisk"; visible: !!placeMenu.target && placeMenu.target.fs === "btrfs"; height: visible ? implicitHeight : 0
+            tip: "Open the top of this btrfs disk, where subvolumes like @, @home and the snapshots live (read-only)"
+            onTriggered: sb.win.showAllSubvolumes(placeMenu.target.path || ("mount:" + placeMenu.target.device)) }
     }
     GMenu {
         id: sectionMenu
