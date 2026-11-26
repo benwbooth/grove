@@ -382,7 +382,17 @@ pub fn helper_argv(pkexec: Option<&str>, exe: &str, args: &[&str]) -> Vec<String
 pub fn read_exit(code: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Result<String, AdminError> {
     match code {
         Some(0) => Ok(String::from_utf8_lossy(stdout).into_owned()),
-        Some(126) | Some(127) => Err(AdminError::Cancelled),
+        // 126: the prompt was dismissed; 127: not authorized, or pkexec
+        // refused for a reason of its own (it says which on stderr).
+        Some(126) => Err(AdminError::Cancelled),
+        Some(127) => {
+            let m = String::from_utf8_lossy(stderr).trim().to_string();
+            if m.is_empty() || m.contains("Not authorized") || m.contains("dismissed") {
+                Err(AdminError::Cancelled)
+            } else {
+                Err(AdminError::Failed(m.lines().next().unwrap_or("").trim_start_matches("Error executing command as another user: ").to_string()))
+            }
+        }
         _ => {
             let m = String::from_utf8_lossy(stderr).trim().to_string();
             Err(AdminError::Failed(if m.is_empty() { "the helper stopped".into() } else { m }))
@@ -390,13 +400,22 @@ pub fn read_exit(code: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Result<Stri
     }
 }
 
+/// `pkexec grove --root-helper ARGS...` (GROVE_PKEXEC swaps pkexec in
+/// tests). Without SHELL: pkexec refuses outright (exit 127, no password
+/// asked) when SHELL isn't listed in /etc/shells, e.g. a per-user
+/// /etc/profiles/per-user/NAME/bin/zsh on NixOS, 2026-11-26.
+pub fn command(args: &[&str]) -> std::process::Command {
+    let argv = helper_argv(std::env::var("GROVE_PKEXEC").ok().as_deref(), &exe(), args);
+    let mut c = std::process::Command::new(&argv[0]);
+    c.args(&argv[1..]).env_remove("SHELL");
+    c
+}
+
 /// Runs `grove --root-helper ARGS...` as root through polkit (which asks
 /// for the password) and waits: call it off the UI thread. Returns what
 /// the helper printed.
 pub fn as_root(args: &[&str]) -> Result<String, AdminError> {
-    let alt = std::env::var("GROVE_PKEXEC").ok();
-    let argv = helper_argv(alt.as_deref(), &exe(), args);
-    let o = std::process::Command::new(&argv[0]).args(&argv[1..]).stdin(std::process::Stdio::null()).output().map_err(|_| AdminError::Unavailable)?;
+    let o = command(args).stdin(std::process::Stdio::null()).output().map_err(|_| AdminError::Unavailable)?;
     read_exit(o.status.code(), &o.stdout, &o.stderr)
 }
 
@@ -417,6 +436,10 @@ mod tests {
         assert_eq!(read_exit(Some(0), b"{}", b""), Ok("{}".into()));
         assert_eq!(read_exit(Some(126), b"", b""), Err(AdminError::Cancelled));
         assert_eq!(read_exit(Some(127), b"", b""), Err(AdminError::Cancelled));
+        assert_eq!(read_exit(Some(127), b"", b"Error executing command as another user: Not authorized\n"), Err(AdminError::Cancelled));
+        assert_eq!(read_exit(Some(127), b"", b"The value for the SHELL variable was not found the /etc/shells file\n\nThis incident has been reported.\n"),
+                   Err(AdminError::Failed("The value for the SHELL variable was not found the /etc/shells file".into())));
+        assert!(command(&["x"]).get_envs().any(|(k, v)| k == "SHELL" && v.is_none()));
         assert_eq!(read_exit(Some(1), b"", b"bad\n"), Err(AdminError::Failed("bad".into())));
         assert!(AdminError::Cancelled.words("Deleting").contains("Nothing was changed"));
     }

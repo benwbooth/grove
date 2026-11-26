@@ -41,7 +41,8 @@ pub fn quick(qt: &CxxQtThread<ffi::Grove>, action: &str, paths: &[PathBuf], arg:
         "open-as-root" => {
             // pkexec clears the environment: grove puts back what the window
             // needs itself (--env), no env command.
-            let mut argv = vec!["pkexec".to_string(), crate::roothelper::exe()];
+            // Without SHELL: pkexec refuses one that /etc/shells doesn't list.
+            let mut argv = vec!["env".to_string(), "-u".into(), "SHELL".into(), "pkexec".into(), crate::roothelper::exe()];
             for v in ["WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DISPLAY", "XAUTHORITY", "QT_QPA_PLATFORM"] {
                 if let Ok(x) = std::env::var(v) {
                     argv.push("--env".into());

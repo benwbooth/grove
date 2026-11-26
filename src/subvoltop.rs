@@ -176,9 +176,8 @@ pub fn open(spec: &str, writable: bool) -> Value {
     let args = ["btrfs-top", d.device.as_str(), mp.as_str(), if writable { "rw" } else { "ro" }];
     // Through pkexec, like every root-helper call (GROVE_PKEXEC: tests run it
     // through something else, e.g. `env`, so the mount is refused).
-    let argv = crate::roothelper::helper_argv(std::env::var("GROVE_PKEXEC").ok().as_deref(), &crate::roothelper::exe(), &args);
-    let mut cmd = std::process::Command::new(&argv[0]);
-    cmd.args(&argv[1..]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut cmd = crate::roothelper::command(&args);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(_) => {
@@ -196,9 +195,10 @@ pub fn open(spec: &str, writable: bool) -> Value {
     drop(child.stdin.take());
     let o = child.wait_with_output();
     let _ = std::fs::remove_dir(&dir);
-    match o {
-        Ok(o) if o.status.code() == Some(126) || o.status.code() == Some(127) => json!({"error": "Not opened: the administrator password wasn't given."}),
-        Ok(o) => json!({"error": format!("Couldn't open the disk's subvolumes: {}", String::from_utf8_lossy(&o.stderr).trim())}),
+    match o.map(|o| crate::roothelper::read_exit(o.status.code(), &o.stdout, &o.stderr)) {
+        Ok(Err(crate::roothelper::AdminError::Cancelled)) => json!({"error": "Not opened: the administrator password wasn't given."}),
+        Ok(Err(crate::roothelper::AdminError::Failed(m))) => json!({"error": format!("Couldn't open the disk's subvolumes: {m}")}),
+        Ok(_) => json!({"error": "Couldn't open the disk's subvolumes: the helper stopped."}),
         Err(e) => json!({"error": e.to_string()}),
     }
 }
