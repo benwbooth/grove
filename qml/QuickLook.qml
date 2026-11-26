@@ -158,6 +158,9 @@ Window {
             if (ql.pv.kind === "table" && e.key === Qt.Key_F && (e.modifiers & Qt.ControlModifier)) {
                 dataTable.focusSearch(); e.accepted = true; return
             }
+            if (codeDoc.visible && codeDoc.treeShown && e.key === Qt.Key_F && (e.modifiers & Qt.ControlModifier)) {
+                codeDoc.focusSearch(); e.accepted = true; return
+            }
             if (pdfLoader.item && pdfLoader.item.next && (e.key === Qt.Key_PageDown || e.key === Qt.Key_PageUp)) {
                 if (e.key === Qt.Key_PageDown) pdfLoader.item.next(); else pdfLoader.item.prev()
                 e.accepted = true

@@ -34,6 +34,7 @@ pub mod settings;
 pub mod syntaxpref;
 pub mod tags;
 pub mod thumbs;
+pub mod structured;
 pub mod trash;
 pub mod util;
 pub mod worddoc;

@@ -82,7 +82,7 @@ fn main() {
         .cpp_file("cpp/global_menu.cpp")
         .cpp_file("include/mpv_gl.h")
         .cpp_file("cpp/mpv_gl.cpp")
-        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs", "src/hexdoc.rs", "src/pvcanvas.rs", "src/mpv.rs"]);
+        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs", "src/treedoc.rs", "src/hexdoc.rs", "src/pvcanvas.rs", "src/mpv.rs"]);
     // Only adds include dirs and a define for our own code.
     let builder = unsafe {
         builder.cc_builder(|cc| {

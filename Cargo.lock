@@ -1779,6 +1779,7 @@ dependencies = [
  "libc",
  "libhlp",
  "md-5",
+ "memchr",
  "msi",
  "parking_lot",
  "percent-encoding",
@@ -1791,8 +1792,10 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tiny-skia",
+ "toml_edit",
  "tract-onnx",
  "xattr",
+ "yaml-rust",
  "zip",
 ]
 

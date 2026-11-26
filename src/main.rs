@@ -46,6 +46,7 @@ mod roothelper;
 mod subvol;
 mod table;
 mod textdoc;
+mod treedoc;
 mod secrets;
 mod terminal;
 mod thumbgen;

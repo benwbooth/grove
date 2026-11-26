@@ -22,6 +22,10 @@ grep-regex = "0.1"
 grep-matcher = "0.1"
 regex = "1"
 quick-xml = "0.37"
+# The viewer's tree view (structured.rs): YAML events, TOML with spans.
+yaml-rust = "0.4"
+toml_edit = { version = "0.25", default-features = false, features = ["parse"] }
+memchr = "2"
 parking_lot = "0.12"
 msi = "0.11.1"
 cab = "0.6.0"
