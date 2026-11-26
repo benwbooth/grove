@@ -591,9 +591,184 @@ pub fn open_terminal(dir: &Path) -> Result<(), String> {
     spawn_detached(&terminal_command(dir), Some(dir))
 }
 
+/// The terminal program to use, as words (grove's setting, $TERMINAL, then
+/// tessera, konsole and friends: the first one installed).
+fn chosen_terminal() -> Option<Vec<String>> {
+    let setting = crate::settings::load().terminal;
+    let mut candidates: Vec<String> = vec![];
+    if !setting.is_empty() {
+        candidates.push(setting);
+    }
+    if let Ok(t) = std::env::var("TERMINAL") {
+        candidates.push(t);
+    }
+    candidates.extend(["tessera", "konsole", "foot", "kitty", "alacritty", "wezterm", "ghostty", "xterm"].iter().map(|s| s.to_string()));
+    candidates.into_iter().map(|c| split_exec(&c)).find(|argv| argv.first().is_some_and(|exe| crate::thumbs::which(exe).is_some()))
+}
+
+/// How a terminal takes a command: its desktop file's X-TerminalArg* keys
+/// (the Default Terminal Execution spec: Exec, Dir, Hold), else what's
+/// known of the common ones. (exec flag, dir flag, hold flag)
+fn terminal_args(exe: &str) -> (String, Option<String>, Option<String>) {
+    let name = Path::new(exe).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let from_entry = all().into_iter().find(|a| {
+        a.categories.iter().any(|c| c == "TerminalEmulator")
+            && split_exec(&a.exec).first().and_then(|e| Path::new(e).file_name().map(|n| n.to_string_lossy().into_owned())).as_deref() == Some(name.as_str())
+    });
+    let key = |k: &str| -> Option<String> {
+        let t = std::fs::read_to_string(&from_entry.as_ref()?.file).ok()?;
+        t.lines().find_map(|l| l.strip_prefix(&format!("{k}=")).map(|v| v.to_string()))
+    };
+    let known: (&str, Option<&str>, Option<&str>) = match name.as_str() {
+        "tessera" => ("-e", Some("--working-directory="), Some("--hold")),
+        "konsole" => ("-e", Some("--workdir "), Some("--hold")),
+        "foot" => ("", Some("--working-directory="), Some("--hold")),
+        "kitty" => ("", Some("--directory="), Some("--hold")),
+        "alacritty" => ("-e", Some("--working-directory "), Some("--hold")),
+        "ghostty" => ("-e", Some("--working-directory="), Some("--wait-after-command")),
+        "xterm" => ("-e", None, Some("-hold")),
+        _ => ("-e", None, None),
+    };
+    (
+        key("X-TerminalArgExec").unwrap_or_else(|| known.0.to_string()),
+        key("X-TerminalArgDir").or(known.1.map(String::from)),
+        key("X-TerminalArgHold").or(known.2.map(String::from)),
+    )
+}
+
+/// The terminal command running `argv` in `dir`, staying open after it so
+/// its output can be read.
+pub fn terminal_exec(argv: &[String], dir: &Path) -> Result<Vec<String>, String> {
+    let base = chosen_terminal().ok_or("No terminal app is installed.")?;
+    let exe = base[0].clone();
+    let d = dir.to_string_lossy().into_owned();
+    let mut v = base;
+    if Path::new(&exe).file_name().is_some_and(|n| n == "wezterm") {
+        // (wezterm: its own form, and nothing to hold the window.)
+        v.extend(["start".into(), "--cwd".into(), d, "--".into()]);
+        v.extend(hold_in_shell(argv));
+        return Ok(v);
+    }
+    let (exec_flag, dir_flag, hold_flag) = terminal_args(&exe);
+    if let Some(f) = dir_flag {
+        match f.strip_suffix(' ') {
+            Some(two) => v.extend([two.to_string(), d]),
+            None => v.push(format!("{f}{d}")),
+        }
+    }
+    let held = hold_flag.is_some();
+    if let Some(h) = hold_flag {
+        v.push(h);
+    }
+    if !exec_flag.is_empty() {
+        v.push(exec_flag);
+    }
+    if held {
+        v.extend(argv.iter().cloned());
+    } else {
+        v.extend(hold_in_shell(argv));
+    }
+    Ok(v)
+}
+
+/// A command that waits for Enter once `argv` is done (for terminals that
+/// close as soon as it ends).
+fn hold_in_shell(argv: &[String]) -> Vec<String> {
+    let mut v: Vec<String> = vec!["sh".into(), "-c".into(), r#""$@"; s=$?; printf '\n[%s ended with status %s. Press Enter to close.]' "$1" "$s"; read _"#.into(), "sh".into()];
+    v.extend(argv.iter().cloned());
+    v
+}
+
+/// How a file runs: itself when it's executable, else with the program its
+/// first line (#!) or its extension names: shell, Python, Perl, Ruby, Node,
+/// Lua, PHP, tessh, PowerShell, R, Julia... None: not something to run.
+pub fn run_argv(path: &Path) -> Option<Vec<String>> {
+    use std::os::unix::fs::PermissionsExt;
+    let m = std::fs::metadata(path).ok()?;
+    if !m.is_file() {
+        return None;
+    }
+    let p = path.to_string_lossy().into_owned();
+    if m.permissions().mode() & 0o111 != 0 {
+        return Some(vec![p]);
+    }
+    // #!: the interpreter by name (NixOS has no /bin/bash: /usr/bin/env bash
+    // and /bin/bash both mean whichever bash is installed).
+    let mut head = [0u8; 256];
+    let n = std::fs::File::open(path).and_then(|mut f| std::io::Read::read(&mut f, &mut head)).unwrap_or(0);
+    let first = String::from_utf8_lossy(&head[..n]).lines().next().unwrap_or("").to_string();
+    if let Some(sb) = first.strip_prefix("#!") {
+        let mut words = sb.split_whitespace();
+        let prog = words.next().unwrap_or("");
+        let mut rest: Vec<String> = words.map(String::from).collect();
+        let base = Path::new(prog).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let interp = if base == "env" { rest.retain(|w| w != "-S"); if rest.is_empty() { None } else { Some(rest.remove(0)) } } else { Some(base) };
+        if let Some(i) = interp.filter(|i| crate::thumbs::which(i).is_some()) {
+            let mut v = vec![i];
+            v.extend(rest);
+            v.push(p);
+            return Some(v);
+        }
+    }
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let interp: &[&str] = match ext.as_str() {
+        "sh" => &["bash", "sh"],
+        "bash" => &["bash"],
+        "zsh" => &["zsh"],
+        "fish" => &["fish"],
+        "py" | "pyw" => &["python3", "python"],
+        "pl" => &["perl"],
+        "rb" => &["ruby"],
+        "js" | "mjs" | "cjs" => &["node"],
+        "ts" => &["deno", "bun"],
+        "lua" => &["lua"],
+        "php" => &["php"],
+        "tcl" => &["tclsh"],
+        "ps1" => &["pwsh"],
+        "r" => &["Rscript"],
+        "jl" => &["julia"],
+        "tsh" | "tessh" => &["tessh"],
+        "awk" => &["awk", "-f"],
+        _ => &[],
+    };
+    if ext == "awk" {
+        return crate::thumbs::which("awk").map(|_| vec!["awk".into(), "-f".into(), p]);
+    }
+    let i = interp.iter().find(|i| crate::thumbs::which(i).is_some())?;
+    Some(vec![i.to_string(), p])
+}
+
+/// Run a program or script in a terminal, in its folder.
+pub fn run_in_terminal(path: &Path) -> Result<(), String> {
+    let argv = run_argv(path).ok_or("This isn't a program or script grove knows how to run.")?;
+    let dir = path.parent().unwrap_or(Path::new("/"));
+    let cmd = terminal_exec(&argv, dir)?;
+    spawn_detached(&cmd, Some(dir))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runs_scripts() {
+        let d = std::env::temp_dir().join(format!("grove-run-test-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let sh = d.join("a.sh");
+        std::fs::write(&sh, "echo hi\n").unwrap();
+        let v = run_argv(&sh).unwrap();
+        assert!(v.last().unwrap().ends_with("a.sh") && (v[0] == "bash" || v[0] == "sh"), "{v:?}");
+        let bang = d.join("tool");
+        std::fs::write(&bang, "#!/usr/bin/env sh\necho hi\n").unwrap();
+        assert_eq!(run_argv(&bang).unwrap()[0], "sh");
+        let txt = d.join("notes.txt");
+        std::fs::write(&txt, "hello").unwrap();
+        assert!(run_argv(&txt).is_none());
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&txt, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(run_argv(&txt).unwrap(), vec![txt.to_string_lossy().into_owned()]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
 
     #[test]
     fn splits_exec() {

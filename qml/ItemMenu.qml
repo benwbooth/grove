@@ -9,6 +9,8 @@ GMenu {
     property var sel: []
     property var apps: []
     property var services: []
+    // A program or script (executable, #!, .sh, .py...): Run in Terminal.
+    property bool runnable: false
     readonly property bool one: sel.length === 1
     // A long name in a menu item: its start and end, "…" between.
     function shortName(n) { n = n || ""; return n.length <= 32 ? n : n.substring(0, 20) + "…" + n.substring(n.length - 10) }
@@ -61,6 +63,14 @@ GMenu {
         onTriggered: m.pane.restoreFromSnapshot(m.sel)
     }
     GMenuItem { text: m.target.isDir ? "Open" : "Open"; iconName: "document-open"; shortcutText: Help.shown("Return"); enabled: !m.trash; onTriggered: m.pane.openSelected(false) }
+    GMenuItem {
+        text: "Run in Terminal"
+        iconName: "utilities-terminal"
+        visible: m.runnable && m.one && !m.trash
+        height: visible ? implicitHeight : 0
+        tip: "Run “" + (m.target.name || "") + "” in a terminal (a new tab of the open Tessera window), in its folder; the tab stays open afterwards"
+        onTriggered: m.pane.grove.runInTerminal(m.target.path)
+    }
     GMenuItem { text: "Open in New Tab"; iconName: "tab-new"; visible: !!m.target.isDir; height: visible ? implicitHeight : 0; shortcutText: Help.shown("Ctrl+Return"); onTriggered: m.pane.openSelected(true) }
     GMenu {
         id: openWith

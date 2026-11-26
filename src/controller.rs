@@ -402,6 +402,21 @@ impl ffi::Grove {
         });
     }
 
+    pub fn can_run(&self, key: &QString, path: &QString) {
+        let p = PathBuf::from(path.to_string());
+        self.answer(key, move || json!({"ok": apps::run_argv(&p).is_some()}));
+    }
+
+    pub fn run_in_terminal(&self, path: &QString) {
+        let p = PathBuf::from(path.to_string());
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            if let Err(e) = apps::run_in_terminal(&p) {
+                let _ = qt.queue(move |g| g.notify(qs("error"), qs(&e)));
+            }
+        });
+    }
+
     pub fn open_terminal(&self, dir: &QString) {
         let d = PathBuf::from(dir.to_string());
         let qt = self.qt_thread();

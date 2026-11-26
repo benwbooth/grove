@@ -1127,6 +1127,9 @@ FocusScope {
         itemMenu.sel = selectedPaths()
         itemMenu.apps = []
         itemMenu.services = []
+        itemMenu.runnable = false
+        if (!itemMenu.target.isDir && itemMenu.sel.length === 1 && (itemMenu.target.path || "").indexOf("/") === 0)
+            Async.call(grove, k => grove.canRun(k, itemMenu.target.path), r => itemMenu.runnable = !!(r && r.ok))
         if (!itemMenu.target.isDir && itemMenu.sel.length === 1)
             Async.call(grove, k => grove.appsFor(k, itemMenu.target.path), r => itemMenu.apps = r.apps || [])
         Async.call(grove, k => grove.serviceMenus(k, JSON.stringify(itemMenu.sel)), r => itemMenu.services = r || [])

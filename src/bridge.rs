@@ -143,6 +143,15 @@ pub mod ffi {
         fn set_default_app(self: &Grove, key: &QString, mime: &QString, app_id: &QString);
         #[qinvokable]
         fn open_terminal(self: &Grove, dir: &QString);
+        /// Whether a file is a program or script grove can run ({ok}).
+        #[qinvokable]
+        #[cxx_name = "canRun"]
+        fn can_run(self: &Grove, key: &QString, path: &QString);
+        /// Run a program or script in the terminal (a new tab of an open
+        /// Tessera window), in its folder.
+        #[qinvokable]
+        #[cxx_name = "runInTerminal"]
+        fn run_in_terminal(self: &Grove, path: &QString);
         #[qinvokable]
         fn run_command(self: &Grove, argv: &QString, cwd: &QString);
 
