@@ -393,8 +393,15 @@ pub fn preview(path: &str, dark: bool) -> Value {
                 let (w, h) = imagesize::size(path).map(|s| (s.width, s.height)).unwrap_or((0, 0));
                 return with(json!({"kind": "image", "src": path, "width": w, "height": h}));
             }
-            // HEIC/AVIF/RAW/PSD...: a big thumbnail (system thumbnailers,
-            // vips or ImageMagick), made by the thumbnail provider.
+            // HEIC/AVIF/RAW/PSD...: a full-size copy libvips makes (once,
+            // kept in the cache), shown and zoomed like any picture.
+            if let Some(copy) = grove_core::vips::viewable_copy(p) {
+                let c = copy.to_string_lossy().into_owned();
+                let (w, h) = imagesize::size(&c).map(|s| (s.width, s.height)).unwrap_or((0, 0));
+                return with(json!({"kind": "image", "src": c, "width": w, "height": h}));
+            }
+            // Else a big thumbnail (system thumbnailers, ImageMagick), made by
+            // the thumbnail provider.
             return with(json!({"kind": "thumb"}));
         }
         Kind::Video | Kind::Audio => {
