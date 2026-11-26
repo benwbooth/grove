@@ -1026,7 +1026,7 @@ ApplicationWindow {
         if (openWith.length) openWith.push({ separator: true })
         openWith.push({ id: "openwith.other", icon: "application-x-executable", text: "Other…", enabled: !!t && !t.isDir && !trash })
         return [
-            { title: "Grove", icon: "system-file-manager", items: [
+            { title: "Grove", icon: "grove", items: [
                 { id: "about", icon: "help-about", text: "About Grove" },
                 { separator: true },
                 { id: "settings", icon: "configure", text: "Settings…", shortcut: k("settings") },

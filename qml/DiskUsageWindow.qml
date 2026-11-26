@@ -150,7 +150,7 @@ Window {
                 GButton { iconName: "zoom-original"; enabled: du.ready && du.mapRoot !== 0; tip: "Treemap: show the whole scanned folder again"; onClicked: { du.mapRoot = 0; du.refresh(true) } }
                 Item { width: 6; height: 1 }
                 GButton { iconName: "document-open"; enabled: du.ready && du.sel >= 0; tip: "Open the selected item"; onClicked: du.openSel() }
-                GButton { iconName: "system-file-manager|folder"; enabled: du.ready && du.sel >= 0; tip: "Show the selected item in a Grove window"; onClicked: du.showSel() }
+                GButton { iconName: "grove|folder"; enabled: du.ready && du.sel >= 0; tip: "Show the selected item in a Grove window"; onClicked: du.showSel() }
                 GButton { iconName: "user-trash"; enabled: du.ready && du.sel > 0; tip: "Move the selected item to the Trash (Delete)"; onClicked: du.askTrash() }
             }
             Row {
@@ -411,7 +411,7 @@ Window {
     GMenu {
         id: menu
         GMenuItem { text: "Open"; iconName: "document-open"; onTriggered: du.openSel() }
-        GMenuItem { text: "Show in Grove"; iconName: "system-file-manager"; onTriggered: du.showSel() }
+        GMenuItem { text: "Show in Grove"; iconName: "grove"; onTriggered: du.showSel() }
         GMenuItem { text: "Zoom Treemap Here"; iconName: "zoom-in"; onTriggered: du.zoom(du.sel) }
         GMenuItem { text: "Copy Path"; iconName: "edit-copy-path"; onTriggered: du.app.grove.copyText(du.nodePath(du.sel)) }
         GMenuSeparator {}

@@ -1056,7 +1056,8 @@ void grove_create_app()
     QIcon::setFallbackThemeName(QStringLiteral("breeze"));
     if (qEnvironmentVariableIsSet("GROVE_DEBUG_ICONS"))
         qWarning() << "grove icons: theme" << QIcon::themeName() << "paths" << QIcon::themeSearchPaths() << "has folder" << QIcon::hasThemeIcon(QStringLiteral("folder"));
-    QGuiApplication::setWindowIcon(QIcon::fromTheme(QGuiApplication::desktopFileName(), QIcon::fromTheme(QStringLiteral("grove"), QIcon::fromTheme(QStringLiteral("system-file-manager")))));
+    // (grove's own icon, never the theme's generic file manager: WhiteSur draws that as Finder.)
+    QGuiApplication::setWindowIcon(QIcon::fromTheme(QGuiApplication::desktopFileName(), QIcon::fromTheme(QStringLiteral("grove"))));
 }
 
 int grove_run(const QString& url, const QString& importPath)
