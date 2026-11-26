@@ -163,6 +163,18 @@ fn main() {
         }
     }
     controller::init_startup();
+    // As the desktop's file chooser (xdg-desktop-portal's backend), not a
+    // client of the portal itself: Qt registers with it and asks it things
+    // while starting, and the portal was waiting for this process to come
+    // up, so each waited on the other until D-Bus's 25 s timeout. Every app
+    // asking the portal anything at login waited too (the Claude app came
+    // up light, its dark-mode question unanswered), 2026-11-25.
+    // (Kept for the process's life: Qt checks it again later, and the
+    // portal process starts no other programs.)
+    if std::env::var_os("GROVE_PORTAL").is_some() {
+        #[allow(unused_unsafe)]
+        unsafe { std::env::set_var("QT_NO_XDG_DESKTOP_PORTAL", "1") };
+    }
     set_qt_env("QT_QUICK_CONTROLS_STYLE", "Basic");
     // Its own Qt's plugins first (a desktop QT_PLUGIN_PATH from another Qt
     // build would stop the window from opening).
