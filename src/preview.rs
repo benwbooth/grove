@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 
-fn syntaxes() -> &'static SyntaxSet {
+pub(crate) fn syntaxes() -> &'static SyntaxSet {
     static S: OnceLock<SyntaxSet> = OnceLock::new();
     // bat's set (two-face): ~200 languages, PowerShell, VBScript, TOML,
     // TypeScript, Nix, CMake, Dockerfile, INI, assembly... besides syntect's.
@@ -26,7 +26,7 @@ fn syntaxes() -> &'static SyntaxSet {
     })
 }
 
-fn themes() -> &'static ThemeSet {
+pub(crate) fn themes() -> &'static ThemeSet {
     static T: OnceLock<ThemeSet> = OnceLock::new();
     T.get_or_init(ThemeSet::load_defaults)
 }
@@ -62,7 +62,7 @@ fn read_head(p: &Path, limit: usize) -> Option<(String, bool)> {
     Some((grove_core::textenc::decode(&buf, enc), truncated))
 }
 
-fn syntax_for<'a>(ss: &'a SyntaxSet, text: &str, name: &str) -> &'a syntect::parsing::SyntaxReference {
+pub(crate) fn syntax_for<'a>(ss: &'a SyntaxSet, text: &str, name: &str) -> &'a syntect::parsing::SyntaxReference {
     let ext = Path::new(name).extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     // Whole names first (Makefile, CMakeLists.txt, Dockerfile, .bashrc).
     ss.find_syntax_by_extension(name)

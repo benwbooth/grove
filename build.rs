@@ -87,7 +87,7 @@ fn main() {
         // HEIC/AVIF/JPEG XL through libvips, as a built-in Qt image plugin.
         .cpp_file("include/vips_image.h")
         .cpp_file("cpp/vips_image.cpp")
-        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs", "src/treedoc.rs", "src/hexdoc.rs", "src/pvcanvas.rs", "src/mpv.rs"]);
+        .files(["src/bridge.rs", "src/model.rs", "src/terminal.rs", "src/table.rs", "src/textdoc.rs", "src/treedoc.rs", "src/diffdoc.rs", "src/hexdoc.rs", "src/pvcanvas.rs", "src/mpv.rs"]);
     // Only adds include dirs and a define for our own code.
     let builder = unsafe {
         builder.cc_builder(|cc| {

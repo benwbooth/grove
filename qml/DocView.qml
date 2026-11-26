@@ -17,7 +17,7 @@ Item {
     property bool slim: false
     // Viewing choices, remembered: soft wrap for text and code, and
     // Markdown as its coloured source instead of the rendered page.
-    Settings { id: prefs; category: "viewer"; property bool wrapText: false; property bool markdownSource: false; property bool htmlSource: false; property bool treeSource: false; property bool wrapTree: false; property bool wrapMarkdown: true; property real textZoom: 1 }
+    Settings { id: prefs; category: "viewer"; property bool wrapText: false; property bool markdownSource: false; property bool htmlSource: false; property bool treeSource: false; property bool wrapTree: false; property bool wrapMarkdown: true; property real textZoom: 1; property string diffView: "unified"; property bool wrapDiff: true }
     // Markdown and web pages: rendered, or their coloured source (each remembered).
     readonly property bool renderable: mode === "markdown" || mode === "html"
     readonly property bool showSource: mode === "html" ? prefs.htmlSource : prefs.markdownSource
@@ -35,12 +35,19 @@ Item {
     readonly property bool treeShown: treeChosen && !treeFailed
     readonly property string formatTitle: ({ json: "JSON", yaml: "YAML", toml: "TOML", xml: "XML", ini: "INI" })[treeFormat] || ""
     function focusSearch() { if (treeShown) sview.focusSearch() }
+    // Patches and diffs: delta-style, unified or side by side, or their
+    // source (remembered). By name, or when the source reads as a diff.
+    property bool sniffedDiff: false
+    readonly property bool diffable: mode === "code" && path !== "" && (dview.doc.isPatchName(path) || sniffedDiff)
+    readonly property bool diffChosen: diffable && prefs.diffView !== "source"
+    // No changes in it after all: the source.
+    readonly property bool diffShown: diffChosen && dview.doc.error === ""
     // Office documents read as a page: white paper at letter width, margins.
     readonly property bool paper: mode === "office"
     readonly property real paperW: Math.max(240, Math.min(list.width - 32, 816 * prefs.textZoom))
     readonly property real paperX: Math.max(16, (list.width - paperW) / 2)
     readonly property real paperPad: Math.min(72, paperW * 0.09)
-    readonly property bool wrap: paper || (treeShown ? prefs.wrapTree : rendered ? prefs.wrapMarkdown : prefs.wrapText)
+    readonly property bool wrap: paper || (diffShown ? prefs.wrapDiff : treeShown ? prefs.wrapTree : rendered ? prefs.wrapMarkdown : prefs.wrapText)
     readonly property alias lines: doc.lines
     readonly property alias loading: doc.loading
     readonly property real charWidth: fm.averageCharacterWidth
@@ -53,10 +60,11 @@ Item {
     }
     property real widest: 0
     function reload() {
-        widest = 0; doc.load(active && !treeShown ? path : "", shownMode, Theme.dark) }
+        widest = 0; doc.load(active && !treeShown && !diffShown ? path : "", shownMode, Theme.dark) }
+    onDiffShownChanged: Qt.callLater(reload)
     onShownModeChanged: Qt.callLater(reload)
     onWrapChanged: widest = 0
-    onPathChanged: { sniffed = ""; Qt.callLater(reload) }
+    onPathChanged: { sniffed = ""; sniffedDiff = false; Qt.callLater(reload) }
     onTreeShownChanged: Qt.callLater(reload)
     onModeChanged: Qt.callLater(reload)
     onActiveChanged: Qt.callLater(reload)
@@ -84,6 +92,7 @@ Item {
         function onDetectedChanged() {
             const f = ({ "JSON": "json", "YAML": "yaml", "XML": "xml", "TOML": "toml", "INI": "ini" })[doc.syntax || doc.detected]
             if (f && dv.mode === "code") dv.sniffed = f
+            if ((doc.syntax || doc.detected) === "Diff" && dv.mode === "code") dv.sniffedDiff = true
         }
     }
     // Source after a failed tree: scroll to the line it stopped at.
@@ -96,6 +105,8 @@ Item {
     // Tests (GROVE_TEST qlview=...): "end", "top", "dump".
     function testAction(a) {
         // "view:tree" / "view:source" switch; "tree:..." go to the tree.
+        if (a === "view:unified" || a === "view:split" || a === "view:diffsource") { prefs.diffView = a === "view:diffsource" ? "source" : a.substring(5); console.warn("grove test doc", a, "diffable", dv.diffable); return }
+        if (a.startsWith("diff:")) { dview.testAction(a); return }
         if (a === "view:tree" || a === "view:source") { prefs.treeSource = a === "view:source"; console.warn("grove test doc", a, "treeable", dv.treeable, dv.treeFormat); return }
         if (a.startsWith("tree:")) { if (dv.treeShown) sview.testAction(a); else console.warn("grove test doc no tree:", dv.treeFormat, "failed", dv.treeFailed, sview.doc.error); return }
         if (a === "showerror") dv.showLine(sview.doc.errorLine)
@@ -110,7 +121,7 @@ Item {
     FontMetrics { id: fm; font.family: Theme.mono; font.pixelSize: Theme.body * 0.95 * prefs.textZoom }
 
     // Momentum both ways (unwrapped text pans sideways too).
-    PanWheel { id: wheel; visible: !dv.treeShown; anchors.fill: parent; anchors.topMargin: list.anchors.topMargin; flickable: list; sideways: !dv.wrap }
+    PanWheel { id: wheel; visible: !dv.treeShown && !dv.diffShown; anchors.fill: parent; anchors.topMargin: list.anchors.topMargin; flickable: list; sideways: !dv.wrap }
 
     StructView {
         id: sview
@@ -123,6 +134,19 @@ Item {
         slim: dv.slim
         zoom: prefs.textZoom
         wrap: prefs.wrapTree
+    }
+
+    DiffView {
+        id: dview
+        anchors.fill: parent
+        anchors.topMargin: opts.height
+        visible: dv.diffShown
+        active: dv.active && dv.diffChosen
+        path: dv.path
+        split: prefs.diffView === "split"
+        wrap: prefs.wrapDiff
+        zoom: prefs.textZoom
+        slim: dv.slim
     }
 
     // The tree didn't parse: why, where, and a way there.
@@ -163,7 +187,7 @@ Item {
         id: list
         anchors.fill: parent
         anchors.topMargin: opts.height + treeError.height
-        visible: !dv.treeShown
+        visible: !dv.treeShown && !dv.diffShown
         clip: true
         interactive: false
         model: doc
@@ -234,7 +258,7 @@ Item {
             x: dv.slim ? 10 : 12
             width: parent.width - tools.width - 30
             elide: Text.ElideRight
-            text: dv.paper ? "" : dv.treeShown ? (sview.doc.values > 0 ? sview.doc.values.toLocaleString(Qt.locale(), "f", 0) + (sview.doc.values === 1 ? " value" : " values") + " · " + dv.formatTitle : "") : doc.lines > 0 ? doc.lines.toLocaleString(Qt.locale(), "f", 0) + (doc.lines === 1 ? " line" : " lines") + (doc.loading ? " so far…" : "") + (doc.encoding ? " · " + doc.encoding : "") : ""
+            text: dv.paper ? "" : dv.diffShown ? (dview.doc.files > 0 ? dview.doc.files + (dview.doc.files === 1 ? " file" : " files") + " · +" + dview.doc.added + " −" + dview.doc.removed : "") : dv.treeShown ? (sview.doc.values > 0 ? sview.doc.values.toLocaleString(Qt.locale(), "f", 0) + (sview.doc.values === 1 ? " value" : " values") + " · " + dv.formatTitle : "") : doc.lines > 0 ? doc.lines.toLocaleString(Qt.locale(), "f", 0) + (doc.lines === 1 ? " line" : " lines") + (doc.loading ? " so far…" : "") + (doc.encoding ? " · " + doc.encoding : "") : ""
             color: Theme.fgSecondary
             font.pixelSize: Theme.small
         }
@@ -246,12 +270,25 @@ Item {
             spacing: dv.slim ? 2 : 6
             SyntaxPicker {
                 id: syntaxPicker
-                visible: dv.shownMode === "code" && dv.active && !dv.treeShown
+                visible: dv.shownMode === "code" && dv.active && !dv.treeShown && !dv.diffShown
                 doc: doc
                 slim: dv.slim
                 anchors.verticalCenter: parent.verticalCenter
             }
             Rectangle { visible: syntaxPicker.visible; width: 1; height: dv.slim ? 14 : 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
+            Segmented {
+                visible: dv.diffable
+                height: Math.round((dv.slim ? 22 : 28) * Theme.pt)
+                anchors.verticalCenter: parent.verticalCenter
+                items: [
+                    { icon: "view-list-text|view-list-details", tip: "Unified: each change as removed lines (red) then added lines (green), with old and new line numbers and the changed words marked", value: "unified" },
+                    { icon: "view-split-left-right|view-dual-symbolic|view-columns", tip: "Side by side: the old lines on the left, the new on the right", value: "split" },
+                    { icon: "format-text-code|text-x-script", tip: "Source: the patch text itself, coloured", value: "source" }
+                ]
+                current: prefs.diffView
+                onPicked: (v) => prefs.diffView = v
+            }
+            Rectangle { visible: dv.diffable; width: 1; height: dv.slim ? 14 : 18; color: Theme.separator; anchors.verticalCenter: parent.verticalCenter }
             Segmented {
                 visible: dv.treeable
                 height: Math.round((dv.slim ? 22 : 28) * Theme.pt)
@@ -288,7 +325,7 @@ Item {
                 WrapGlyph { anchors.centerIn: parent; size: dv.slim ? 14 : 16; color: wrapBtn.enabled ? wrapBtn.tint : Theme.fgDisabled }
                 anchors.verticalCenter: parent.verticalCenter
                 tip: dv.wrap ? "Wrap long lines: on (click to keep each line whole and scroll sideways)" : "Wrap long lines: off (scroll sideways or Shift+wheel; click to wrap)"
-                onClicked: { if (dv.treeShown) prefs.wrapTree = !prefs.wrapTree; else if (dv.rendered) prefs.wrapMarkdown = !prefs.wrapMarkdown; else prefs.wrapText = !prefs.wrapText }
+                onClicked: { if (dv.diffShown) prefs.wrapDiff = !prefs.wrapDiff; else if (dv.treeShown) prefs.wrapTree = !prefs.wrapTree; else if (dv.rendered) prefs.wrapMarkdown = !prefs.wrapMarkdown; else prefs.wrapText = !prefs.wrapText }
             }
         }
     }
@@ -303,7 +340,7 @@ Item {
     }
     GLabel {
         anchors.centerIn: parent
-        visible: !dv.treeShown && (doc.error !== "" || (doc.loading && dv.readingLong && list.count === 0))
+        visible: !dv.treeShown && !dv.diffShown && (doc.error !== "" || (doc.loading && dv.readingLong && list.count === 0))
         text: doc.error !== "" ? doc.error : "Reading…"
         color: Theme.fgSecondary
     }

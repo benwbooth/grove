@@ -47,6 +47,7 @@ mod subvol;
 mod table;
 mod textdoc;
 mod treedoc;
+mod diffdoc;
 mod secrets;
 mod terminal;
 mod thumbgen;
