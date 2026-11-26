@@ -76,7 +76,7 @@ GMenu {
             onObjectRemoved: (i, o) => openWith.removeItem(o)
         }
         GMenuSeparator {}
-        GMenuItem { text: "Other…"; iconName: "system-run|application-x-executable"; tip: "Choose any installed app, and optionally make it the default"; onTriggered: m.pane.win.openWithDialog(m.target.path) }
+        GMenuItem { text: "Other Application…"; iconName: "system-run|application-x-executable"; tip: "Choose any installed app (all of them, with a search), and optionally make it the default"; onTriggered: m.pane.win.openWithDialog(m.target.path) }
     }
     GMenuItem { text: "Quick Look"; iconName: "quickview"; shortcutText: Help.shown("Space"); onTriggered: m.pane.quickLook() }
     GMenuItem { text: "Get Info"; iconName: "documentinfo"; shortcutText: Help.shown("Alt+Return"); onTriggered: m.pane.win.showInfo(m.sel) }

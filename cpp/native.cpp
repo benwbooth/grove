@@ -1092,10 +1092,21 @@ QString grove_mime_info(const QString& name, const QString& path, bool deep)
     return t.name() + QLatin1Char('\n') + t.iconName() + QLatin1Char('\n') + t.genericIconName() + QLatin1Char('\n') + t.comment();
 }
 
+// A type's other names and the types it's a kind of, with theirs: apps
+// say what they open by any of them (Kog: audio/x-wav; a .wav is
+// audio/vnd.wave, with audio/wav and audio/x-wav as its aliases).
 QString grove_mime_parents(const QString& mime)
 {
     static thread_local QMimeDatabase db;
-    return db.mimeTypeForName(mime).allAncestors().join(QLatin1Char('\n'));
+    const QMimeType t = db.mimeTypeForName(mime);
+    QStringList out = t.aliases();
+    for (const QString& a : t.allAncestors()) {
+        if (!out.contains(a)) out << a;
+        for (const QString& al : db.mimeTypeForName(a).aliases())
+            if (!out.contains(al)) out << al;
+    }
+    out.removeAll(mime);
+    return out.join(QLatin1Char('\n'));
 }
 
 void grove_set_clipboard(const QString& pathsNewline, bool cut)
