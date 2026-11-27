@@ -32,8 +32,10 @@ Window {
     readonly property bool writable: !!listing && listing.writable
     readonly property int selCount: Object.keys(sel).length
 
-    width: Math.round(900 * Theme.pt)
-    height: Math.round(580 * Theme.pt)
+    // A tool of its own to the desktop (own size and place); 16:9 at first.
+    property string groveAppId: "grove-archiver"
+    width: Math.round(1120 * Theme.pt)
+    height: Math.round(width * 9 / 16)
     minimumWidth: 560
     minimumHeight: 320
     color: Theme.window
@@ -304,8 +306,86 @@ Window {
         { k: "crc", label: "CRC", w: 84, tip: "The CRC-32 checksum stored for the file; Test compares it with the contents" },
         { k: "encrypted", label: "🔒", w: 30, tip: "Encrypted: needs the password to extract" },
         { k: "mode", label: "Attributes", w: 96, tip: "Unix permissions, where the archive keeps them" }]
-    readonly property real fixedW: { let t = 0; for (const c of columns) t += c.w * Theme.pt; return t }
-    readonly property real nameW: Math.max(200, list.width - fixedW - 12)
+    // Column widths (points): drag a column's right edge, double-click it
+    // to fit its contents; kept in the settings. Name fills what's left
+    // until it's sized itself.
+    property var widths: {
+        const v = app.settings.archiver_columns
+        if (typeof v === "string") { try { return JSON.parse(v) || {} } catch (e) { return {} } }
+        return v || {}
+    }
+    function colW(k) {
+        const c = columns.find(c => c.k === k)
+        return Math.round((widths[k] || (c ? c.w : 80)) * Theme.pt)
+    }
+    readonly property real fixedW: { let t = 0; for (const c of columns) t += colW(c.k); return t }
+    readonly property real nameW: widths.name ? Math.round(widths.name * Theme.pt) : Math.max(200, list.width - fixedW - 12)
+    readonly property real totalW: nameW + fixedW + 12
+    function setWidth(k, px, save) {
+        const w = Object.assign({}, widths)
+        w[k] = Math.max(k === "name" ? 120 : 28, px) / Theme.pt
+        widths = w
+        if (save) saveWidths()
+    }
+    function saveWidths() { app.grove.setSetting("archiver_columns", JSON.stringify(widths)) }
+    function resetWidths() { widths = {}; saveWidths() }
+    function cellText(r, k) {
+        switch (k) {
+        case "size": return sizeText(r)
+        case "packed": return r.packed === null || r.packed === undefined || (r.isDir && !r.packed) ? "" : app.size(r.packed)
+        case "mtime": return fmtDate(r.mtime)
+        case "method": return r.method || ""
+        case "crc": return r.crc || ""
+        case "encrypted": return r.encrypted ? "🔒" : ""
+        case "mode": return modeText(r.mode, r.isDir)
+        }
+        return ""
+    }
+    // The width that shows the column's widest entry (and its heading).
+    function fitWidth(k) {
+        const n = Math.min(rows.length, 5000)
+        if (k === "name") {
+            let w = 0
+            for (let i = 0; i < n; i++) {
+                const r = rows[i]
+                nameMetrics.text = r.name + (r.link && r.link !== "→" ? "  → " + r.link : "") + (r.where ? "   — " + r.where : "")
+                w = Math.max(w, nameMetrics.implicitWidth + 56 + (r.depth || 0) * 16)
+            }
+            return Math.max(w + 8, 120)
+        }
+        const c = columns.find(c => c.k === k)
+        cellMetrics.font.family = k === "crc" || k === "mode" ? Theme.mono : nameMetrics.font.family
+        let w = 0
+        for (let i = 0; i < n; i++) { cellMetrics.text = cellText(rows[i], k); w = Math.max(w, cellMetrics.implicitWidth) }
+        headMetrics.text = c ? c.label : ""
+        return Math.ceil(Math.max(w + 12, headMetrics.implicitWidth + 28) + 4)
+    }
+    function fitColumn(k) { setWidth(k, fitWidth(k), true) }
+    function fitAll() {
+        const w = {}
+        for (const c of columns) w[c.k] = fitWidth(c.k) / Theme.pt
+        w.name = fitWidth("name") / Theme.pt
+        widths = w
+        saveWidths()
+    }
+    // Tests (GROVE_TEST): fitall, fit=COL, colw=COL,PX, dumpcols.
+    Timer {
+        interval: 1200
+        running: (aw.app.grove.env("GROVE_TEST") || "") !== ""
+        onTriggered: {
+          for (const st of aw.app.grove.env("GROVE_TEST").split(";")) {
+            const [c, a] = st.split("=")
+            if (c === "fitall") aw.fitAll()
+            else if (c === "fit") aw.fitColumn(a)
+            else if (c === "colw") { const [k, px] = a.split(","); aw.setWidth(k, Number(px), true) }
+            else if (c === "dumpcols") console.warn("grove test cols", aw.nameW, JSON.stringify(aw.columns.map(c => [c.k, aw.colW(c.k)])), "total", aw.totalW, "list", list.width)
+          }
+        }
+    }
+    // Measuring labels, styled as the cells they measure.
+    GLabel { id: nameMetrics; visible: false; elide: Text.ElideNone }
+    GLabel { id: cellMetrics; visible: false; elide: Text.ElideNone; font.pixelSize: Theme.small; font.features: { "tnum": 1 } }
+    GLabel { id: headMetrics; visible: false; elide: Text.ElideNone; font.pixelSize: Theme.small; font.bold: true }
 
     Item {
         anchors.fill: parent
@@ -406,8 +486,9 @@ Window {
                 width: parent.width; height: Math.round(24 * Theme.pt)
                 color: Theme.window
                 visible: !!aw.listing
+                clip: true
                 Row {
-                    x: 6
+                    x: 6 - list.contentX
                     height: parent.height
                     component Head: Item {
                         property string k: ""
@@ -423,16 +504,41 @@ Window {
                             horizontalAlignment: parent.alignEnd ? Text.AlignRight : Text.AlignLeft
                         }
                         Rectangle { anchors.right: parent.right; width: 1; height: parent.height - 8; anchors.verticalCenter: parent.verticalCenter; color: Theme.separator }
-                        MouseArea { id: hm; anchors.fill: parent; hoverEnabled: true; onClicked: aw.sortBy(parent.k) }
-                        GTip { visible: hm.containsMouse && parent.tip !== ""; text: parent.tip + " — click to sort" }
+                        MouseArea {
+                            id: hm; anchors.fill: parent; hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: (m) => { if (m.button === Qt.RightButton) headMenu.popup(); else aw.sortBy(parent.k) }
+                        }
+                        GTip { visible: hm.containsMouse && parent.tip !== ""; text: parent.tip + " — click to sort; right-click to fit the columns" }
+                        // The column's edge: drag to resize, double-click to fit.
+                        MouseArea {
+                            id: edge
+                            width: 8; height: parent.height
+                            anchors.right: parent.right; anchors.rightMargin: -4
+                            z: 2
+                            hoverEnabled: true
+                            cursorShape: Qt.SplitHCursor
+                            property real startX: 0
+                            property real startW: 0
+                            onPressed: (m) => { startX = mapToItem(null, m.x, 0).x; startW = parent.width }
+                            onPositionChanged: (m) => { if (pressed) aw.setWidth(parent.k, startW + mapToItem(null, m.x, 0).x - startX, false) }
+                            onReleased: aw.saveWidths()
+                            onDoubleClicked: aw.fitColumn(parent.k)
+                        }
+                        GTip { visible: edge.containsMouse && !edge.pressed; text: "Drag to resize the column; double-click to fit its contents" }
                     }
                     Head { k: "name"; label: "Name"; width: aw.nameW; tip: "The file or folder's name" }
                     Repeater {
                         model: aw.columns
-                        Head { required property var modelData; k: modelData.k; label: modelData.label; alignEnd: !!modelData.right; tip: modelData.tip; width: modelData.w * Theme.pt }
+                        Head { required property var modelData; k: modelData.k; label: modelData.label; alignEnd: !!modelData.right; tip: modelData.tip; width: aw.colW(modelData.k) }
                     }
                 }
                 Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.separator }
+                GMenu {
+                    id: headMenu
+                    GMenuItem { text: "Size All Columns to Fit"; iconName: "zoom-fit-width|view-list-details"; onTriggered: aw.fitAll() }
+                    GMenuItem { text: "Reset Column Widths"; iconName: "edit-undo"; onTriggered: aw.resetWidths() }
+                }
             }
 
             ListView {
@@ -443,13 +549,17 @@ Window {
                 model: aw.rows
                 focus: true
                 boundsBehavior: Flickable.StopAtBounds
+                // Wider columns than the window: scroll sideways.
+                contentWidth: Math.max(width, aw.totalW)
+                flickableDirection: Flickable.HorizontalAndVerticalFlick
                 ScrollBar.vertical: GScrollBar {}
+                ScrollBar.horizontal: GScrollBar {}
                 delegate: Rectangle {
                     id: row
                     required property var modelData
                     required property int index
                     readonly property bool picked: !!aw.sel[modelData.path]
-                    width: list.width
+                    width: Math.max(list.width, aw.totalW)
                     height: Theme.rowHeight
                     color: picked ? (aw.active ? Theme.accent : Theme.selectedInactive) : index % 2 ? Theme.rowAlt : "transparent"
                     radius: 4
@@ -495,9 +605,9 @@ Window {
                                      width: aw.nameW - 56 - (row.modelData.depth || 0) * 16; color: row.ink; anchors.verticalCenter: parent.verticalCenter }
                         }
                         component Cell: GLabel {
-                            property real w: 80
+                            property string col: ""
                             property bool alignEnd: false
-                            width: w * Theme.pt
+                            width: aw.colW(col)
                             height: row.height
                             leftPadding: 6; rightPadding: 6
                             horizontalAlignment: alignEnd ? Text.AlignRight : Text.AlignLeft
@@ -505,13 +615,13 @@ Window {
                             font.pixelSize: Theme.small
                             font.features: { "tnum": 1 }
                         }
-                        Cell { w: 90; alignEnd: true; text: aw.sizeText(row.modelData) }
-                        Cell { w: 96; alignEnd: true; text: row.modelData.packed === null || row.modelData.packed === undefined || (row.modelData.isDir && !row.modelData.packed) ? "" : aw.app.size(row.modelData.packed) }
-                        Cell { w: 140; text: aw.fmtDate(row.modelData.mtime) }
-                        Cell { w: 120; text: row.modelData.method }
-                        Cell { w: 84; text: row.modelData.crc; font.family: Theme.mono }
-                        Cell { w: 30; text: row.modelData.encrypted ? "🔒" : ""; horizontalAlignment: Text.AlignHCenter }
-                        Cell { w: 96; text: aw.modeText(row.modelData.mode, row.modelData.isDir); font.family: Theme.mono }
+                        Cell { col: "size"; alignEnd: true; text: aw.sizeText(row.modelData) }
+                        Cell { col: "packed"; alignEnd: true; text: row.modelData.packed === null || row.modelData.packed === undefined || (row.modelData.isDir && !row.modelData.packed) ? "" : aw.app.size(row.modelData.packed) }
+                        Cell { col: "mtime"; text: aw.fmtDate(row.modelData.mtime) }
+                        Cell { col: "method"; text: row.modelData.method }
+                        Cell { col: "crc"; text: row.modelData.crc; font.family: Theme.mono }
+                        Cell { col: "encrypted"; text: row.modelData.encrypted ? "🔒" : ""; horizontalAlignment: Text.AlignHCenter }
+                        Cell { col: "mode"; text: aw.modeText(row.modelData.mode, row.modelData.isDir); font.family: Theme.mono }
                     }
                     MouseArea {
                         anchors.fill: parent
