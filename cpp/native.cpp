@@ -1,3 +1,4 @@
+#include <cmath>
 #include <QWheelEvent>
 #include <QPointingDevice>
 #include <QUrlQuery>
@@ -29,6 +30,7 @@ Q_IMPORT_PLUGIN(VipsImagePlugin)
 #include <QtCore/QElapsedTimer>
 #include <QtCore/QUrl>
 #include <QtGui/QClipboard>
+#include <QtGui/qevent.h>
 #include <QtGui/QFontDatabase>
 #include <QtCore/QDir>
 #include <QtGui/QGuiApplication>
@@ -1332,6 +1334,30 @@ void grove_test_click(double x, double y)
     QMouseEvent release(QEvent::MouseButtonRelease, pos, w->mapToGlobal(pos), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
     QGuiApplication::sendEvent(w, &press);
     QGuiApplication::sendEvent(w, &release);
+}
+
+// A touchpad pinch, as the compositor sends it: begin, `steps` zoom
+// events growing the scale to `factor` in all, end (tests).
+void grove_test_pinch(double x, double y, double factor, int32_t steps)
+{
+    QWindow* w = QGuiApplication::focusWindow();
+    if (!w && !QGuiApplication::topLevelWindows().isEmpty()) w = QGuiApplication::topLevelWindows().first();
+    if (!w || steps < 1) return;
+    const QPointF pos(x, y), g = w->mapToGlobal(pos);
+    const auto* dev = QPointingDevice::primaryPointingDevice();
+    auto send = [&](Qt::NativeGestureType t, qreal v) {
+        QNativeGestureEvent ev(t, dev, 2, pos, pos, g, v, QPointF());
+        QGuiApplication::sendEvent(w, &ev);
+    };
+    send(Qt::BeginNativeGesture, 0);
+    const qreal each = std::pow(factor, 1.0 / steps);
+    qreal scale = 1;
+    for (int i = 0; i < steps; ++i) {
+        const qreal next = scale * each;
+        send(Qt::ZoomNativeGesture, next / scale - 1);
+        scale = next;
+    }
+    send(Qt::EndNativeGesture, 0);
 }
 
 void grove_test_wheel_x(double x, double y, int32_t angleX)

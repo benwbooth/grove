@@ -1175,6 +1175,8 @@ ApplicationWindow {
         else if (cmd === "continuous") docView.display = "continuous"
         else if (cmd === "nopaged") docView.pageAtATime = false
         else if (cmd === "pgdn") docView.pageDown()
+        else if (cmd === "realpinch") { const [x, y, f, n] = arg.split(",").map(Number); app.grove.testPinch(x, y, f, n || 10) }
+        else if (cmd === "zoomat") { const [x, y, f] = arg.split(",").map(Number); const o = docView.mapFromItem(null, x, y); docView.zoomBy(f, Qt.point(o.x, o.y)) }
         else if (cmd === "pgup") docView.pageUp()
         else if (cmd === "search") { searchField.text = arg; search(arg) }
         else if (cmd === "page") goPage(Number(arg) - 1)

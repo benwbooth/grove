@@ -47,6 +47,7 @@ void grove_set_icon_theme(bool dark, bool mac);
 void grove_test_wheel(double x, double y, int32_t angleY, int32_t pixelY);
 void grove_test_wheel_x(double x, double y, int32_t angleX);
 void grove_test_click(double x, double y);
+void grove_test_pinch(double x, double y, double factor, int32_t steps);
 void grove_test_touchpad(double x, double y, int32_t ax, int32_t ay, int32_t px, int32_t py, int32_t phase);
 // Test hook: save every visible window (the first to `path`, others to
 // path-1.png, path-2.png...).

@@ -1467,6 +1467,10 @@ impl ffi::Grove {
         ffi::grove_test_click(x, y);
     }
 
+    pub fn test_pinch(&self, x: f64, y: f64, factor: f64, steps: i32) {
+        ffi::grove_test_pinch(x, y, factor, steps);
+    }
+
     pub fn test_wheel(&self, x: f64, y: f64, angle_y: i32, pixel_y: i32) {
         ffi::grove_test_wheel(x, y, angle_y, pixel_y);
     }

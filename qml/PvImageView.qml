@@ -32,12 +32,34 @@ Item {
     property bool zooming: false
     onKChanged: { zooming = true; settle.restart() }
     Timer { id: settle; interval: 220; onTriggered: { iv.renderK = iv.k; iv.zooming = false } }
-    function setZoom(z) { zoom = Math.max(0.02, Math.min(32, z)); fit = "none" }
+    // `at` (a point in the view) keeps the same spot of the picture under
+    // it; without it, the middle does.
+    function setZoom(z, at) {
+        const a = anchorOf(at)
+        zoom = Math.max(0.02, Math.min(32, z)); fit = "none"
+        restore(a)
+    }
     // Zoom steps stop at 100% on the way past it (buttons, keys, Ctrl+wheel).
-    function zoomBy(f) {
+    function zoomBy(f, at) {
         const one = 1 / iv.dpr, to = iv.k * f
-        if ((iv.k < one * 0.995 && to > one * 1.005) || (iv.k > one * 1.005 && to < one * 0.995) || Math.abs(to - one) < one * 0.03) { iv.fit = "actual"; return }
-        setZoom(to)
+        if ((iv.k < one * 0.995 && to > one * 1.005) || (iv.k > one * 1.005 && to < one * 0.995) || Math.abs(to - one) < one * 0.03) {
+            const a = anchorOf(at)
+            iv.fit = "actual"
+            restore(a)
+            return
+        }
+        setZoom(to, at)
+    }
+    function anchorOf(at) {
+        const px = at ? at.x : view.width / 2, py = at ? at.y : view.height / 2
+        return { px: px, py: py,
+                 u: (view.contentX + px - stage.x) / Math.max(1, stage.width),
+                 v: (view.contentY + py - stage.y) / Math.max(1, stage.height) }
+    }
+    function restore(a, at) {
+        const px = at ? at.x : a.px, py = at ? at.y : a.py
+        view.contentX = Math.max(0, Math.min(view.contentWidth - view.width, stage.x + a.u * stage.width - px))
+        view.contentY = Math.max(0, Math.min(view.contentHeight - view.height, stage.y + a.v * stage.height - py))
     }
     readonly property string key: doc ? doc.id + ":img" : ""
     readonly property var rectSel: win.rectSel && win.rectSel.key === key ? win.rectSel.rect : null
@@ -47,13 +69,22 @@ Item {
     WheelHandler {
         acceptedModifiers: Qt.ControlModifier
         acceptedDevices: PointerDevice.AllDevices
-        onWheel: (e) => iv.zoomBy(e.angleDelta.y > 0 || e.pixelDelta.y > 0 ? 1.12 : 1 / 1.12)
+        onWheel: (e) => iv.zoomBy(e.angleDelta.y > 0 || e.pixelDelta.y > 0 ? 1.12 : 1 / 1.12, point.position)
     }
+    // Pinching zooms about the fingers, following them as they move.
     PinchHandler {
+        id: pinch
         target: null
         property real start: 1
-        onActiveChanged: if (active) start = iv.k
-        onActiveScaleChanged: if (active) iv.setZoom(start * activeScale)
+        property var a: null
+        property point at: Qt.point(0, 0)
+        onActiveChanged: if (active) { start = iv.k; at = centroid.position; a = iv.anchorOf(at) }
+        onActiveScaleChanged: if (active) step()
+        onCentroidChanged: if (active && a) { at = centroid.position; step() }
+        function step() {
+            iv.zoom = Math.max(0.02, Math.min(32, start * activeScale)); iv.fit = "none"
+            iv.restore(a, at)
+        }
     }
 
     Flickable {
@@ -73,6 +104,7 @@ Item {
             y: (view.contentHeight - height) / 2
             // See-through: a checkerboard.
             Canvas {
+                id: checker
                 anchors.fill: parent
                 visible: iv.doc && iv.doc.info && iv.doc.info.alpha || (iv.img && iv.img.alpha.length > 0)
                 onPaint: {
@@ -82,8 +114,10 @@ Item {
                         g.fillRect(x, y, s, s)
                     }
                 }
-                onWidthChanged: requestPaint()
-                onHeightChanged: requestPaint()
+                // Stretched while zooming; drawn again once it settles.
+                onWidthChanged: if (!iv.zooming) requestPaint()
+                onHeightChanged: if (!iv.zooming) requestPaint()
+                Connections { target: iv; function onZoomingChanged() { if (!iv.zooming) checker.requestPaint() } }
             }
             Item {
                 id: pic

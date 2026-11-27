@@ -35,17 +35,51 @@ Item {
     onKChanged: { zooming = true; settle.restart() }
     Timer { id: settle; interval: 220; onTriggered: { dv.renderK = dv.k; dv.zooming = false } }
     readonly property real percent: Math.round(k * 72 / 96 * 100)
-    function setZoom(z) {
-        const before = k
+    function setZoom(z, at) {
+        const a = anchorOf(at)
         zoom = Math.max(0.1, Math.min(8, z))
         fit = "none"
-        keepCenter(before)
+        restore(a)
     }
     // Zoom steps stop at 100% on the way past it (buttons, keys, Ctrl+wheel).
-    function zoomBy(f) {
+    // `at` (a point in the view) stays put; without it, the middle does.
+    function zoomBy(f, at) {
         const one = 96 / 72, to = dv.k * f
-        if ((dv.k < one * 0.995 && to > one * 1.005) || (dv.k > one * 1.005 && to < one * 0.995) || Math.abs(to - one) < one * 0.03) { dv.fit = "actual"; return }
-        setZoom(to)
+        if ((dv.k < one * 0.995 && to > one * 1.005) || (dv.k > one * 1.005 && to < one * 0.995) || Math.abs(to - one) < one * 0.03) {
+            const a = anchorOf(at)
+            dv.fit = "actual"
+            restore(a)
+            return
+        }
+        setZoom(to, at)
+    }
+    // What's under a point of the view, as a row and an offset from that
+    // row's middle (page content scales about it), so a zoom can put the
+    // same spot back under the point.
+    function anchorOf(at) {
+        const px = at ? at.x : list.width / 2, py = at ? at.y : list.height / 2
+        const cx = list.contentX + px, cy = list.contentY + py
+        let r = -1
+        for (const d of [0, -10, 10, -24, 24, -48, 48]) {
+            r = list.indexAt(list.contentWidth / 2, cy + d)
+            if (r >= 0) break
+        }
+        const it = r >= 0 ? list.itemAtIndex(r) : null
+        if (!it) return { r: -1, px: px, py: py, k: k }
+        return { r: r, dy: cy - (it.y + it.height / 2), dx: cx - list.contentWidth / 2, px: px, py: py, k: k }
+    }
+    function restore(a, at) {
+        if (!a || a.r < 0 || display === "contact") return
+        const s = k / a.k
+        const px = at ? at.x : a.px, py = at ? at.y : a.py
+        list.forceLayout()
+        list.positionViewAtIndex(a.r, ListView.Beginning)
+        const it = list.itemAtIndex(a.r)
+        if (!it) return
+        const minY = list.originY - list.topMargin
+        const maxY = Math.max(minY, list.originY + list.contentHeight + list.bottomMargin - list.height)
+        list.contentY = Math.max(minY, Math.min(maxY, it.y + it.height / 2 + a.dy * s - py))
+        list.contentX = Math.max(0, Math.min(Math.max(0, list.contentWidth - list.width), list.contentWidth / 2 + a.dx * s - px))
     }
     function keepCenter(before) {
         const cy = (list.contentY + list.height / 2) / Math.max(1, list.contentHeight)
@@ -117,22 +151,71 @@ Item {
     WheelHandler {
         acceptedModifiers: Qt.ControlModifier
         acceptedDevices: PointerDevice.AllDevices
-        onWheel: (e) => dv.zoomBy(e.angleDelta.y > 0 || e.pixelDelta.y > 0 ? 1.12 : 1 / 1.12)
+        onWheel: (e) => dv.zoomBy(e.angleDelta.y > 0 || e.pixelDelta.y > 0 ? 1.12 : 1 / 1.12, point.position)
     }
+    // Pinching stretches the pages already drawn, about the fingers (no
+    // relayout per step: that's what made it slow), and lays them out at
+    // the new zoom when the fingers pause or lift, the same spot still
+    // under them.
     PinchHandler {
+        id: pinch
         target: null
-        property real start: 1
-        onActiveChanged: if (active) start = dv.k
-        onActiveScaleChanged: if (active) dv.setZoom(start * activeScale)
+        property var a: null
+        property real base: 1     // activeScale at the last settle
+        property real k0: 1       // k at the last settle
+        readonly property real rel: Math.max(0.1 / k0, Math.min(8 / k0, activeScale / base))
+        // Where the fingers are (the centroid resets once they lift).
+        property point at: Qt.point(0, 0)
+        onCentroidChanged: if (active) at = centroid.position
+        onActiveChanged: {
+            if (active) {
+                k0 = dv.k; base = activeScale
+                at = centroid.position
+                a = dv.anchorOf(at)
+                dv.pinching = true
+            } else {
+                settlePinch.stop()
+                dv.settlePinch()
+                dv.pinching = false
+            }
+        }
+        onActiveScaleChanged: if (active) settlePinch.restart()
+    }
+    property bool pinching: false
+    Timer { id: settlePinch; interval: 260; onTriggered: dv.settlePinch() }
+    function settlePinch() {
+        if (!pinch.a) return
+        const at = pinch.at
+        const rel = pinch.rel
+        const a = pinch.a
+        zoom = Math.max(0.1, Math.min(8, pinch.k0 * rel))
+        fit = "none"
+        pinch.a = null       // drop the live stretch before laying out
+        restore(a, at)
+        if (pinch.active) {
+            pinch.k0 = k; pinch.base = pinch.activeScale
+            pinch.a = anchorOf(at)
+        }
     }
 
     Rectangle { anchors.fill: parent; color: Theme.dark ? "#262628" : "#e9e9eb" }
 
+    clip: true
     ListView {
         id: list
         anchors.fill: parent
         visible: dv.display !== "contact"
-        clip: true
+        clip: !pinch.a
+        transform: [
+            Scale {
+                origin.x: pinch.a ? pinch.a.px : 0; origin.y: pinch.a ? pinch.a.py : 0
+                xScale: pinch.a ? pinch.rel : 1; yScale: xScale
+            },
+            Translate {
+                x: pinch.a ? pinch.at.x - pinch.a.px : 0
+                y: pinch.a ? pinch.at.y - pinch.a.py : 0
+            }
+        ]
         interactive: false
         model: dv.display === "two" ? Math.ceil(dv.pages.length / 2) : dv.pages.length
         // Page at a Time rows are a whole window tall, so none show beside another.
@@ -150,7 +233,14 @@ Item {
             id: row
             required property int index
             width: list.contentWidth
-            height: dv.fill ? Math.max(list.height, pages.height + 32) : pages.height
+            // From the page sizes, not the Row (a positioner lays out later,
+            // and zooming about a point needs the new heights at once).
+            readonly property real rowH: {
+                const a = dv.pages[dv.display === "two" ? index * 2 : index]
+                const b = dv.display === "two" ? dv.pages[index * 2 + 1] : null
+                return Math.max(a ? dv.dispH(a) : 0, b ? dv.dispH(b) : 0) * dv.k
+            }
+            height: dv.fill ? Math.max(list.height, rowH + 32) : rowH
             Row {
                 id: pages
                 anchors.horizontalCenter: parent.horizontalCenter
