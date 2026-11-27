@@ -54,6 +54,38 @@ pub fn git_branch(dir: &Path) -> Option<String> {
     }
 }
 
+/// Uncommitted changes in each git repository among `dir`'s items:
+/// {path: count} (staged, changed and untracked files; untracked folders
+/// count once). Several repositories are read at a time.
+pub fn repo_changes(dir: &str) -> Value {
+    let orig = Path::new(dir);
+    let repos: Vec<PathBuf> = std::fs::read_dir(orig)
+        .map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.is_dir() && matches!(repo_kind(p), Some("git") | Some("jj"))).collect())
+        .unwrap_or_default();
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let out = std::sync::Mutex::new(serde_json::Map::new());
+    let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(1, 8).min(repos.len().max(1));
+    std::thread::scope(|sc| {
+        for _ in 0..workers {
+            sc.spawn(|| loop {
+                let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let Some(p) = repos.get(i) else { break };
+                let Ok(repo) = git2::Repository::open(p) else { continue };
+                if repo.is_bare() {
+                    continue;
+                }
+                let mut o = git2::StatusOptions::new();
+                o.include_untracked(true).recurse_untracked_dirs(false).include_ignored(false).exclude_submodules(true);
+                let n = repo.statuses(Some(&mut o)).map(|st| st.len());
+                if let Ok(n) = n {
+                    out.lock().unwrap().insert(p.to_string_lossy().into_owned(), json!(n));
+                }
+            });
+        }
+    });
+    Value::Object(out.into_inner().unwrap())
+}
+
 /// The repository holding `dir` (it or a parent): (top, kind).
 fn find_repo(dir: &Path) -> Option<(PathBuf, &'static str)> {
     let mut d = Some(dir);
@@ -349,6 +381,22 @@ pub fn status(dir: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn counts_repo_changes() {
+        let d = std::env::temp_dir().join(format!("grove-vcs-dirty-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        git2::Repository::init(d.join("clean")).unwrap();
+        git2::Repository::init(d.join("dirty")).unwrap();
+        std::fs::write(d.join("dirty/a.txt"), "a").unwrap();
+        std::fs::write(d.join("dirty/b.txt"), "b").unwrap();
+        std::fs::create_dir_all(d.join("plain")).unwrap();
+        let v = repo_changes(d.to_str().unwrap());
+        assert_eq!(v[d.join("dirty").to_str().unwrap()], 2);
+        assert_eq!(v[d.join("clean").to_str().unwrap()], 0);
+        assert!(v.get(d.join("plain").to_str().unwrap()).is_none());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn reads_branches() {
         let d = std::env::temp_dir().join(format!("grove-vcs-branch-{}", std::process::id()));

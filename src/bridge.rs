@@ -284,6 +284,10 @@ pub mod ffi {
         fn remove_smart_folder(self: &Grove, name: &QString);
         #[qinvokable]
         fn git_status(self: &Grove, key: &QString, dir: &QString);
+        /// Uncommitted changes in each git repository among a folder's
+        /// items: {path: count} (vcs.rs `repo_changes`).
+        #[qinvokable]
+        fn repo_changes(self: &Grove, key: &QString, dir: &QString);
         /// Google Drive badges from canopy: {path: "S/canopy"..., __root}.
         #[qinvokable]
         fn cloud_status(self: &Grove, key: &QString, dir: &QString);

@@ -1059,6 +1059,11 @@ impl ffi::Grove {
         self.answer(key, move || crate::vcs::status(&d));
     }
 
+    pub fn repo_changes(&self, key: &QString, dir: &QString) {
+        let d = dir.to_string();
+        self.answer(key, move || crate::vcs::repo_changes(&d));
+    }
+
     pub fn cloud_status(&self, key: &QString, dir: &QString) {
         let d = dir.to_string();
         self.answer(key, move || crate::canopy::folder_status(&d));

@@ -145,6 +145,8 @@ FocusScope {
     property string typeAhead: ""
     property bool dropHover: false
     property var gitMap: ({})
+    // {repository folder: uncommitted changes} for the repositories shown.
+    property var repoDirty: ({})
     property bool inGit: false
     // Google Drive (canopy): the synced folder this folder is inside ("" when
     // none), and every synced folder seen here (for the item menu).
@@ -254,6 +256,21 @@ FocusScope {
         onMerged: vcsTimer.restart()
     }
     Timer { id: vcsTimer; interval: 1000; onTriggered: pane.vcsBadges() }
+    // Commits and edits made elsewhere don't touch this folder, so the
+    // repositories' change counts are read again now and then while grove
+    // is in front.
+    Timer {
+        interval: 15000
+        repeat: true
+        running: pane.visible && Object.keys(pane.repoDirty).length > 0 && Qt.application.state === Qt.ApplicationActive
+        onTriggered: {
+            const asked = pane.path, seq = pane.vcsSeq
+            Async.call(grove, k => grove.repoChanges(k, asked), d => {
+                if (seq !== pane.vcsSeq || asked !== pane.path) return
+                if (JSON.stringify(d || {}) !== JSON.stringify(pane.repoDirty)) pane.repoDirty = d || {}
+            })
+        }
+    }
 
     // Version control badges. Replies run on their own threads and can come
     // back out of order (a big repo's status outlasts a quick folder's), so
@@ -267,6 +284,14 @@ FocusScope {
             pane.gitMap = r || {}
             pane.inGit = !!r && (r.__vcs === "git" || r.__vcs === "jj")
             fm.setGitStatus(JSON.stringify(r || {}))
+            // Repositories among the items: how many uncommitted changes
+            // each has (their branch tags show it), read after the badges.
+            const repos = Object.keys(r || {}).some(k => { const v = r[k]; return typeof v === "string" && (v.indexOf("@/git") === 0 || v.indexOf("@/jj") === 0) })
+            if (!repos) { pane.repoDirty = {}; return }
+            Async.call(grove, k => grove.repoChanges(k, asked), d => {
+                if (seq !== pane.vcsSeq || asked !== pane.path) return
+                pane.repoDirty = d || {}
+            })
         })
     }
 
@@ -319,6 +344,7 @@ FocusScope {
         pendingSelect = opts.select || []
         fm.loadPath(p)
         gitMap = {}
+        repoDirty = {}
     }
     function goBack() {
         if (!backStack.length) return
