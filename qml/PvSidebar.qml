@@ -222,6 +222,17 @@ Item {
         walk(d.info.outline, 0, "")
         return out
     }
+    // The section you're reading, as Preview marks it: the last entry (of
+    // those shown) that starts on or before the current page.
+    readonly property int tocCurrent: {
+        const d = win.cur
+        if (!d || !d.pages) return -1
+        const p = d.pages[win.currentPage]
+        const at = p && p.src === d.path ? p.page : win.currentPage
+        let best = -1
+        tocRows.forEach((r, i) => { if (r.o.page >= 0 && r.o.page <= at) best = i })
+        return best
+    }
     ListView {
         id: toc
         anchors.fill: parent
@@ -235,12 +246,14 @@ Item {
             required property var modelData
             width: toc.width
             height: Theme.sidebarRow
-            Rectangle { anchors.fill: parent; radius: 5; color: tm.containsMouse ? Theme.hover : "transparent" }
+            required property int index
+            readonly property bool current: index === sb.tocCurrent
+            Rectangle { anchors.fill: parent; radius: 5; color: parent.current ? (sb.win.active ? Theme.accent : Theme.selectedInactive) : tm.containsMouse ? Theme.hover : "transparent" }
             GLabel {
                 x: 4 + modelData.depth * 14
                 anchors.verticalCenter: parent.verticalCenter
                 text: modelData.kids ? ((sb.tocOpen[modelData.id] !== undefined ? sb.tocOpen[modelData.id] : modelData.depth < 1) ? "▾" : "▸") : ""
-                color: Theme.fgSecondary
+                color: parent.current && sb.win.active ? Theme.accentText : Theme.fgSecondary
                 MouseArea {
                     anchors.fill: parent; anchors.margins: -4
                     onClicked: { const o = Object.assign({}, sb.tocOpen); const id = modelData.id; o[id] = !(o[id] !== undefined ? o[id] : modelData.depth < 1); sb.tocOpen = o }
@@ -253,8 +266,9 @@ Item {
                 text: modelData.o.title
                 elide: Text.ElideRight
                 font.bold: modelData.depth === 0
+                color: parent.current && sb.win.active ? Theme.accentText : Theme.fg
             }
-            GLabel { anchors.right: parent.right; anchors.rightMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: modelData.o.page >= 0 ? String(modelData.o.page + 1) : ""; color: Theme.fgSecondary; font.pixelSize: Theme.small }
+            GLabel { anchors.right: parent.right; anchors.rightMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: modelData.o.page >= 0 ? String(modelData.o.page + 1) : ""; color: parent.current && sb.win.active ? Theme.accentText : Theme.fgSecondary; font.pixelSize: Theme.small }
             MouseArea {
                 id: tm
                 anchors.fill: parent; anchors.leftMargin: 16 + modelData.depth * 14
