@@ -689,6 +689,7 @@ ApplicationWindow {
                 { id: "d.continuous", icon: "view-list-text", text: "Continuous Scroll", checkable: true, checked: docView.display === "continuous", enabled: pdf },
                 { id: "d.single", icon: "view-pages-single", text: "Single Page", checkable: true, checked: docView.display === "single", enabled: pdf },
                 { id: "d.two", icon: "view-pages-facing", text: "Two Pages", checkable: true, checked: docView.display === "two", enabled: pdf },
+                { id: "pageatatime", icon: "go-next-view-page", text: "Page at a Time", checkable: true, checked: docView.pageAtATime, enabled: pdf, tip: "Page Down, Page Up and Space go a whole page at a time, the next page's top at the top of the window" },
                 { separator: true },
                 { id: "actual", icon: "zoom-original", text: "Actual Size", shortcut: k("pv.actual"), enabled: !!d },
                 { id: "fit", icon: "zoom-fit-best", text: "Zoom to Fit", shortcut: k("pv.fit"), enabled: !!d },
@@ -776,6 +777,7 @@ ApplicationWindow {
         case "findnext": gotoHit(searchIndex + 1); break
         case "findprev": gotoHit(searchIndex - 1); break
         case "sidebar": sidebarShown = !sidebarShown; break
+        case "pageatatime": app.grove.setSetting("preview_page_at_a_time", docView.pageAtATime ? "false" : "true"); break
         case "contact": docView.display = docView.display === "contact" ? "continuous" : "contact"; break
         case "actual": if (isPdf) docView.fit = "actual"; else imageView.fit = "actual"; break
         case "fit": if (isPdf) docView.fit = "page"; else imageView.fit = "fit"; break
@@ -1012,7 +1014,7 @@ ApplicationWindow {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             clip: true
-            PvDocView { id: docView; anchors.fill: parent; win: pw; doc: pw.isPdf ? pw.cur : null; visible: pw.isPdf && !pw.cur.locked }
+            PvDocView { id: docView; anchors.fill: parent; win: pw; pageAtATime: pw.app.settings.preview_page_at_a_time !== false; doc: pw.isPdf ? pw.cur : null; visible: pw.isPdf && !pw.cur.locked }
             PvImageView { id: imageView; anchors.fill: parent; win: pw; doc: pw.cur && pw.cur.kind === "image" && pw.cur.img ? pw.cur : null; visible: !!doc }
             DocView {
                 id: textView
@@ -1169,6 +1171,11 @@ ApplicationWindow {
         else if (cmd === "nosidebar") sidebarShown = false
         else if (cmd === "contact") docView.display = "contact"
         else if (cmd === "two") { docView.display = "two"; docView.fit = "page" }
+        else if (cmd === "single") { docView.display = "single"; docView.fit = arg || "page" }
+        else if (cmd === "continuous") docView.display = "continuous"
+        else if (cmd === "nopaged") docView.pageAtATime = false
+        else if (cmd === "pgdn") docView.pageDown()
+        else if (cmd === "pgup") docView.pageUp()
         else if (cmd === "search") { searchField.text = arg; search(arg) }
         else if (cmd === "page") goPage(Number(arg) - 1)
         else if (cmd === "doc") { const d = docs[Number(arg)]; if (d) setCurrent(d, 0) }

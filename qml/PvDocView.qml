@@ -65,14 +65,49 @@ Item {
         go(i)
         if (y > 0) Qt.callLater(() => { list.contentY = Math.max(0, list.contentY + y * k - 20) })
     }
-    function pageUp() { list.contentY = Math.max(0, list.contentY - list.height * 0.9) }
-    function pageDown() { list.contentY = Math.min(Math.max(0, list.contentHeight - list.height), list.contentY + list.height * 0.9) }
+    // Page at a Time: PgDn/PgUp (and Space) go to the next/previous page's
+    // top, scrolling within a page first only when it's zoomed taller than
+    // the window. Single Page and Two Pages then show one page (or pair) per
+    // window, with nothing of the next peeking in.
+    property bool pageAtATime: true
+    readonly property bool paged: pageAtATime && display !== "contact"
+    readonly property bool fill: pageAtATime && (display === "single" || display === "two")
+    function curRow() { return display === "two" ? Math.floor(current / 2) : current }
+    function pageUp() {
+        if (paged) {
+            const it = list.itemAtIndex(curRow())
+            if (it && it.y < list.contentY - 1) list.contentY = Math.max(it.y, list.contentY - list.height * 0.9)
+            else if (curRow() > 0) go((curRow() - 1) * (display === "two" ? 2 : 1))
+            else list.contentY = 0
+            return
+        }
+        list.contentY = Math.max(0, list.contentY - list.height * 0.9)
+    }
+    function pageDown() {
+        if (paged) {
+            const it = list.itemAtIndex(curRow())
+            const bottom = it ? it.y + it.height : 0
+            if (it && bottom > list.contentY + list.height + 1) list.contentY = Math.min(bottom - list.height, list.contentY + list.height * 0.9)
+            else if (curRow() + 1 < list.count) go((curRow() + 1) * (display === "two" ? 2 : 1))
+            return
+        }
+        list.contentY = Math.min(Math.max(0, list.contentHeight - list.height), list.contentY + list.height * 0.9)
+    }
+    // Keep the current row lined up when the layout or window changes.
+    onDisplayChanged: if (paged) Qt.callLater(() => go(current))
+    onPageAtATimeChanged: if (paged) Qt.callLater(() => go(current))
+    property int alignTo: -1
+    Connections {
+        target: list
+        function onHeightChanged() { if (dv.paged) { dv.alignTo = dv.current; realign.restart() } }
+    }
+    Timer { id: realign; interval: 0; onTriggered: if (dv.alignTo >= 0) dv.go(dv.alignTo) }
     function viewState() { return { y: Math.round(list.contentY), fit: fit, zoom: zoom, display: display } }
 
     // Which page is in the middle of the view.
     function updateCurrent() {
         if (display === "contact" || !pages.length) return
-        const it = list.indexAt(list.width / 2 + list.contentX, list.contentY + list.height / 3)
+        const it = list.indexAt(list.width / 2 + list.contentX, list.contentY + (paged ? 1 : list.height / 3))
         if (it < 0) return
         const i = display === "two" ? it * 2 : it
         if (i !== win.currentPage) win.setCurrentQuiet(i)
@@ -100,14 +135,14 @@ Item {
         clip: true
         interactive: false
         model: dv.display === "two" ? Math.ceil(dv.pages.length / 2) : dv.pages.length
-        spacing: dv.display === "single" ? 40 : 14
-        topMargin: 16
-        bottomMargin: 16
+        // Page at a Time rows are a whole window tall, so none show beside another.
+        spacing: dv.fill ? 0 : 14
+        topMargin: dv.fill ? 0 : 16
+        bottomMargin: dv.fill ? 0 : 16
         cacheBuffer: Math.max(400, height)
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.HorizontalAndVerticalFlick
         contentWidth: Math.max(width, dv.maxW * dv.k + 48)
-        snapMode: dv.display === "single" ? ListView.SnapOneItem : ListView.NoSnap
         ScrollBar.vertical: GScrollBar {}
         ScrollBar.horizontal: GScrollBar {}
         onContentYChanged: Qt.callLater(dv.updateCurrent)
@@ -115,7 +150,7 @@ Item {
             id: row
             required property int index
             width: list.contentWidth
-            height: dv.display === "single" ? Math.max(list.height - 32, pages.height) : pages.height
+            height: dv.fill ? Math.max(list.height, pages.height + 32) : pages.height
             Row {
                 id: pages
                 anchors.horizontalCenter: parent.horizontalCenter
