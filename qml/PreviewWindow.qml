@@ -15,8 +15,10 @@ ApplicationWindow {
     id: pw
     property var app
     property var initialPaths: []
-    width: Math.round(1080 * Theme.pt)
-    height: Math.round(760 * Theme.pt)
+    // A tool of its own to the desktop (own size and place); 16:9 at first.
+    property string groveAppId: "grove-preview"
+    width: Math.round(1280 * Theme.pt)
+    height: Math.round(width * 9 / 16)
     minimumWidth: 520
     minimumHeight: 360
     color: Theme.window

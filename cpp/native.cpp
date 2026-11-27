@@ -987,6 +987,30 @@ public:
 
 // Logs the first wheel events the app receives, before any QML sees them
 // (to tell "never arrives" from "arrives but goes to the wrong place").
+// Grove's tools (Archiver, Preview, Player, Disk Utility, Disk Usage, Git
+// Changes) are apps of their own to the desktop even when grove opens them:
+// a window's `groveAppId` property names its app id. Qt takes the id from
+// the desktop file name when it maps the window, which comes right after
+// the Show event, so it's switched here for each window as it's shown. The
+// window manager then keeps each tool's size and place apart from grove's.
+class AppIdFilter : public QObject {
+public:
+    explicit AppIdFilter(const QString& fallback, QObject* parent) : QObject(parent), m_fallback(fallback) {}
+    bool eventFilter(QObject* o, QEvent* e) override
+    {
+        if (e->type() == QEvent::Show) {
+            if (auto* w = qobject_cast<QWindow*>(o); w && !w->transientParent()) {
+                const QString id = w->property("groveAppId").toString();
+                const QString want = id.isEmpty() ? m_fallback : id;
+                if (QGuiApplication::desktopFileName() != want) QGuiApplication::setDesktopFileName(want);
+            }
+        }
+        return false;
+    }
+private:
+    QString m_fallback;
+};
+
 class WheelLogFilter : public QObject {
 public:
     int left = 80;
@@ -1028,6 +1052,7 @@ void grove_create_app()
     // their desktop entry and icon.
     const QString appId = qEnvironmentVariableIsSet("GROVE_APP_ID") ? QString::fromLocal8Bit(qgetenv("GROVE_APP_ID")) : QStringLiteral("grove");
     QGuiApplication::setDesktopFileName(appId);
+    qApp->installEventFilter(new AppIdFilter(appId, qApp));
     if (appId == QLatin1String("grove-player")) QGuiApplication::setApplicationDisplayName(QStringLiteral("Grove Player"));
     else if (appId == QLatin1String("grove-preview")) QGuiApplication::setApplicationDisplayName(QStringLiteral("Grove Preview"));
     // Inter (SF Pro's open relative) when SF Pro isn't installed: the

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Grove Disk Usage
+Comment=See what takes up space on a disk
+Exec=grove
+Icon=grove
+Terminal=false
+NoDisplay=true
+Categories=Qt;Utility;

@@ -26,8 +26,10 @@ Window {
     property var selRect: []
     property string trashAsk: ""
 
-    width: Math.round(980 * Theme.pt)
-    height: Math.round(760 * Theme.pt)
+    // A tool of its own to the desktop (own size and place); 16:9 at first.
+    property string groveAppId: "grove-disk-usage"
+    width: Math.round(1120 * Theme.pt)
+    height: Math.round(width * 9 / 16)
     minimumWidth: 560
     minimumHeight: 420
     color: Theme.window

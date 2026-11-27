@@ -38,8 +38,10 @@ Window {
     readonly property real mib: 1048576
 
     // Fits the screen it opens on (the window manager doesn't shrink it).
-    width: Math.min(Math.round(1060 * Theme.pt), Math.round((Screen.desktopAvailableWidth || 1600) * 0.8))
-    height: Math.min(Math.round(680 * Theme.pt), Math.round((Screen.desktopAvailableHeight || 1000) * 0.75))
+    // A tool of its own to the desktop (own size and place); 16:9 at first.
+    property string groveAppId: "grove-disk-utility"
+    width: Math.min(Math.round(1120 * Theme.pt), Math.round((Screen.desktopAvailableWidth || 1600) * 0.8), Math.round((Screen.desktopAvailableHeight || 1000) * 0.8 * 16 / 9))
+    height: Math.round(width * 9 / 16)
     minimumWidth: 640
     minimumHeight: 480
     color: Theme.window

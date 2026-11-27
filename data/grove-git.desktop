@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Grove Git Changes
+Comment=Stage, commit and switch branches in a git repository
+Exec=grove
+Icon=grove
+Terminal=false
+NoDisplay=true
+Categories=Qt;Utility;

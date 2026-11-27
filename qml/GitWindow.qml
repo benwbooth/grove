@@ -27,8 +27,10 @@ Window {
     readonly property string repoName: root.substring(root.lastIndexOf("/") + 1)
     readonly property int stagedCount: (ov.staged || []).length
 
-    width: Math.round(1180 * Theme.pt)
-    height: Math.round(780 * Theme.pt)
+    // A tool of its own to the desktop (own size and place); 16:9 at first.
+    property string groveAppId: "grove-git"
+    width: Math.round(1280 * Theme.pt)
+    height: Math.round(width * 9 / 16)
     minimumWidth: 640
     minimumHeight: 420
     color: Theme.window

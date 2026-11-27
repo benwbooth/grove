@@ -53,8 +53,10 @@ Window {
     flags: Qt.Window | Qt.FramelessWindowHint | (onTop ? Qt.WindowStaysOnTopHint : 0)
     minimumWidth: trimming || clipEditing ? 520 : music ? 300 : 320
     minimumHeight: music ? 300 : 180
+    // A tool of its own to the desktop (own size and place); 16:9 at first.
+    property string groveAppId: "grove-player"
     width: 960
-    height: 560
+    height: 540
 
     MpvPlayer {
         id: mp
