@@ -54,9 +54,11 @@ pub fn git_branch(dir: &Path) -> Option<String> {
     }
 }
 
-/// Uncommitted changes in each git repository among `dir`'s items:
-/// {path: count} (staged, changed and untracked files; untracked folders
-/// count once). Several repositories are read at a time.
+/// Each git repository among `dir`'s items: {path: {c, a}}, `c` its
+/// uncommitted changes (staged, changed and untracked files; untracked
+/// folders count once), `a` its commits not pushed yet (on HEAD but on no
+/// remote branch; absent when it has no remote). Several repositories are
+/// read at a time.
 pub fn repo_changes(dir: &str) -> Value {
     let orig = Path::new(dir);
     let repos: Vec<PathBuf> = std::fs::read_dir(orig)
@@ -78,12 +80,36 @@ pub fn repo_changes(dir: &str) -> Value {
                 o.include_untracked(true).recurse_untracked_dirs(false).include_ignored(false).exclude_submodules(true);
                 let n = repo.statuses(Some(&mut o)).map(|st| st.len());
                 if let Ok(n) = n {
-                    out.lock().unwrap().insert(p.to_string_lossy().into_owned(), json!(n));
+                    let mut v = json!({ "c": n });
+                    if let Some(a) = unpushed(&repo) {
+                        v["a"] = json!(a);
+                    }
+                    out.lock().unwrap().insert(p.to_string_lossy().into_owned(), v);
                 }
             });
         }
     });
     Value::Object(out.into_inner().unwrap())
+}
+
+/// Commits on HEAD that no remote branch has (capped at 1000); None when
+/// the repository has no remotes or no commits.
+fn unpushed(repo: &git2::Repository) -> Option<usize> {
+    let remotes = repo.remotes().ok()?;
+    if remotes.is_empty() {
+        return None;
+    }
+    let head = repo.head().ok()?.target()?;
+    let mut walk = repo.revwalk().ok()?;
+    walk.push(head).ok()?;
+    if let Ok(refs) = repo.references_glob("refs/remotes/*") {
+        for r in refs.flatten() {
+            if let Some(t) = r.target() {
+                let _ = walk.hide(t);
+            }
+        }
+    }
+    Some(walk.take(1000).count())
 }
 
 /// The repository holding `dir` (it or a parent): (top, kind).
@@ -390,9 +416,20 @@ mod tests {
         std::fs::write(d.join("dirty/a.txt"), "a").unwrap();
         std::fs::write(d.join("dirty/b.txt"), "b").unwrap();
         std::fs::create_dir_all(d.join("plain")).unwrap();
+        // A remote that has the first commit; a second one isn't pushed.
+        let r = git2::Repository::open(d.join("clean")).unwrap();
+        let sig = git2::Signature::now("t", "t@t").unwrap();
+        let tree = r.find_tree(r.index().unwrap().write_tree().unwrap()).unwrap();
+        let c1 = r.commit(Some("HEAD"), &sig, &sig, "one", &tree, &[]).unwrap();
+        r.remote("origin", "https://example.invalid/x.git").unwrap();
+        r.reference("refs/remotes/origin/main", c1, true, "test").unwrap();
+        let p1 = r.find_commit(c1).unwrap();
+        r.commit(Some("HEAD"), &sig, &sig, "two", &tree, &[&p1]).unwrap();
         let v = repo_changes(d.to_str().unwrap());
-        assert_eq!(v[d.join("dirty").to_str().unwrap()], 2);
-        assert_eq!(v[d.join("clean").to_str().unwrap()], 0);
+        assert_eq!(v[d.join("dirty").to_str().unwrap()]["c"], 2);
+        assert!(v[d.join("dirty").to_str().unwrap()].get("a").is_none());
+        assert_eq!(v[d.join("clean").to_str().unwrap()]["c"], 0);
+        assert_eq!(v[d.join("clean").to_str().unwrap()]["a"], 1);
         assert!(v.get(d.join("plain").to_str().unwrap()).is_none());
         let _ = std::fs::remove_dir_all(&d);
     }
