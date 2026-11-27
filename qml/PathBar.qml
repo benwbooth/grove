@@ -14,7 +14,7 @@ Item {
     function segments() {
         if (!pane || !grove) return []
         const p = pane.path
-        if (p.indexOf("/") !== 0) return [{ name: pane.title, path: p, icon: p.indexOf("trash:") === 0 ? "user-trash" : p.indexOf("recent:") === 0 ? "document-open-recent" : "edit-find" }]
+        if (p.indexOf("/") !== 0) return [{ name: pane.title, path: p, icon: p.indexOf("trash:") === 0 ? "user-trash" : p.indexOf("recent:") === 0 ? "document-open-recent" : p.indexOf("computer:") === 0 ? "computer" : "edit-find" }]
         const home = grove.home()
         const out = []
         let base = "/"
@@ -39,7 +39,8 @@ Item {
     function edit() {
         editing = true
         // (Inside an archive: the plain path through it, as Copy Path gives.)
-        const p = pane.plainPath(pane.path)
+        // Computer (above /) edits as "/".
+        const p = pane.path.indexOf("computer:") === 0 ? "/" : pane.plainPath(pane.path)
         field.text = p.indexOf("/") === 0 ? p : grove.home()
         field.forceActiveFocus()
         field.selectAll()
