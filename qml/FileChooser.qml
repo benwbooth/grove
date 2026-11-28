@@ -7,6 +7,11 @@ import QtQuick.Window
 // (saving), file type filters and Open/Save.
 ApplicationWindow {
     id: fc
+    // Its own app to the window manager: an Open/Save window keeps its own
+    // size and place, and grove's own window comes back where it was (with
+    // grove's id, a chooser closed last became grove's remembered place, and
+    // one open while grove started had grove opened in the middle).
+    property string groveAppId: "grove-chooser"
     property var app
     property var request: ({})
     readonly property bool saving: request.mode === "save" || request.mode === "savefiles"
