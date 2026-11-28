@@ -76,6 +76,9 @@ ApplicationWindow {
     function toggleHidden() { const v = !app.settings.show_hidden; setSetting("show_hidden", v); chooserPane.model.applyShowHidden(v) }
     // Ctrl+H (or your own keys for it) shows and hides hidden files here too.
     Shortcut { sequences: Help.seqs("hidden"); context: Qt.WindowShortcut; enabled: !fc.modalOpen; onActivated: fc.toggleHidden() }
+    // Ctrl+L, Ctrl+Shift+G, F6 (or your own keys for Go to Folder): type a
+    // location in the path bar, as in a Grove window.
+    Shortcut { sequences: Help.seqs("gotofolder"); context: Qt.WindowShortcut; enabled: !fc.modalOpen; onActivated: chooserPath.edit() }
     function confirm(t, m, a, fn) { fn() }
     function confirmDelete(p) {}
     function emptyTrash() {}
@@ -131,6 +134,7 @@ ApplicationWindow {
                 GButton { iconName: "go-up"; tip: "Enclosing folder"; onClicked: chooserPane.goUp() }
             }
             PathBar {
+                id: chooserPath
                 pane: chooserPane
                 anchors.left: tools.right; anchors.leftMargin: 10
                 anchors.right: views.left; anchors.rightMargin: 10
